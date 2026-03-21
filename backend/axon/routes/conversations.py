@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 
-from axon.main import agent_registry
+from axon.registry import agent_registry
 
 router = APIRouter()
 

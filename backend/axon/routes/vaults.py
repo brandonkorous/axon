@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from axon.config import settings
-from axon.main import agent_registry
+from axon.registry import agent_registry
 from axon.vault.frontmatter import parse_frontmatter, write_frontmatter
 from axon.vault.graph import VaultGraph
 

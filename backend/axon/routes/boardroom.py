@@ -6,7 +6,7 @@ import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from axon.main import boardroom_instance
+import axon.registry as registry
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ async def boardroom_websocket(websocket: WebSocket):
       { "type": "text", "speaker": "table", "target": null, "content": "..." }
       { "type": "done" }
     """
-    if not boardroom_instance:
+    if not registry.boardroom_instance:
         await websocket.close(code=4004, reason="Boardroom not configured")
         return
 
@@ -40,7 +40,7 @@ async def boardroom_websocket(websocket: WebSocket):
                 content = message.get("content", "")
                 mode = message.get("mode", "standard")
 
-                async for chunk in boardroom_instance.process(content, mode=mode):
+                async for chunk in registry.boardroom_instance.process(content, mode=mode):
                     await websocket.send_json({
                         "type": chunk.type,
                         "speaker": chunk.speaker,
@@ -49,7 +49,7 @@ async def boardroom_websocket(websocket: WebSocket):
                     })
 
             elif message.get("type") == "clear":
-                boardroom_instance.conversation.clear()
+                registry.boardroom_instance.conversation.clear()
                 await websocket.send_json({"type": "cleared"})
 
     except WebSocketDisconnect:
@@ -64,7 +64,7 @@ async def boardroom_websocket(websocket: WebSocket):
 @router.get("/history")
 async def get_boardroom_history():
     """Get boardroom conversation history."""
-    if not boardroom_instance:
+    if not registry.boardroom_instance:
         return {"messages": []}
 
     return {
@@ -74,6 +74,6 @@ async def get_boardroom_history():
                 "content": m.content,
                 "timestamp": m.timestamp,
             }
-            for m in boardroom_instance.conversation.messages
+            for m in registry.boardroom_instance.conversation.messages
         ],
     }

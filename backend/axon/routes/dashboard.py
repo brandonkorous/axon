@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from axon.config import settings
-from axon.main import agent_registry
+from axon.registry import agent_registry
 from axon.vault.frontmatter import parse_frontmatter
 
 router = APIRouter()

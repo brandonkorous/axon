@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from axon.main import agent_registry
+from axon.registry import agent_registry
 
 router = APIRouter()
 

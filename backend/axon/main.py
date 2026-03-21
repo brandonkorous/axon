@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +11,7 @@ from axon.config import PersonaConfig, load_all_personas, settings
 from axon.agents.agent import Agent
 from axon.agents.axon_agent import AxonAgent
 from axon.agents.boardroom import Boardroom
+import axon.registry as registry
 from axon.routes import agents as agents_routes
 from axon.routes import conversations as conversations_routes
 from axon.routes import boardroom as boardroom_routes
@@ -19,15 +19,8 @@ from axon.routes import dashboard as dashboard_routes
 from axon.routes import vaults as vaults_routes
 
 
-# Global state — agent instances
-agent_registry: dict[str, Agent] = {}
-boardroom_instance: Boardroom | None = None
-
-
 def init_agents() -> None:
     """Load all persona configs and initialize agent instances."""
-    global boardroom_instance
-
     personas = load_all_personas(settings.axon_personas_dir)
 
     # Initialize specialist agents first
@@ -36,20 +29,20 @@ def init_agents() -> None:
         if persona_id in ("axon", "boardroom"):
             continue
         agent = Agent(config, data_dir=settings.axon_data_dir)
-        agent_registry[persona_id] = agent
+        registry.agent_registry[persona_id] = agent
         specialists[persona_id] = config
 
     # Initialize Axon orchestrator
     axon_config = personas.get("axon")
     if axon_config:
         axon = AxonAgent(axon_config, specialists, data_dir=settings.axon_data_dir)
-        agent_registry["axon"] = axon
+        registry.agent_registry["axon"] = axon
 
     # Initialize Boardroom
     boardroom_config = personas.get("boardroom")
     if boardroom_config:
         advisor_configs = {k: v for k, v in personas.items() if k not in ("axon", "boardroom")}
-        boardroom_instance = Boardroom(
+        registry.boardroom_instance = Boardroom(
             boardroom_config, advisor_configs, data_dir=settings.axon_data_dir
         )
 
@@ -89,6 +82,6 @@ app.include_router(vaults_routes.router, prefix="/api/vaults", tags=["vaults"])
 async def health():
     return {
         "status": "ok",
-        "agents": list(agent_registry.keys()),
-        "boardroom": boardroom_instance is not None,
+        "agents": list(registry.agent_registry.keys()),
+        "boardroom": registry.boardroom_instance is not None,
     }
