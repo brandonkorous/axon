@@ -1,0 +1,52 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${AXON_VAULT:-./data/vaults/axon}:/vaults/axon
+      - ${MARCUS_VAULT:-./data/vaults/marcus}:/vaults/marcus
+      - ${RAJ_VAULT:-./data/vaults/raj}:/vaults/raj
+      - ${DIANA_VAULT:-./data/vaults/diana}:/vaults/diana
+      - ${BOARDROOM_VAULT:-./data/vaults/boardroom}:/vaults/boardroom
+      - ${EA_MEMORY:-./data/vaults/enterprise-architect}:/vaults/enterprise-architect:ro
+      - ./backend/axon/personas:/personas
+      - axon_data:/data
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - AXON_DATA_DIR=/data
+      - AXON_PERSONAS_DIR=/personas
+      - AXON_VAULTS_DIR=/vaults
+    depends_on:
+      ollama:
+        condition: service_started
+        required: false
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    profiles:
+      - local-llm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  axon_data:
+  ollama_models:

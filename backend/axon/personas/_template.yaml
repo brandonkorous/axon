@@ -1,0 +1,49 @@
+# Agent Persona Template
+# Copy this file and customize it to create a new agent.
+# Then run: axon init-vault <agent_id>
+
+id: my_agent          # Unique identifier (lowercase, no spaces)
+name: My Agent        # Display name
+title: Agent Role     # e.g., "Financial Analyst", "DevOps Engineer"
+tagline: "Short description of expertise"
+
+model:
+  reasoning: anthropic/claude-sonnet-4-20250514   # The model for actual responses
+  navigator: anthropic/claude-sonnet-4-20250514   # The model for vault navigation (can be cheaper)
+  max_tokens: 4096
+  temperature: 0.7
+
+voice:
+  engine: disabled    # piper | xtts | elevenlabs | disabled
+  voice_id: ""        # Voice preset or reference audio path
+  speed: 1.0
+
+vault:
+  path: /vaults/my_agent
+  root_file: second-brain.md
+  read_only_mounts: []    # Other vaults this agent can read
+  writable_paths:
+    - /vaults/my_agent
+
+memory:
+  max_context_tokens: 4000   # Token budget for vault context per conversation turn
+
+delegation:
+  can_delegate_to: []     # Agent IDs this agent can send tasks to
+  accepts_from: [axon]    # Agent IDs that can send tasks to this agent
+
+behavior:
+  auto_save: true         # Automatically save knowledge to vault
+  first_message: true     # Generate a greeting at conversation start
+  proactive_checks: []    # Scheduled behaviors
+
+ui:
+  color: "#6B7280"        # Agent color in the UI
+  avatar: ""              # Avatar image filename
+  sparkle_color: "#9CA3AF"  # Sparkle color during thinking/speaking
+
+# System prompt — either inline or from a file
+system_prompt_file: my_agent_instructions.md
+# OR:
+# system_prompt: |
+#   You are [name], a [role]...
