@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+@plugin "daisyui" {
+  themes: axon-dark --default;
+  logs: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "axon-dark";
+  default: true;
+  color-scheme: dark;
+
+  /* Base surfaces — gray hierarchy */
+  --color-base-100: oklch(13% 0.028 261.692);     /* gray-950 — body bg */
+  --color-base-200: oklch(21% 0.034 264.665);     /* gray-900 — sidebar, headers */
+  --color-base-300: oklch(27.8% 0.033 256.848);   /* gray-800 — cards, inputs */
+  --color-base-content: oklch(96.7% 0.003 264.542); /* gray-100 — primary text */
+
+  /* Primary = violet */
+  --color-primary: oklch(54.1% 0.281 293.009);        /* violet-600 */
+  --color-primary-content: oklch(100% 0 0);
+
+  /* Secondary = subtle gray */
+  --color-secondary: oklch(37.3% 0.034 259.733);      /* gray-700 */
+  --color-secondary-content: oklch(96.7% 0.003 264.542);
+
+  /* Accent = violet-400 */
+  --color-accent: oklch(70.2% 0.183 293.541);         /* violet-400 */
+  --color-accent-content: oklch(100% 0 0);
+
+  /* Neutral = gray-800 */
+  --color-neutral: oklch(27.8% 0.033 256.848);
+  --color-neutral-content: oklch(70.7% 0.022 261.325); /* gray-400 */
+
+  /* Semantic status colors */
+  --color-success: oklch(72% 0.19 145);
+  --color-success-content: oklch(100% 0 0);
+  --color-warning: oklch(80% 0.18 85);
+  --color-warning-content: oklch(20% 0.02 85);
+  --color-error: oklch(63% 0.24 25);
+  --color-error-content: oklch(100% 0 0);
+  --color-info: oklch(62% 0.18 250);
+  --color-info-content: oklch(100% 0 0);
+
+  /* Geometry — sharp, command-center feel */
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}

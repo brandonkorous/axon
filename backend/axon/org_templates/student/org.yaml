@@ -1,0 +1,3 @@
+type: student
+name: "{{ORG_NAME}}"
+description: "AI study team for {{ORG_NAME}}"

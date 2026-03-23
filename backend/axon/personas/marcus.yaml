@@ -4,8 +4,6 @@ title: CEO Advisor
 tagline: "The Board Chair"
 
 model:
-  reasoning: anthropic/claude-sonnet-4-20250514
-  navigator: anthropic/claude-sonnet-4-20250514
   max_tokens: 4096
   temperature: 0.7
 
@@ -26,12 +24,18 @@ memory:
 
 delegation:
   can_delegate_to: []
-  accepts_from: [axon, boardroom]
+  accepts_from: [axon, huddle]
 
 behavior:
   auto_save: true
   first_message: true
-  proactive_checks: []
+  proactive_checks:
+    - trigger: daily
+      action: check_inbox
+      description: "Check inbox for delegated tasks from Axon or Huddle"
+    - trigger: frequent
+      action: work_on_tasks
+      description: "Complete in_progress tasks and deliver results"
 
 ui:
   color: "#EF4444"

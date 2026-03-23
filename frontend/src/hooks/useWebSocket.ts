@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { orgWsPath } from "../stores/orgStore";
 
 interface UseWebSocketOptions {
   url: string;
@@ -16,7 +17,11 @@ export function useWebSocket({ url, onMessage, autoConnect = true }: UseWebSocke
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}${url}`;
+    // In dev, connect directly to backend to avoid Vite proxy WS issues
+    const host = import.meta.env.DEV ? "127.0.0.1:8000" : window.location.host;
+    // Use org-scoped path if multi-org is active
+    const resolvedUrl = orgWsPath(url.replace(/^\/api\//, ""));
+    const wsUrl = `${protocol}//${host}${resolvedUrl}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => setConnected(true);

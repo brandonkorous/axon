@@ -9,11 +9,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from axon.config import settings
-from axon.registry import agent_registry
+import axon.registry as registry
 from axon.vault.frontmatter import parse_frontmatter, write_frontmatter
-from axon.vault.graph import VaultGraph
 
 router = APIRouter()
+org_router = APIRouter()
 
 
 class FileWriteRequest(BaseModel):
@@ -31,34 +31,36 @@ class LinkRequest(BaseModel):
     section: str | None = None
 
 
-# ── Graph API ────────────────────────────────────────────────────────
-
-
-@router.get("/{agent_id}/graph")
-async def get_vault_graph(agent_id: str):
-    """Get the full wikilink graph for an agent's vault (for the memory browser)."""
-    agent = agent_registry.get(agent_id)
+def _get_agent_or_404(agent_reg: dict, agent_id: str, org_id: str = ""):
+    """Resolve an agent from a registry or raise 404."""
+    agent = agent_reg.get(agent_id)
     if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
-
-    graph = VaultGraph.build(agent.config.vault.path)
-    return graph.to_json()
-
-
-# ── File CRUD ────────────────────────────────────────────────────────
+        detail = f"Agent not found: {agent_id}"
+        if org_id:
+            detail += f" in org {org_id}"
+        raise HTTPException(status_code=404, detail=detail)
+    return agent
 
 
-@router.get("/{agent_id}/files")
-async def list_vault_files(agent_id: str, branch: str | None = None):
-    """List files in an agent's vault, optionally filtered by branch."""
-    agent = agent_registry.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+# ── Shared implementation ───────────────────────────────────────────
 
+
+async def _get_vault_graph(agent):
+    return agent.vault.graph.to_json()
+
+
+async def _get_vault_graph_neighborhood(agent, file_path: str, depth: int = 2):
+    return agent.vault.graph.get_neighborhood(file_path, depth)
+
+
+async def _get_vault_graph_stats(agent):
+    return agent.vault.graph.get_stats()
+
+
+async def _list_vault_files(agent, branch: str | None = None):
     if branch:
         files = agent.vault.list_branch(branch)
     else:
-        # List all branches
         vault_path = Path(agent.config.vault.path)
         files = []
         for item in sorted(vault_path.iterdir()):
@@ -74,22 +76,14 @@ async def list_vault_files(agent_id: str, branch: str | None = None):
                     "type": "file",
                     "path": item.name,
                 })
+    return {"agent_id": agent.id, "branch": branch, "files": files}
 
-    return {"agent_id": agent_id, "branch": branch, "files": files}
 
-
-@router.get("/{agent_id}/files/{file_path:path}")
-async def read_vault_file(agent_id: str, file_path: str):
-    """Read a specific file from an agent's vault."""
-    agent = agent_registry.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
-
+async def _read_vault_file(agent, file_path: str):
     try:
         metadata, body = agent.vault.read_file(file_path)
         links = agent.vault.get_links(file_path)
         backlinks = agent.vault.get_backlinks(file_path)
-
         return {
             "path": file_path,
             "frontmatter": metadata,
@@ -101,13 +95,7 @@ async def read_vault_file(agent_id: str, file_path: str):
         raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
 
 
-@router.put("/{agent_id}/files/{file_path:path}")
-async def write_vault_file(agent_id: str, file_path: str, body: FileWriteRequest):
-    """Create or update a file in an agent's vault."""
-    agent = agent_registry.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
-
+async def _write_vault_file(agent, file_path: str, body: FileWriteRequest):
     try:
         agent.vault.write_file(file_path, body.frontmatter, body.content)
         return {"status": "ok", "path": file_path}
@@ -115,48 +103,165 @@ async def write_vault_file(agent_id: str, file_path: str, body: FileWriteRequest
         raise HTTPException(status_code=403, detail=str(e))
 
 
-@router.delete("/{agent_id}/files/{file_path:path}")
-async def delete_vault_file(agent_id: str, file_path: str):
-    """Delete a file from an agent's vault."""
-    agent = agent_registry.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
-
+async def _delete_vault_file(agent, file_path: str):
     full_path = Path(agent.config.vault.path) / file_path
     if not full_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
-
     full_path.unlink()
+    agent.vault.cache.remove(file_path)
     agent.vault._invalidate_graph()
     return {"status": "deleted", "path": file_path}
 
 
-# ── Search ───────────────────────────────────────────────────────────
-
-
-@router.get("/{agent_id}/search")
-async def search_vault(agent_id: str, q: str):
-    """Full-text search across an agent's vault."""
-    agent = agent_registry.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
-
+async def _search_vault(agent, q: str):
     results = agent.vault.search(q)
     return {"query": q, "results": results}
 
 
-# ── Links ────────────────────────────────────────────────────────────
-
-
-@router.post("/{agent_id}/link")
-async def create_link(agent_id: str, body: LinkRequest):
-    """Create a wikilink between two files in an agent's vault."""
-    agent = agent_registry.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
-
+async def _create_link(agent, body: LinkRequest):
     try:
         agent.vault.add_link(body.from_path, body.to_path, body.section)
         return {"status": "ok", "from": body.from_path, "to": body.to_path}
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ── Legacy routes (default org) ─────────────────────────────────────
+
+
+@router.get("/{agent_id}/graph")
+async def get_vault_graph(agent_id: str):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _get_vault_graph(agent)
+
+
+@router.get("/{agent_id}/graph/stats")
+async def get_vault_graph_stats(agent_id: str):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _get_vault_graph_stats(agent)
+
+
+@router.get("/{agent_id}/graph/neighborhood/{file_path:path}")
+async def get_vault_graph_neighborhood(agent_id: str, file_path: str, depth: int = 2):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _get_vault_graph_neighborhood(agent, file_path, depth)
+
+
+@router.get("/{agent_id}/files")
+async def list_vault_files(agent_id: str, branch: str | None = None):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _list_vault_files(agent, branch)
+
+
+@router.get("/{agent_id}/files/{file_path:path}")
+async def read_vault_file(agent_id: str, file_path: str):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _read_vault_file(agent, file_path)
+
+
+@router.put("/{agent_id}/files/{file_path:path}")
+async def write_vault_file(agent_id: str, file_path: str, body: FileWriteRequest):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _write_vault_file(agent, file_path, body)
+
+
+@router.delete("/{agent_id}/files/{file_path:path}")
+async def delete_vault_file(agent_id: str, file_path: str):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _delete_vault_file(agent, file_path)
+
+
+@router.get("/{agent_id}/search")
+async def search_vault(agent_id: str, q: str):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _search_vault(agent, q)
+
+
+@router.post("/{agent_id}/link")
+async def create_link(agent_id: str, body: LinkRequest):
+    agent = _get_agent_or_404(registry.agent_registry, agent_id)
+    return await _create_link(agent, body)
+
+
+# ── Org-scoped routes ───────────────────────────────────────────────
+
+
+@org_router.get("/{agent_id}/graph")
+async def get_org_vault_graph(org_id: str, agent_id: str):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _get_vault_graph(agent)
+
+
+@org_router.get("/{agent_id}/graph/stats")
+async def get_org_vault_graph_stats(org_id: str, agent_id: str):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _get_vault_graph_stats(agent)
+
+
+@org_router.get("/{agent_id}/graph/neighborhood/{file_path:path}")
+async def get_org_vault_graph_neighborhood(org_id: str, agent_id: str, file_path: str, depth: int = 2):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _get_vault_graph_neighborhood(agent, file_path, depth)
+
+
+@org_router.get("/{agent_id}/files")
+async def list_org_vault_files(org_id: str, agent_id: str, branch: str | None = None):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _list_vault_files(agent, branch)
+
+
+@org_router.get("/{agent_id}/files/{file_path:path}")
+async def read_org_vault_file(org_id: str, agent_id: str, file_path: str):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _read_vault_file(agent, file_path)
+
+
+@org_router.put("/{agent_id}/files/{file_path:path}")
+async def write_org_vault_file(org_id: str, agent_id: str, file_path: str, body: FileWriteRequest):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _write_vault_file(agent, file_path, body)
+
+
+@org_router.delete("/{agent_id}/files/{file_path:path}")
+async def delete_org_vault_file(org_id: str, agent_id: str, file_path: str):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _delete_vault_file(agent, file_path)
+
+
+@org_router.get("/{agent_id}/search")
+async def search_org_vault(org_id: str, agent_id: str, q: str):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _search_vault(agent, q)
+
+
+@org_router.post("/{agent_id}/link")
+async def create_org_link(org_id: str, agent_id: str, body: LinkRequest):
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    return await _create_link(agent, body)

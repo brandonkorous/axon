@@ -2,10 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+# Install CPU-only PyTorch first to avoid pulling ~5GB of NVIDIA/CUDA packages
+RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
+# Copy source and install
+COPY pyproject.toml .
 COPY axon/ axon/
+COPY models/ models/
+RUN pip install --no-cache-dir ".[voice]"
 
 EXPOSE 8000
 

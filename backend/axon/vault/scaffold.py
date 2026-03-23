@@ -14,6 +14,8 @@ def scaffold_vault(
     template: str = "advisor",
     agent_name: str = "Agent",
     agent_title: str = "",
+    agent_id: str = "",
+    agent_tagline: str = "",
 ) -> Path:
     """Initialize a new vault from a template.
 
@@ -22,6 +24,8 @@ def scaffold_vault(
         template: Template name (advisor, orchestrator, executor).
         agent_name: Agent's name for placeholder replacement.
         agent_title: Agent's title for placeholder replacement.
+        agent_id: Agent's unique ID for config placeholder replacement.
+        agent_tagline: Agent's tagline for config placeholder replacement.
 
     Returns:
         Path to the created vault.
@@ -35,6 +39,12 @@ def scaffold_vault(
     if vault.exists() and any(vault.iterdir()):
         raise FileExistsError(f"Vault already exists and is not empty: {vault}")
 
+    # Derive defaults from agent_name if not provided
+    if not agent_id:
+        agent_id = agent_name.lower().replace(" ", "_")
+    if not agent_tagline:
+        agent_tagline = agent_title or agent_name
+
     # Copy template to vault
     vault.mkdir(parents=True, exist_ok=True)
     for item in template_dir.rglob("*"):
@@ -46,9 +56,16 @@ def scaffold_vault(
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             content = item.read_text(encoding="utf-8")
-            # Replace placeholders
-            content = content.replace("{{AGENT_NAME}}", agent_name)
-            content = content.replace("{{AGENT_TITLE}}", agent_title)
+            # Replace placeholders — escape backslashes for YAML safety
+            replacements = {
+                "{{AGENT_NAME}}": agent_name,
+                "{{AGENT_TITLE}}": agent_title,
+                "{{AGENT_ID}}": agent_id,
+                "{{AGENT_TAGLINE}}": agent_tagline,
+            }
+            for placeholder, value in replacements.items():
+                safe_value = value.replace("\\", "/")
+                content = content.replace(placeholder, safe_value)
             target.write_text(content, encoding="utf-8")
 
     return vault

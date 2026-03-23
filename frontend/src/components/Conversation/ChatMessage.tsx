@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatMessage as ChatMessageType } from "../../stores/conversationStore";
@@ -7,7 +8,7 @@ interface Props {
   message: ChatMessageType;
 }
 
-export function ChatMessage({ message }: Props) {
+export const ChatMessage = memo(function ChatMessage({ message }: Props) {
   const { agents } = useAgentStore();
   const agent = agents.find((a) => a.id === message.agentId);
 
@@ -17,27 +18,26 @@ export function ChatMessage({ message }: Props) {
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
-      {/* Avatar */}
       <div
-        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-        style={{ backgroundColor: isUser ? "#6B7280" : agentColor }}
+        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${isUser ? "bg-neutral" : ""}`}
+        style={isUser ? undefined : { backgroundColor: agentColor }}
+        aria-hidden="true"
       >
         {isUser ? "You" : agentName[0]}
       </div>
 
-      {/* Message */}
       <div
         className={`max-w-[80%] rounded-xl px-4 py-3 ${
           isUser
-            ? "bg-gray-700 text-gray-100"
-            : "bg-gray-800/50 text-gray-200 border border-gray-700/50"
+            ? "bg-secondary text-base-content"
+            : "bg-base-300/50 text-base-content border border-neutral/50"
         }`}
       >
         {!isUser && (
           <div className="text-xs font-semibold mb-1" style={{ color: agentColor }}>
             {agentName}
             {message.target && (
-              <span className="text-gray-500"> → {message.target}</span>
+              <span className="text-neutral-content"> → {message.target}</span>
             )}
           </div>
         )}
@@ -49,4 +49,4 @@ export function ChatMessage({ message }: Props) {
       </div>
     </div>
   );
-}
+});

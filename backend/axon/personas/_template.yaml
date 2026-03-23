@@ -8,8 +8,15 @@ title: Agent Role     # e.g., "Financial Analyst", "DevOps Engineer"
 tagline: "Short description of expertise"
 
 model:
-  reasoning: anthropic/claude-sonnet-4-20250514   # The model for actual responses
-  navigator: anthropic/claude-sonnet-4-20250514   # The model for vault navigation (can be cheaper)
+  # reasoning and navigator inherit from DEFAULT_MODEL env var if omitted.
+  # Override per-agent with LiteLLM format: provider/model-name
+  # Examples:
+  #   anthropic/claude-sonnet-4-20250514  (cloud)
+  #   openai/gpt-4o                       (cloud)
+  #   ollama/llama3:8b                    (local)
+  #   ollama/qwen2.5:14b                  (local)
+  # reasoning: anthropic/claude-sonnet-4-20250514
+  # navigator: ollama/llama3:8b    # use a cheap local model for vault navigation
   max_tokens: 4096
   temperature: 0.7
 

@@ -1,0 +1,46 @@
+id: huddle
+name: The Huddle
+title: Advisory Group Session
+tagline: "Where advisors debate, disagree, and converge"
+
+model:
+  # inherits reasoning/navigator from DEFAULT_MODEL
+  max_tokens: 8192
+  temperature: 0.8
+
+voice:
+  engine: disabled
+  voice_id: ""
+  speed: 1.0
+
+vault:
+  path: /vaults/huddle
+  root_file: second-brain.md
+  read_only_mounts:
+    - path: /vaults/marcus
+      root_file: second-brain.md
+    - path: /vaults/raj
+      root_file: second-brain.md
+    - path: /vaults/diana
+      root_file: second-brain.md
+  writable_paths:
+    - /vaults/huddle
+
+memory:
+  max_context_tokens: 6000
+
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon]
+
+behavior:
+  auto_save: true
+  first_message: true
+  proactive_checks: []
+
+ui:
+  color: "#F59E0B"
+  avatar: ""
+  sparkle_color: "#FBBF24"
+
+system_prompt_file: huddle_instructions.md

@@ -4,14 +4,14 @@ title: Personal Assistant
 tagline: "Your AI chief of staff"
 
 model:
-  reasoning: anthropic/claude-sonnet-4-20250514
-  navigator: anthropic/claude-sonnet-4-20250514
+  # reasoning and navigator inherit from DEFAULT_MODEL env var
+  # override here to use a different model for this agent
   max_tokens: 4096
   temperature: 0.7
 
 voice:
-  engine: disabled
-  voice_id: ""
+  engine: piper
+  voice_id: en_US-lessac-medium
   speed: 1.0
 
 vault:
@@ -31,7 +31,10 @@ delegation:
 behavior:
   auto_save: true
   first_message: true
-  proactive_checks: []
+  proactive_checks:
+    - trigger: frequent
+      action: work_on_tasks
+      description: "Complete in_progress tasks and deliver results"
 
 ui:
   color: "#8B5CF6"

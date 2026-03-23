@@ -7,6 +7,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from axon.vault.cache import VaultCache
+from axon.vault.watcher import VaultWatcher
 from axon.vault.frontmatter import (
     parse_frontmatter,
     read_file_with_frontmatter,
@@ -21,28 +23,50 @@ class VaultManager:
 
     Handles reading, writing, searching, and linking of markdown files
     with YAML frontmatter and [[wikilinks]].
+
+    Uses VaultCache for in-memory indexing — all reads are cache-first,
+    writes update cache after flushing to disk.
     """
 
     def __init__(self, vault_path: str, root_file: str = "second-brain.md"):
         self.vault_path = Path(vault_path)
         self.root_file = root_file
+        self._cache: VaultCache | None = None
         self._graph: VaultGraph | None = None
+        self._watcher: VaultWatcher | None = None
 
     @property
     def root_path(self) -> Path:
         return self.vault_path / self.root_file
 
     @property
+    def cache(self) -> VaultCache:
+        """Lazy-loaded vault cache. Hydrates from disk on first access."""
+        if self._cache is None:
+            self._cache = VaultCache(self.vault_path)
+            self._cache.load_all()
+            # Start file watcher to keep cache synced with external edits
+            self._watcher = VaultWatcher(self.vault_path, self._cache)
+            self._watcher.start()
+        return self._cache
+
+    @property
     def graph(self) -> VaultGraph:
-        """Lazy-loaded vault graph. Call rebuild_graph() to refresh."""
+        """Lazy-loaded vault graph, derived from cache."""
         if self._graph is None:
-            self._graph = VaultGraph.build(self.vault_path)
+            self._graph = self.cache.build_graph()
         return self._graph
 
     def rebuild_graph(self) -> VaultGraph:
-        """Rebuild the wikilink graph from disk."""
-        self._graph = VaultGraph.build(self.vault_path)
+        """Rebuild the wikilink graph from cache."""
+        self._graph = self.cache.build_graph()
         return self._graph
+
+    def shutdown(self) -> None:
+        """Stop the file watcher and release resources."""
+        if self._watcher:
+            self._watcher.stop()
+            self._watcher = None
 
     # ── Read operations ──────────────────────────────────────────────
 
@@ -55,8 +79,14 @@ class VaultManager:
     def read_file(self, relative_path: str) -> tuple[dict[str, Any], str]:
         """Read a file, return (frontmatter_dict, body_string).
 
-        Raises FileNotFoundError if the file doesn't exist.
+        Cache-first: returns from cache if available, falls back to disk.
         """
+        # Try cache first
+        cached = self.cache.get(relative_path)
+        if cached:
+            return cached.metadata, cached.body
+
+        # Fall back to disk
         full_path = self.vault_path / relative_path
         if not full_path.exists():
             raise FileNotFoundError(f"Vault file not found: {relative_path}")
@@ -65,6 +95,11 @@ class VaultManager:
 
     def read_file_raw(self, relative_path: str) -> str:
         """Read a file's raw content (frontmatter + body)."""
+        # Try cache first
+        cached = self.cache.get(relative_path)
+        if cached:
+            return cached.raw
+
         full_path = self.vault_path / relative_path
         if not full_path.exists():
             raise FileNotFoundError(f"Vault file not found: {relative_path}")
@@ -78,15 +113,27 @@ class VaultManager:
         relative_path: str,
         metadata: dict[str, Any],
         body: str,
+        _bypass_audit_check: bool = False,
     ) -> str:
         """Write a file with YAML frontmatter. Creates parent directories if needed.
 
         Returns the relative path of the written file.
+        The audit/ branch is protected — only the AuditLogger (via _bypass_audit_check)
+        can write there.
         """
+        if not _bypass_audit_check:
+            from axon.audit import is_audit_branch
+            if is_audit_branch(relative_path):
+                raise PermissionError(
+                    f"Cannot write to audit branch directly: {relative_path}"
+                )
         full_path = self.vault_path / relative_path
         self._check_path_access(full_path)
         full_path.parent.mkdir(parents=True, exist_ok=True)
         write_file_with_frontmatter(str(full_path), metadata, body)
+
+        # Update cache + invalidate derived graph
+        self.cache.update(relative_path)
         self._invalidate_graph()
         return relative_path
 
@@ -117,67 +164,12 @@ class VaultManager:
     # ── Search operations ────────────────────────────────────────────
 
     def search(self, query: str, max_results: int = 20) -> list[dict[str, Any]]:
-        """Full-text search across vault files.
-
-        Returns list of {path, title, snippet} dicts.
-        """
-        results: list[dict[str, Any]] = []
-        query_lower = query.lower()
-
-        for md_file in self.vault_path.rglob("*.md"):
-            if md_file.name.startswith("."):
-                continue
-            try:
-                content = md_file.read_text(encoding="utf-8")
-            except Exception:
-                continue
-
-            if query_lower in content.lower():
-                rel_path = str(md_file.relative_to(self.vault_path)).replace("\\", "/")
-                metadata, body = parse_frontmatter(content)
-
-                # Extract snippet around first match
-                idx = content.lower().index(query_lower)
-                start = max(0, idx - 100)
-                end = min(len(content), idx + len(query) + 100)
-                snippet = content[start:end].strip()
-
-                results.append({
-                    "path": rel_path,
-                    "title": metadata.get("name", md_file.stem),
-                    "snippet": snippet,
-                })
-
-                if len(results) >= max_results:
-                    break
-
-        return results
+        """Full-text search across vault files (cache-backed)."""
+        return self.cache.search(query, max_results)
 
     def list_branch(self, branch: str) -> list[dict[str, Any]]:
-        """List all files in a branch directory.
-
-        Returns list of {path, name, title, description} dicts.
-        """
-        branch_dir = self.vault_path / branch
-        if not branch_dir.exists():
-            return []
-
-        files: list[dict[str, Any]] = []
-        for md_file in sorted(branch_dir.glob("*.md")):
-            rel_path = str(md_file.relative_to(self.vault_path)).replace("\\", "/")
-            try:
-                metadata, _ = read_file_with_frontmatter(str(md_file))
-            except Exception:
-                metadata = {}
-
-            files.append({
-                "path": rel_path,
-                "name": md_file.stem,
-                "title": metadata.get("name", md_file.stem),
-                "description": metadata.get("description", ""),
-            })
-
-        return files
+        """List all files in a branch directory (cache-backed)."""
+        return self.cache.list_branch(branch)
 
     # ── Link operations ──────────────────────────────────────────────
 
@@ -187,19 +179,27 @@ class VaultManager:
         if not full_from.exists():
             raise FileNotFoundError(f"Source file not found: {from_path}")
 
-        # Determine the wikilink target (use shortest unique reference)
         to_stem = Path(to_path).stem
         content = full_from.read_text(encoding="utf-8")
         updated = add_wikilink(content, to_stem, section)
         full_from.write_text(updated, encoding="utf-8")
+
+        # Update cache for the modified file
+        self.cache.update(from_path)
         self._invalidate_graph()
 
     def get_backlinks(self, relative_path: str) -> list[str]:
         """Find all files that link to the given file."""
+        cached = self.cache.get(relative_path)
+        if cached:
+            return cached.backlinks
         return self.graph.get_backlinks(relative_path)
 
     def get_links(self, relative_path: str) -> list[str]:
         """Get all files that this file links to."""
+        cached = self.cache.get(relative_path)
+        if cached:
+            return cached.links
         return self.graph.get_neighbors(relative_path)
 
     # ── Context building (for memory navigator) ──────────────────────
@@ -211,7 +211,6 @@ class VaultManager:
         replaces this with intelligent graph traversal.
         """
         content = self.read_root()
-        # Rough token estimate: ~4 chars per token
         if len(content) // 4 > max_tokens:
             content = content[: max_tokens * 4]
         return content
@@ -220,7 +219,6 @@ class VaultManager:
 
     def _update_branch_index(self, branch: str, entry_name: str, description: str) -> None:
         """Add an entry to a branch's index file."""
-        # Find the index file (conventions: branch-index.md, branch-log.md, or branch.md)
         index_candidates = [
             f"{branch}/{branch}-index.md",
             f"{branch}/{branch}-log.md",
@@ -234,7 +232,6 @@ class VaultManager:
                 break
 
         if not index_path:
-            # Create a default index
             index_path = f"{branch}/{branch}-index.md"
             self.write_file(
                 index_path,
@@ -249,6 +246,7 @@ class VaultManager:
         if f"[[{entry_name}]]" not in content:
             content = f"{content.rstrip()}\n{link_line}\n"
             full_index.write_text(content, encoding="utf-8")
+            self.cache.update(index_path)
 
     def _check_path_access(self, full_path: Path) -> None:
         """Ensure the path is within the vault directory (prevent directory traversal)."""

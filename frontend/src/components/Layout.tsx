@@ -1,87 +1,221 @@
-import { useEffect } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAgentStore } from "../stores/agentStore";
+import { useOrgStore } from "../stores/orgStore";
+import { StatusBadge } from "./AgentControls/AgentControls";
+import { OrgSwitcher } from "./OrgSwitcher";
+import { VoiceChatFAB } from "./VoiceChat/VoiceChatFAB";
+import { VoiceChatOverlay } from "./VoiceChat/VoiceChatOverlay";
+import { VoiceSettingsModal } from "./VoiceChat/VoiceSettingsModal";
+import { useVoiceChatStore } from "../stores/voiceChatStore";
+import { useApprovalStore } from "../stores/approvalStore";
+import { useInboxStore } from "../stores/inboxStore";
 
 export function Layout() {
   const { agents, fetchAgents, loading } = useAgentStore();
+  const { fetchOrgs } = useOrgStore();
+  const openVoiceSettings = useVoiceChatStore((s) => s.openSettings);
+  const approvalCount = useApprovalStore((s) => s.approvals.length);
+  const fetchPending = useApprovalStore((s) => s.fetchPending);
+  const inboxPendingCount = useInboxStore(
+    (s) => s.items.filter((i) => i.status === "pending").length
+  );
+  const fetchInbox = useInboxStore((s) => s.fetchAll);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
-    fetchAgents();
-  }, [fetchAgents]);
+    fetchOrgs().then(() => fetchAgents());
+  }, [fetchOrgs, fetchAgents]);
 
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `block px-3 py-2 rounded-lg text-sm transition-colors ${
-      isActive
-        ? "bg-gray-800 text-white"
-        : "text-gray-400 hover:text-white hover:bg-gray-800/50"
-    }`;
+  useEffect(() => {
+    fetchPending();
+    const interval = setInterval(fetchPending, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchPending]);
+
+  useEffect(() => {
+    fetchInbox();
+    const interval = setInterval(fetchInbox, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchInbox]);
+
+  // Close sidebar on navigation (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        {/* Logo */}
-        <div className="p-4 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-white tracking-tight">
-            <span className="text-violet-400">⚡</span> Axon
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">AI Command Center</p>
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside className={`fixed z-40 inset-y-0 left-0 w-64 bg-base-200 border-r border-neutral flex flex-col transition-transform duration-200 md:static md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="p-4 border-b border-neutral flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-base-content tracking-tight">
+              <span className="text-accent">⚡</span> Axon
+            </h1>
+            <p className="text-xs text-neutral-content mt-1">AI Command Center</p>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="btn btn-ghost btn-sm btn-square md:hidden"
+            aria-label="Close sidebar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          <NavLink to="/" className={navLinkClass} end>
-            Axon
-          </NavLink>
-          <NavLink to="/boardroom" className={navLinkClass}>
-            Boardroom
-          </NavLink>
-          <NavLink to="/dashboard" className={navLinkClass}>
-            Dashboard
-          </NavLink>
+        <OrgSwitcher />
 
-          {/* Agent List */}
-          <div className="pt-4 pb-2">
-            <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Agents
-            </p>
-          </div>
+        <nav className="flex-1 px-2 py-3 overflow-y-auto" aria-label="Main navigation">
+          <ul className="menu w-full gap-0.5">
+            <li>
+              <NavLink to="/" className={({ isActive }) => isActive ? "menu-active" : ""} end>
+                Axon
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/huddle" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Huddle
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/dashboard" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Dashboard
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/inbox" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                <span className="flex items-center justify-between w-full">
+                  Inbox
+                  {inboxPendingCount > 0 && (
+                    <span className="badge badge-info badge-xs">{inboxPendingCount}</span>
+                  )}
+                </span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/tasks" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Tasks
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/approvals" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                <span className="flex items-center justify-between w-full">
+                  Approvals
+                  {approvalCount > 0 && (
+                    <span className="badge badge-warning badge-xs">{approvalCount}</span>
+                  )}
+                </span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/issues" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Issues
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/achievements" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Achievements
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/org-chart" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Org Chart
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/audit" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Audit Log
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/usage" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Usage
+              </NavLink>
+            </li>
 
-          {!loading &&
-            agents
-              .filter((a) => a.id !== "axon")
-              .map((agent) => (
-                <NavLink
-                  key={agent.id}
-                  to={`/agent/${agent.id}`}
-                  className={navLinkClass}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: agent.ui.color }}
-                    />
-                    {agent.name}
-                  </span>
-                </NavLink>
-              ))}
+            <li className="menu-title mt-4">Agents</li>
+            {!loading &&
+              agents
+                .filter((a) => a.id !== "axon" && a.type !== "external")
+                .map((agent) => (
+                  <li key={agent.id}>
+                    <NavLink
+                      to={`/agent/${agent.id}`}
+                      className={({ isActive }) => isActive ? "menu-active" : ""}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: agent.ui.color }}
+                        />
+                        {agent.name}
+                        {agent.lifecycle && agent.lifecycle.status !== "active" && (
+                          <StatusBadge status={agent.lifecycle.status} />
+                        )}
+                      </span>
+                    </NavLink>
+                  </li>
+                ))}
 
-          {/* Memory Browser */}
-          <div className="pt-4 pb-2">
-            <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Memory
-            </p>
-          </div>
-          <NavLink to="/memory" className={navLinkClass}>
-            Memory Browser
-          </NavLink>
+            <li className="menu-title mt-4">Workers</li>
+            <li>
+              <NavLink to="/workers" className={({ isActive }) => isActive ? "menu-active" : ""} end>
+                All Workers
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/workers/new" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                + Add Worker
+              </NavLink>
+            </li>
+
+            <li className="menu-title mt-4">Knowledge</li>
+            <li>
+              <NavLink to="/mind" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Mind
+              </NavLink>
+            </li>
+
+            <li className="menu-title mt-4">Settings</li>
+            <li>
+              <button onClick={openVoiceSettings}>
+                Voice
+              </button>
+            </li>
+          </ul>
         </nav>
+
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-hidden">
-        <Outlet />
+      <main className="flex-1 overflow-hidden flex flex-col">
+        {/* Mobile header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral bg-base-200 md:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="btn btn-ghost btn-sm btn-square"
+            aria-label="Open sidebar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
+          </button>
+          <span className="text-sm font-semibold text-base-content"><span className="text-accent">⚡</span> Axon</span>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <Outlet />
+        </div>
       </main>
+
+      <VoiceChatFAB />
+      <VoiceChatOverlay />
+      <VoiceSettingsModal />
     </div>
   );
 }

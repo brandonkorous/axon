@@ -1,0 +1,28 @@
+id: "{{AGENT_ID}}"
+name: "{{AGENT_NAME}}"
+title: "{{AGENT_TITLE}}"
+tagline: "{{AGENT_TAGLINE}}"
+type: advisor
+
+model:
+  max_tokens: 4096
+  temperature: 0.7
+
+vault:
+  root_file: second-brain.md
+  writable_paths: ["."]
+
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon, huddle]
+
+behavior:
+  auto_save: true
+  first_message: true
+
+learning:
+  enabled: true
+
+ui:
+  color: "#6B7280"
+  sparkle_color: "#9CA3AF"

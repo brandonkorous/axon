@@ -19,3 +19,7 @@ Post-mortems and lessons learned — what worked, what didn't.
 ### Ideas
 Parking lot for ideas not yet acted on.
 - [[ideas/ideas-index]]
+
+### Learnings
+Auto-extracted insights, patterns, and corrections from conversations.
+- [[learnings/learnings-index]]

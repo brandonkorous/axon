@@ -1,0 +1,28 @@
+id: "{{AGENT_ID}}"
+name: "{{AGENT_NAME}}"
+title: "{{AGENT_TITLE}}"
+tagline: "{{AGENT_TAGLINE}}"
+type: external
+
+model:
+  max_tokens: 4096
+  temperature: 0.5
+
+vault:
+  root_file: second-brain.md
+  writable_paths: ["."]
+
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon]
+
+behavior:
+  auto_save: false
+  first_message: false
+
+learning:
+  enabled: false
+
+ui:
+  color: "#10B981"
+  sparkle_color: "#34D399"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAgentStore } from "../../stores/agentStore";
+import { orgApiPath } from "../../stores/orgStore";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -43,31 +44,31 @@ export function MemoryBrowserView() {
   const [editContent, setEditContent] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ path: string; title: string; snippet: string }>>([]);
+  const [error, setError] = useState(false);
 
-  // Load graph data
   useEffect(() => {
     if (!selectedAgentId) return;
-    fetch(`/api/vaults/${selectedAgentId}/graph`)
+    setError(false);
+    fetch(`${orgApiPath("vaults")}/${selectedAgentId}/graph`)
       .then((r) => r.json())
       .then((data) => {
         setNodes(data.nodes || []);
         setEdges(data.edges || []);
       })
-      .catch(() => {});
+      .catch(() => setError(true));
   }, [selectedAgentId]);
 
-  // Load file
   const loadFile = useCallback(async (path: string) => {
     if (!selectedAgentId) return;
     try {
-      const res = await fetch(`/api/vaults/${selectedAgentId}/files/${path}`);
+      const res = await fetch(`${orgApiPath("vaults")}/${selectedAgentId}/files/${path}`);
       const data = await res.json();
       setSelectedFile(data);
       setEditing(false);
+      setSidebarOpen(false);
     } catch {}
   }, [selectedAgentId]);
 
-  // Search
   useEffect(() => {
     if (!searchQuery || !selectedAgentId) {
       setSearchResults([]);
@@ -76,7 +77,7 @@ export function MemoryBrowserView() {
     const timeout = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/vaults/${selectedAgentId}/search?q=${encodeURIComponent(searchQuery)}`
+          `${orgApiPath("vaults")}/${selectedAgentId}/search?q=${encodeURIComponent(searchQuery)}`
         );
         const data = await res.json();
         setSearchResults(data.results || []);
@@ -85,10 +86,9 @@ export function MemoryBrowserView() {
     return () => clearTimeout(timeout);
   }, [searchQuery, selectedAgentId]);
 
-  // Save
   const handleSave = async () => {
     if (!selectedFile || !selectedAgentId) return;
-    await fetch(`/api/vaults/${selectedAgentId}/files/${selectedFile.path}`, {
+    await fetch(`${orgApiPath("vaults")}/${selectedAgentId}/files/${selectedFile.path}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -100,7 +100,6 @@ export function MemoryBrowserView() {
     loadFile(selectedFile.path);
   };
 
-  // Group nodes by branch
   const branches = nodes.reduce<Record<string, GraphNode[]>>((acc, node) => {
     const branch = node.branch || "root";
     if (!acc[branch]) acc[branch] = [];
@@ -108,54 +107,64 @@ export function MemoryBrowserView() {
     return acc;
   }, {});
 
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   return (
-    <div className="flex h-full">
-      {/* Left panel: tree view */}
-      <div className="w-72 bg-gray-900 border-r border-gray-800 flex flex-col">
-        {/* Agent selector */}
-        <div className="p-3 border-b border-gray-800">
+    <div className="flex h-full relative">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <div className={`fixed z-30 inset-y-0 left-0 w-72 bg-base-200 border-r border-neutral flex flex-col transition-transform duration-200 md:static md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="p-3 border-b border-neutral">
           <select
             value={selectedAgentId}
             onChange={(e) => {
               setSelectedAgentId(e.target.value);
               setSelectedFile(null);
             }}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
+            aria-label="Select agent vault"
+            className="select select-sm w-full"
           >
             {agents
               .filter((a) => a.id !== "axon")
               .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
+                <option key={a.id} value={a.id}>{a.name}</option>
               ))}
           </select>
         </div>
 
-        {/* Search */}
-        <div className="p-3 border-b border-gray-800">
+        <div className="p-3 border-b border-neutral">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search vault..."
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500"
+            aria-label="Search vault"
+            className="input input-sm w-full"
           />
         </div>
 
-        {/* Search results or tree */}
         <div className="flex-1 overflow-y-auto p-2">
-          {searchQuery && searchResults.length > 0 ? (
+          {error ? (
+            <div className="p-3 text-center">
+              <p className="text-error text-xs mb-1">Failed to load vault.</p>
+              <button onClick={() => { setError(false); fetch(`${orgApiPath("vaults")}/${selectedAgentId}/graph`).then((r) => r.json()).then((data) => { setNodes(data.nodes || []); setEdges(data.edges || []); }).catch(() => setError(true)); }} className="btn btn-ghost btn-xs text-error">Retry</button>
+            </div>
+          ) : searchQuery && searchResults.length > 0 ? (
             <div className="space-y-1">
-              <p className="px-2 text-xs text-gray-500">{searchResults.length} results</p>
+              <p className="px-2 text-xs text-neutral-content">{searchResults.length} results</p>
               {searchResults.map((r) => (
                 <button
                   key={r.path}
                   onClick={() => loadFile(r.path)}
-                  className="w-full text-left px-2 py-1.5 rounded text-sm text-gray-300 hover:bg-gray-800"
+                  className="w-full text-left px-2 py-1.5 rounded text-sm text-base-content/80 hover:bg-base-300"
                 >
                   <div className="font-medium">{r.title}</div>
-                  <div className="text-xs text-gray-500 truncate">{r.snippet}</div>
+                  <div className="text-xs text-neutral-content truncate">{r.snippet}</div>
                 </button>
               ))}
             </div>
@@ -164,7 +173,7 @@ export function MemoryBrowserView() {
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([branch, branchNodes]) => (
                 <div key={branch} className="mb-3">
-                  <p className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase">
+                  <p className="px-2 py-1 text-xs font-semibold text-neutral-content uppercase">
                     {branch || "Root"}
                   </p>
                   {branchNodes
@@ -175,13 +184,13 @@ export function MemoryBrowserView() {
                         onClick={() => loadFile(node.id)}
                         className={`w-full text-left px-2 py-1 rounded text-sm transition-colors ${
                           selectedFile?.path === node.id
-                            ? "bg-gray-700 text-white"
-                            : "text-gray-400 hover:text-white hover:bg-gray-800/50"
+                            ? "bg-secondary text-base-content"
+                            : "text-neutral-content hover:text-base-content hover:bg-base-300/50"
                         }`}
                       >
                         {node.title || node.name}
                         {(node.linkCount + node.backlinkCount) > 2 && (
-                          <span className="text-xs text-gray-600 ml-1">
+                          <span className="text-xs text-neutral-content/50 ml-1">
                             ({node.linkCount + node.backlinkCount})
                           </span>
                         )}
@@ -193,41 +202,35 @@ export function MemoryBrowserView() {
         </div>
       </div>
 
-      {/* Right panel: file viewer/editor */}
       <div className="flex-1 overflow-y-auto">
         {selectedFile ? (
           <div className="p-6">
-            {/* File header */}
             <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-white">
-                  {(selectedFile.frontmatter.name as string) || selectedFile.path}
-                </h2>
-                <p className="text-sm text-gray-500">{selectedFile.path}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="btn btn-ghost btn-sm btn-square md:hidden"
+                  aria-label="Open file browser"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
+                </button>
+                <div>
+                  <h2 className="text-xl font-bold text-base-content">
+                    {(selectedFile.frontmatter.name as string) || selectedFile.path}
+                  </h2>
+                  <p className="text-sm text-neutral-content">{selectedFile.path}</p>
+                </div>
               </div>
               <div className="flex gap-2">
                 {editing ? (
                   <>
-                    <button
-                      onClick={handleSave}
-                      className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-sm"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditing(false)}
-                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm"
-                    >
-                      Cancel
-                    </button>
+                    <button onClick={handleSave} className="btn btn-primary btn-sm">Save</button>
+                    <button onClick={() => setEditing(false)} className="btn btn-ghost btn-sm">Cancel</button>
                   </>
                 ) : (
                   <button
-                    onClick={() => {
-                      setEditing(true);
-                      setEditContent(selectedFile.content);
-                    }}
-                    className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm"
+                    onClick={() => { setEditing(true); setEditContent(selectedFile.content); }}
+                    className="btn btn-ghost btn-sm"
                   >
                     Edit
                   </button>
@@ -235,24 +238,25 @@ export function MemoryBrowserView() {
               </div>
             </div>
 
-            {/* Frontmatter */}
             {Object.keys(selectedFile.frontmatter).length > 0 && (
-              <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-3 mb-4 text-sm">
-                {Object.entries(selectedFile.frontmatter).map(([key, value]) => (
-                  <div key={key} className="flex gap-2">
-                    <span className="text-gray-500">{key}:</span>
-                    <span className="text-gray-300">{String(value)}</span>
-                  </div>
-                ))}
+              <div className="card card-border bg-base-300/30 mb-4">
+                <div className="card-body p-3 text-sm">
+                  {Object.entries(selectedFile.frontmatter).map(([key, value]) => (
+                    <div key={key} className="flex gap-2">
+                      <span className="text-neutral-content">{key}:</span>
+                      <span className="text-base-content/80">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Content */}
             {editing ? (
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-96 bg-gray-800 border border-gray-700 rounded-lg p-4 text-sm text-gray-200 font-mono resize-y"
+                aria-label="Edit file content"
+                className="textarea w-full h-96 font-mono resize-y"
               />
             ) : (
               <div className="prose prose-sm prose-invert max-w-none">
@@ -262,12 +266,11 @@ export function MemoryBrowserView() {
               </div>
             )}
 
-            {/* Links & Backlinks */}
             {(selectedFile.links.length > 0 || selectedFile.backlinks.length > 0) && (
               <div className="mt-6 grid grid-cols-2 gap-4">
                 {selectedFile.links.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-400 mb-2">
+                    <h3 className="text-sm font-semibold text-neutral-content mb-2">
                       Links ({selectedFile.links.length})
                     </h3>
                     <div className="space-y-1">
@@ -275,7 +278,7 @@ export function MemoryBrowserView() {
                         <button
                           key={link}
                           onClick={() => loadFile(link)}
-                          className="block text-sm text-violet-400 hover:text-violet-300"
+                          className="block text-sm link link-accent"
                         >
                           {link}
                         </button>
@@ -285,7 +288,7 @@ export function MemoryBrowserView() {
                 )}
                 {selectedFile.backlinks.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-400 mb-2">
+                    <h3 className="text-sm font-semibold text-neutral-content mb-2">
                       Backlinks ({selectedFile.backlinks.length})
                     </h3>
                     <div className="space-y-1">
@@ -293,7 +296,7 @@ export function MemoryBrowserView() {
                         <button
                           key={link}
                           onClick={() => loadFile(link)}
-                          className="block text-sm text-violet-400 hover:text-violet-300"
+                          className="block text-sm link link-accent"
                         >
                           {link}
                         </button>
@@ -305,8 +308,14 @@ export function MemoryBrowserView() {
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            Select a file to view
+          <div className="flex flex-col items-center justify-center h-full text-neutral-content gap-2">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="btn btn-ghost btn-sm md:hidden"
+            >
+              Open file browser
+            </button>
+            <span>Select a file to view</span>
           </div>
         )}
       </div>

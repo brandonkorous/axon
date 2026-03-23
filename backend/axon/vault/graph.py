@@ -143,6 +143,65 @@ class VaultGraph:
         scored.sort(key=lambda x: x[1], reverse=True)
         return [node for node, _ in scored[:n]]
 
+    def get_neighborhood(self, path: str, depth: int = 2) -> dict:
+        """BFS from a node, return subgraph within `depth` hops."""
+        if path not in self.nodes:
+            return {"nodes": [], "edges": []}
+
+        visited: set[str] = set()
+        queue = [(path, 0)]
+        visited.add(path)
+
+        while queue:
+            current, d = queue.pop(0)
+            if d >= depth:
+                continue
+            for neighbor in self.get_neighbors(current) + self.get_backlinks(current):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, d + 1))
+
+        sub_nodes = [self.nodes[p] for p in visited if p in self.nodes]
+        sub_edges = [e for e in self.edges if e.source in visited and e.target in visited]
+
+        return {
+            "nodes": [
+                {
+                    "id": n.path,
+                    "name": n.name,
+                    "branch": n.branch,
+                    "title": n.title,
+                    "description": n.description,
+                    "linkCount": n.link_count,
+                    "backlinkCount": n.backlink_count,
+                    "tags": n.tags,
+                }
+                for n in sub_nodes
+            ],
+            "edges": [
+                {"source": e.source, "target": e.target, "context": e.context}
+                for e in sub_edges
+            ],
+        }
+
+    def get_stats(self) -> dict:
+        """Return graph statistics."""
+        branch_counts: dict[str, int] = {}
+        for node in self.nodes.values():
+            branch_counts[node.branch] = branch_counts.get(node.branch, 0) + 1
+
+        top_connected = self.get_most_connected(5)
+
+        return {
+            "node_count": len(self.nodes),
+            "edge_count": len(self.edges),
+            "branches": branch_counts,
+            "top_connected": [
+                {"path": n.path, "title": n.title, "connections": n.link_count + n.backlink_count}
+                for n in top_connected
+            ],
+        }
+
     def to_json(self) -> dict:
         """Serialize graph for the frontend memory browser."""
         return {

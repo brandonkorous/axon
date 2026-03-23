@@ -7,14 +7,19 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      "/api": "http://localhost:8000",
       "/api/conversations/ws": {
-        target: "ws://localhost:8000",
+        target: "http://127.0.0.1:8000",
         ws: true,
+        changeOrigin: true,
       },
-      "/api/boardroom/ws": {
-        target: "ws://localhost:8000",
+      "/api/huddle/ws": {
+        target: "http://127.0.0.1:8000",
         ws: true,
+        changeOrigin: true,
+      },
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
       },
     },
   },

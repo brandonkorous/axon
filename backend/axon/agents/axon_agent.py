@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from axon.agents.agent import Agent, StreamChunk
 from axon.config import PersonaConfig
+
+if TYPE_CHECKING:
+    from axon.audit import AuditLogger
+    from axon.usage import UsageTracker
+    from axon.vault.vault import VaultManager
 
 
 # Axon's routing system prompt — appended to its persona instructions
@@ -15,10 +20,10 @@ ROUTING_PROMPT = """
 You have a team of specialist agents available. You can:
 - Handle simple questions, status checks, and coordination directly
 - Route to a specific agent when their expertise is needed
-- Open the boardroom when a topic warrants group discussion
+- Open a huddle when a topic warrants group discussion
 
 When you decide to route to an agent, use the route_to_agent tool.
-When you decide to open the boardroom, use the open_boardroom tool.
+When you decide to start a huddle, use the open_huddle tool.
 
 ### Available Agents
 {agent_roster}
@@ -27,7 +32,7 @@ When you decide to open the boardroom, use the open_boardroom tool.
 - Technical architecture, infrastructure, vendor questions → route to the CTO advisor
 - Strategy, fundraising, financials, hiring → route to the CEO advisor
 - Marketing, BD, campaigns, GTM, partnerships → route to the COO advisor
-- Topics touching multiple domains → open the boardroom
+- Topics touching multiple domains → start a huddle
 - Simple coordination, scheduling, status → handle yourself
 - If unsure, ask the user: "Would you like me to pull [agent] in on this?"
 """
@@ -58,14 +63,14 @@ ROUTING_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "open_boardroom",
-            "description": "Open a boardroom session for group discussion. Use when the topic warrants input from multiple advisors.",
+            "name": "open_huddle",
+            "description": "Start a huddle for group discussion. Use when the topic warrants input from multiple advisors.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "topic": {
                         "type": "string",
-                        "description": "The topic for the boardroom discussion",
+                        "description": "The topic for the huddle discussion",
                     },
                     "mode": {
                         "type": "string",
@@ -94,8 +99,18 @@ class AxonAgent(Agent):
         config: PersonaConfig,
         available_agents: dict[str, PersonaConfig],
         data_dir: str = "/data",
+        shared_vault: "VaultManager | None" = None,
+        audit_logger: "AuditLogger | None" = None,
+        usage_tracker: "UsageTracker | None" = None,
+        org_id: str = "",
     ):
-        super().__init__(config, data_dir)
+        super().__init__(
+            config, data_dir,
+            shared_vault=shared_vault,
+            audit_logger=audit_logger,
+            usage_tracker=usage_tracker,
+            org_id=org_id,
+        )
         self.available_agents = available_agents
         self._update_system_prompt()
 
@@ -105,8 +120,8 @@ class AxonAgent(Agent):
         for agent_id, agent_config in self.available_agents.items():
             if agent_id == self.id:
                 continue  # Don't list self
-            if agent_id == "boardroom":
-                continue  # Boardroom is a mode, not a routable agent
+            if agent_id == "huddle":
+                continue  # Huddle is a mode, not a routable agent
             roster_lines.append(
                 f"- **{agent_config.name}** (`{agent_id}`): {agent_config.title} — {agent_config.tagline}"
             )
@@ -114,7 +129,7 @@ class AxonAgent(Agent):
         roster = "\n".join(roster_lines) if roster_lines else "No specialist agents configured."
         routing_section = ROUTING_PROMPT.format(agent_roster=roster)
 
-        base_prompt = self.config.load_system_prompt(self.config.system_prompt_file)
+        base_prompt = self.config.load_system_prompt(self.config.vault.path)
         self.system_prompt = f"{base_prompt}\n\n{routing_section}"
 
     def _build_tool_list(self) -> list:
@@ -126,11 +141,11 @@ class AxonAgent(Agent):
     async def _handle_tool_calls(
         self,
         messages: list[dict[str, Any]],
-        tool_calls: dict[str, dict],
+        tool_calls: dict[int, dict],
         response_so_far: str,
     ) -> AsyncIterator[StreamChunk]:
         """Override to intercept routing tool calls."""
-        for tc_id, tc_data in tool_calls.items():
+        for tc_data in tool_calls.values():
             if tc_data["function"] == "route_to_agent":
                 import json
                 args = json.loads(tc_data["arguments"])
@@ -145,12 +160,12 @@ class AxonAgent(Agent):
                 )
                 return
 
-            if tc_data["function"] == "open_boardroom":
+            if tc_data["function"] == "open_huddle":
                 import json
                 args = json.loads(tc_data["arguments"])
                 yield StreamChunk(
                     agent_id=self.id,
-                    type="boardroom",
+                    type="huddle",
                     content=args.get("topic", ""),
                     metadata={
                         "topic": args["topic"],

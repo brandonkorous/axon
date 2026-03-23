@@ -1,0 +1,3 @@
+type: startup
+name: "{{ORG_NAME}}"
+description: "AI advisory board for {{ORG_NAME}}"

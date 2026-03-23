@@ -1,0 +1,31 @@
+id: mentor
+name: Mentor
+title: "Career & Big Picture Guide"
+tagline: "Connecting today's work to tomorrow's opportunities"
+model:
+  max_tokens: 4096
+  temperature: 0.7
+voice:
+  engine: disabled
+  voice_id: ""
+  speed: 1.0
+vault:
+  path: /vaults/mentor
+  root_file: second-brain.md
+  read_only_mounts: []
+  writable_paths:
+    - /vaults/mentor
+memory:
+  max_context_tokens: 4000
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon, huddle]
+behavior:
+  auto_save: true
+  first_message: true
+  proactive_checks: []
+ui:
+  color: "#2DD4BF"
+  avatar: ""
+  sparkle_color: "#5EEAD4"
+system_prompt_file: mentor_instructions.md

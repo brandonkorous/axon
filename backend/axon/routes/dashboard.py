@@ -5,29 +5,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
-from axon.config import settings
-from axon.registry import agent_registry
+import axon.registry as registry
 from axon.vault.frontmatter import parse_frontmatter
 
 router = APIRouter()
+org_router = APIRouter()
 
 
-@router.get("")
-async def get_dashboard():
-    """Get dashboard data: agent status, recent decisions, pending actions."""
-    return {
-        "agents": _get_agent_summaries(),
-        "recent_decisions": _get_recent_decisions(limit=10),
-        "pending_actions": _get_pending_actions(),
-    }
-
-
-def _get_agent_summaries() -> list[dict[str, Any]]:
+def _get_agent_summaries(agent_reg: dict) -> list[dict[str, Any]]:
     """Get summary info for all agents."""
     summaries = []
-    for agent_id, agent in agent_registry.items():
+    for agent_id, agent in agent_reg.items():
         vault_path = Path(agent.config.vault.path)
         file_count = len(list(vault_path.rglob("*.md"))) if vault_path.exists() else 0
 
@@ -37,18 +27,16 @@ def _get_agent_summaries() -> list[dict[str, Any]]:
             "title": agent.config.title,
             "color": agent.config.ui.color,
             "avatar": agent.config.ui.avatar,
-            "status": "idle",
+            "status": agent.lifecycle.status.value if hasattr(agent, "lifecycle") else "idle",
             "vault_files": file_count,
             "message_count": len(agent.conversation.messages),
         })
     return summaries
 
 
-def _get_recent_decisions(limit: int = 10) -> list[dict[str, Any]]:
-    """Aggregate recent decisions from all agent vaults."""
+def _scan_vault_decisions(vaults_dir: Path, limit: int = 10) -> list[dict[str, Any]]:
+    """Scan vault directories for decision files."""
     decisions: list[dict[str, Any]] = []
-    vaults_dir = Path(settings.axon_vaults_dir)
-
     if not vaults_dir.exists():
         return []
 
@@ -76,16 +64,13 @@ def _get_recent_decisions(limit: int = 10) -> list[dict[str, Any]]:
             except Exception:
                 continue
 
-    # Sort by date descending
     decisions.sort(key=lambda d: d.get("date", ""), reverse=True)
     return decisions[:limit]
 
 
-def _get_pending_actions() -> list[dict[str, Any]]:
-    """Find pending action items and inbox tasks across all vaults."""
+def _scan_vault_pending_actions(vaults_dir: Path) -> list[dict[str, Any]]:
+    """Find pending action items and inbox tasks across vault directories."""
     actions: list[dict[str, Any]] = []
-    vaults_dir = Path(settings.axon_vaults_dir)
-
     if not vaults_dir.exists():
         return []
 
@@ -135,3 +120,196 @@ def _get_pending_actions() -> list[dict[str, Any]]:
                     continue
 
     return actions
+
+
+# ── Widget data helpers ──────────────────────────────────────────────
+
+
+def _get_task_summary(org_id: str) -> dict[str, Any]:
+    """Get task counts by status and recent tasks."""
+    from axon.routes.tasks import _parse_tasks
+
+    org = registry.get_org(org_id)
+    if not org or not org.shared_vault:
+        return {"counts": {}, "recent": []}
+
+    tasks = _parse_tasks(org.shared_vault)
+    counts: dict[str, int] = {}
+    for t in tasks:
+        s = t.get("status", "pending")
+        counts[s] = counts.get(s, 0) + 1
+
+    recent = tasks[:5]
+    return {
+        "counts": counts,
+        "total": len(tasks),
+        "recent": [
+            {
+                "path": t.get("path", ""),
+                "name": t.get("name", ""),
+                "status": t.get("status", ""),
+                "priority": t.get("priority", ""),
+                "assignee": t.get("assignee", ""),
+            }
+            for t in recent
+        ],
+    }
+
+
+def _get_issue_summary(org_id: str) -> dict[str, Any]:
+    """Get issue counts by status and recent issues."""
+    org = registry.get_org(org_id)
+    if not org or not org.shared_vault:
+        return {"counts": {}, "recent": []}
+
+    vault = org.shared_vault
+    issues_dir = Path(vault.vault_path) / "issues"
+    if not issues_dir.exists():
+        return {"counts": {}, "total": 0, "recent": []}
+
+    issues = []
+    for md_file in sorted(issues_dir.glob("*.md"), reverse=True):
+        if md_file.name.endswith("-index.md"):
+            continue
+        try:
+            metadata, _ = vault.read_file(f"issues/{md_file.name}")
+            metadata["path"] = f"issues/{md_file.name}"
+            issues.append(metadata)
+        except Exception:
+            continue
+
+    counts: dict[str, int] = {}
+    for issue in issues:
+        s = issue.get("status", "open")
+        counts[s] = counts.get(s, 0) + 1
+
+    return {
+        "counts": counts,
+        "total": len(issues),
+        "recent": [
+            {
+                "path": i.get("path", ""),
+                "name": i.get("name", ""),
+                "id": i.get("id", ""),
+                "status": i.get("status", ""),
+                "priority": i.get("priority", ""),
+                "assignee": i.get("assignee", ""),
+            }
+            for i in issues[:5]
+        ],
+    }
+
+
+def _get_audit_summary(org_id: str) -> dict[str, Any]:
+    """Get recent audit entries and total count."""
+    org = registry.get_org(org_id)
+    if not org or not org.audit_logger:
+        return {"total": 0, "recent": []}
+
+    total = org.audit_logger.count_entries()
+    recent = org.audit_logger.list_entries(limit=8)
+
+    return {
+        "total": total,
+        "recent": [
+            {
+                "timestamp": e.get("timestamp", ""),
+                "agent_id": e.get("agent_id", ""),
+                "action": e.get("action", ""),
+                "tool": e.get("tool", ""),
+            }
+            for e in recent
+        ],
+    }
+
+
+def _get_achievement_summary(org_id: str) -> list[dict[str, Any]]:
+    """Get recent achievements."""
+    org = registry.get_org(org_id)
+    if not org or not org.shared_vault:
+        return []
+
+    vault = org.shared_vault
+    achievements_dir = Path(vault.vault_path) / "achievements"
+    if not achievements_dir.exists():
+        return []
+
+    achievements = []
+    for md_file in sorted(achievements_dir.glob("*.md"), reverse=True):
+        if md_file.name.endswith("-index.md"):
+            continue
+        try:
+            metadata, _ = vault.read_file(f"achievements/{md_file.name}")
+            achievements.append({
+                "name": metadata.get("name", ""),
+                "impact": metadata.get("impact", ""),
+                "date": metadata.get("date", ""),
+                "agents_involved": metadata.get("agents_involved", []),
+            })
+        except Exception:
+            continue
+
+    return achievements[:5]
+
+
+# ── Build response ───────────────────────────────────────────────────
+
+
+def _build_dashboard(
+    agent_reg: dict,
+    vaults_dir: Path | None = None,
+    org_id: str = "default",
+) -> dict:
+    """Build the full dashboard response."""
+    result: dict[str, Any] = {
+        "agents": _get_agent_summaries(agent_reg),
+        "recent_decisions": [],
+        "pending_actions": [],
+        "tasks": _get_task_summary(org_id),
+        "issues": _get_issue_summary(org_id),
+        "audit": _get_audit_summary(org_id),
+        "achievements": _get_achievement_summary(org_id),
+    }
+    if vaults_dir:
+        result["recent_decisions"] = _scan_vault_decisions(vaults_dir, limit=10)
+        result["pending_actions"] = _scan_vault_pending_actions(vaults_dir)
+    return result
+
+
+# ── Legacy routes (default org) ─────────────────────────────────────
+
+
+@router.get("")
+async def get_dashboard():
+    """Get dashboard data: agent status, recent decisions, pending actions."""
+    org = registry.get_default_org()
+    vaults_dir = None
+    if org:
+        for agent in org.agent_registry.values():
+            vault_path = Path(agent.config.vault.path)
+            if vault_path.exists():
+                vaults_dir = vault_path.parent
+                break
+    return _build_dashboard(registry.agent_registry, vaults_dir, registry.default_org_id)
+
+
+# ── Org-scoped routes ───────────────────────────────────────────────
+
+
+@org_router.get("")
+async def get_org_dashboard(org_id: str):
+    """Get dashboard data for an organization."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+
+    # For org-scoped, scan within the org's vault directories
+    # We'll look at each agent's vault path parent to find the vaults root
+    vaults_dir = None
+    for agent in org.agent_registry.values():
+        vault_path = Path(agent.config.vault.path)
+        if vault_path.exists():
+            vaults_dir = vault_path.parent
+            break
+
+    return _build_dashboard(org.agent_registry, vaults_dir, org_id)

@@ -1,0 +1,6 @@
+{
+  "axon_url": "{{AXON_URL}}",
+  "org_id": "{{ORG_ID}}",
+  "agent_id": "{{AGENT_ID}}",
+  "codebase": "{{CODEBASE_PATH}}"
+}

@@ -7,9 +7,9 @@ interface Props {
 
 export function ThinkingIndicator({ color = "#8B5CF6", agentName = "Axon" }: Props) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
+    <div className="flex items-center gap-3 px-4 py-3" role="status" aria-label={`${agentName} is thinking`}>
       <motion.div
-        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white motion-reduce:animate-none"
         style={{ backgroundColor: color }}
         animate={{
           boxShadow: [
@@ -26,14 +26,14 @@ export function ThinkingIndicator({ color = "#8B5CF6", agentName = "Axon" }: Pro
         {[0, 1, 2].map((i) => (
           <motion.div
             key={i}
-            className="w-2 h-2 rounded-full"
+            className="w-2 h-2 rounded-full motion-reduce:animate-none"
             style={{ backgroundColor: color }}
             animate={{ opacity: [0.3, 1, 0.3] }}
             transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
           />
         ))}
       </div>
-      <span className="text-sm text-gray-500">{agentName} is thinking...</span>
+      <span className="text-sm text-neutral-content">{agentName} is thinking...</span>
     </div>
   );
 }
