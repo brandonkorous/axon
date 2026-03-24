@@ -8,7 +8,7 @@
 - Single responsibility — each function/module does one thing. If you can't name it clearly, it's doing too much
 - Fail fast, fail loud — errors should surface immediately at the boundary, not silently propagate
 - No magic strings/numbers — use constants or enums
-- Tests live next to code — colocate `*.test.ts` with the module, not in a separate tree
+- Tests live in dedicated test directories — frontend: `*.test.ts` colocated, backend: `backend/tests/` mirroring `backend/axon/` structure
 - Imports stay clean — no circular dependencies, no barrel files that re-export everything
 
 ## Design Context

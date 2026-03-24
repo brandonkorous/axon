@@ -11,6 +11,7 @@ dist/
 build/
 .venv/
 venv/
+.pytest_cache/
 
 # Node
 node_modules/
@@ -30,3 +31,4 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+

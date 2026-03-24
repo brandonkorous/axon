@@ -28,7 +28,7 @@ jobs:
           python-version: "3.11"
       - run: pip install -e ".[dev]"
         working-directory: backend/
-      - run: python -m pytest
+      - run: python -m pytest tests/
         working-directory: backend/
 
   docker:
