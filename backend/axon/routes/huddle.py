@@ -8,9 +8,27 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 
 import axon.registry as registry
 import axon.ws_registry as ws_registry
+from axon.agents.huddle import split_response_by_speaker
 
 router = APIRouter()
 org_router = APIRouter()
+
+
+def _build_history(messages) -> list[dict]:
+    """Build history with per-speaker splitting for assistant messages."""
+    history: list[dict] = []
+    for m in messages:
+        if m.role == "assistant":
+            history.extend(split_response_by_speaker(m.content, m.timestamp))
+        else:
+            history.append({
+                "role": m.role,
+                "content": m.content,
+                "speaker": None,
+                "target": None,
+                "timestamp": m.timestamp,
+            })
+    return history
 
 
 async def _handle_huddle(websocket: WebSocket, huddle):
@@ -36,20 +54,10 @@ async def _handle_huddle(websocket: WebSocket, huddle):
     ws_registry.register("huddle", active_conv_id, websocket)
 
     # Send existing conversation history on connect
-    history = [
-        {
-            "role": m.role,
-            "content": m.content,
-            "speaker": getattr(m, "speaker", None),
-            "target": getattr(m, "target", None),
-            "timestamp": m.timestamp,
-        }
-        for m in huddle.conversation.messages
-    ]
     await websocket.send_json({
         "type": "switched",
         "conversation_id": active_conv_id,
-        "messages": history,
+        "messages": _build_history(huddle.conversation.messages),
     })
 
     try:
@@ -90,18 +98,10 @@ async def _handle_huddle(websocket: WebSocket, huddle):
                         ws_registry.unregister("huddle", old_conv_id, websocket)
                         ws_registry.register("huddle", new_conv_id, websocket)
                         active_conv_id = new_conv_id
-                    history = [
-                        {
-                            "role": m.role,
-                            "content": m.content,
-                            "timestamp": m.timestamp,
-                        }
-                        for m in huddle.conversation.messages
-                    ]
                     await websocket.send_json({
                         "type": "switched",
                         "conversation_id": conv_id,
-                        "messages": history,
+                        "messages": _build_history(huddle.conversation.messages),
                     })
                 except ValueError:
                     await websocket.send_json({
@@ -124,16 +124,7 @@ def _get_huddle_history(huddle) -> dict:
     """Build history response for a huddle."""
     if not huddle:
         return {"messages": []}
-    return {
-        "messages": [
-            {
-                "role": m.role,
-                "content": m.content,
-                "timestamp": m.timestamp,
-            }
-            for m in huddle.conversation.messages
-        ],
-    }
+    return {"messages": _build_history(huddle.conversation.messages)}
 
 
 # ── Legacy routes (default org) ─────────────────────────────────────

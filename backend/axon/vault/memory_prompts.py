@@ -119,3 +119,50 @@ Respond with JSON only:
 Be selective. The bar is: "would this change how the agent handles a future \
 conversation?" Greetings, simple facts, and routine answers are NOT worth saving. \
 Only extract genuine insights, patterns, corrections, or validated knowledge."""
+
+CONSOLIDATION_REVIEW_PROMPT = """\
+You are a memory consolidation engine. Review these learning entries from an \
+AI agent's knowledge vault and identify opportunities to consolidate.
+
+## Learning Entries
+{entries}
+
+For each entry you see: [path] name (confidence, age_days, tags)
+> First 150 chars of the insight text
+
+Analyze the batch and respond with JSON only:
+```json
+{{
+  "merges": [
+    {{
+      "source_paths": ["learnings/file1.md", "learnings/file2.md"],
+      "merged_insight": "A higher-level insight combining the sources",
+      "merged_confidence": 0.8,
+      "tags": "tag1, tag2"
+    }}
+  ],
+  "archives": [
+    {{
+      "path": "learnings/file.md",
+      "reason": "Low value — vague, unvalidated, superseded by other entries"
+    }}
+  ],
+  "contradictions": [
+    {{
+      "path_a": "learnings/file1.md",
+      "path_b": "learnings/file2.md",
+      "description": "These entries make opposing claims about X"
+    }}
+  ]
+}}
+```
+
+Rules:
+- Only merge entries that genuinely say the same thing or combine into a clear \
+higher-level pattern. Do not force merges.
+- Only archive entries that are clearly low-value: vague, trivial, or fully \
+superseded by a better entry in this batch.
+- Flag contradictions only when two entries make genuinely incompatible claims.
+- It is fine to return empty arrays if nothing needs action. Be conservative.
+- The merged_confidence should reflect the combined evidence — typically higher \
+than either source alone, but capped at 0.9."""

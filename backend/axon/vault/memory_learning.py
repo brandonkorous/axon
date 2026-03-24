@@ -176,10 +176,37 @@ def apply_confidence_decay(
 # ── Internal helpers ─────────────────────────────────────────────
 
 
+def _ensure_learnings_linked(vault: VaultManager) -> None:
+    """Ensure the vault's root file links to the learnings branch.
+
+    If the root file exists but doesn't contain a [[learnings/ link,
+    append a Learnings section. This prevents orphaned subtrees.
+    """
+    root_path = Path(vault.vault_path) / vault.root_file
+    if not root_path.exists():
+        return
+
+    content = root_path.read_text(encoding="utf-8")
+    if "[[learnings/" in content:
+        return  # Already linked
+
+    # Append the learnings branch link
+    content = content.rstrip() + (
+        "\n\n### Learnings\n"
+        "Auto-extracted insights, patterns, and corrections from conversations.\n"
+        "- [[learnings/learnings-index|Learnings]]\n"
+    )
+    root_path.write_text(content, encoding="utf-8")
+    logger.info("LEARN — linked learnings branch to root file: %s", vault.root_file)
+
+
 def _write_insights(
     vault: VaultManager, insights: list[dict[str, Any]], today: str,
 ) -> None:
     """Write new insight files to the learnings/ branch."""
+    if insights:
+        _ensure_learnings_linked(vault)
+
     for insight_data in insights:
         insight = insight_data.get("insight", "")
         if not insight:

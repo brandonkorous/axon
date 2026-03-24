@@ -1,0 +1,3 @@
+* @axon-hq/core
+/frontend/ @axon-hq/frontend
+/backend/ @axon-hq/backend

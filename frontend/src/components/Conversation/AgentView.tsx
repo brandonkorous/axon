@@ -14,6 +14,7 @@ import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
 import { playAudioBase64 } from "../../hooks/useVoice";
 import { orgApiPath } from "../../stores/orgStore";
+import { DocumentDrawer } from "../Documents/DocumentDrawer";
 
 export function AgentView() {
   const { agentId } = useParams<{ agentId: string }>();
@@ -30,6 +31,7 @@ export function AgentView() {
   } = useConversationStore();
   const { agents, setAgentStatus } = useAgentStore();
   const [isThinking, setIsThinking] = useState(false);
+  const [openDocPath, setOpenDocPath] = useState<string | null>(null);
   const isThinkingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasGreetedRef = useRef<string | null>(null);
@@ -267,7 +269,7 @@ export function AgentView() {
               agentId={agent.id}
             />
           ) : (
-            <ChatMessage key={msg.id} message={msg} />
+            <ChatMessage key={msg.id} message={msg} onDocumentOpen={setOpenDocPath} />
           )
         )}
         {isThinking && (
@@ -286,6 +288,15 @@ export function AgentView() {
         placeholder={`Message ${agent.name}...`}
         disabled={!connected}
       />
+
+      {openDocPath && agentId && (
+        <DocumentDrawer
+          vaultId={agentId}
+          filePath={openDocPath}
+          onClose={() => setOpenDocPath(null)}
+          onNavigate={(path) => setOpenDocPath(path)}
+        />
+      )}
     </div>
   );
 }

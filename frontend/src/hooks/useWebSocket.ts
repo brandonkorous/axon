@@ -12,9 +12,26 @@ export function useWebSocket({ url, onMessage, autoConnect = true }: UseWebSocke
   const [connected, setConnected] = useState(false);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  // Flag to prevent zombie reconnects after intentional disconnect
+  const intentionalCloseRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    // Clean up any existing connection before creating a new one
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onopen = null;
+      if (wsRef.current.readyState !== WebSocket.CLOSED) {
+        wsRef.current.close();
+      }
+      wsRef.current = null;
+    }
+
+    intentionalCloseRef.current = false;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     // In dev, connect directly to backend to avoid Vite proxy WS issues
@@ -27,8 +44,10 @@ export function useWebSocket({ url, onMessage, autoConnect = true }: UseWebSocke
     ws.onopen = () => setConnected(true);
     ws.onclose = () => {
       setConnected(false);
-      // Reconnect after 2 seconds
-      setTimeout(connect, 2000);
+      // Only reconnect if this wasn't an intentional disconnect
+      if (!intentionalCloseRef.current) {
+        reconnectTimerRef.current = setTimeout(connect, 2000);
+      }
     };
     ws.onerror = () => ws.close();
     ws.onmessage = (event) => {
@@ -50,8 +69,17 @@ export function useWebSocket({ url, onMessage, autoConnect = true }: UseWebSocke
   }, []);
 
   const disconnect = useCallback(() => {
-    wsRef.current?.close();
-    wsRef.current = null;
+    intentionalCloseRef.current = true;
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setConnected(false);
   }, []);
 
   useEffect(() => {

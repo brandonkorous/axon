@@ -18,12 +18,12 @@ _TEMPLATE_DIR = Path(__file__).parent / "runner_template"
 _HOST_SERVICE = Path(__file__).parent / "runner_host.js"
 
 # Files copied for every runner
-_COMMON_FILES = ("runner.js",)
+_COMMON_FILES = ("runner.js", "base_bridge.js")
 
 # Bridge files per worker type
 _BRIDGE_FILES: dict[str, tuple[str, ...]] = {
     WorkerType.CODE: ("code_bridge.js", "claude_bridge.js", "claude_util.js"),
-    WorkerType.DOCUMENTS: ("documents_bridge.js", "claude_util.js"),
+    WorkerType.DOCUMENTS: ("documents_bridge.js", "doc_renderers.js", "claude_util.js"),
     WorkerType.EMAIL: ("email_bridge.js", "claude_util.js"),
     WorkerType.IMAGES: ("images_bridge.js", "claude_util.js"),
     WorkerType.BROWSER: ("browser_bridge.js", "claude_util.js"),
@@ -74,6 +74,14 @@ def scaffold_runner(
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
         f.write("\n")
+
+    # Write package.json for workers that need npm dependencies
+    if worker_type == WorkerType.DOCUMENTS:
+        pkg = {"private": True, "dependencies": {"pdfkit": "^0.16", "docx": "^9"}}
+        pkg_path = runner_dir / "package.json"
+        with open(pkg_path, "w", encoding="utf-8") as f:
+            json.dump(pkg, f, indent=2)
+            f.write("\n")
 
     # Ensure host runner service exists in the orgs root
     orgs_root = runners_dir.parent.parent  # runners_dir = orgs/{org}/runners

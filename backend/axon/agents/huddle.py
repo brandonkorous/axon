@@ -54,6 +54,74 @@ class HuddleChunk:
     content: str = ""
 
 
+def split_response_by_speaker(
+    text: str, timestamp: float,
+) -> list[dict[str, Any]]:
+    """Split a stored huddle response into per-speaker segments for history.
+
+    Returns a list of dicts with role, content, speaker, target, timestamp.
+    """
+    segments: list[dict[str, Any]] = []
+    current_speaker: str | None = None
+    current_target: str | None = None
+
+    remaining = text
+    while remaining:
+        speaker_match = SPEAKER_PATTERN.search(remaining)
+        table_match = TABLE_PATTERN.search(remaining)
+
+        match = None
+        if speaker_match and table_match:
+            match = speaker_match if speaker_match.start() < table_match.start() else table_match
+        elif speaker_match:
+            match = speaker_match
+        elif table_match:
+            match = table_match
+
+        if match is None:
+            # No more tags — emit remaining text with current speaker
+            if remaining.strip():
+                segments.append({
+                    "role": "assistant",
+                    "content": remaining.strip(),
+                    "speaker": current_speaker,
+                    "target": current_target,
+                    "timestamp": timestamp,
+                })
+            break
+
+        before = remaining[: match.start()]
+        if before.strip():
+            segments.append({
+                "role": "assistant",
+                "content": before.strip(),
+                "speaker": current_speaker,
+                "target": current_target,
+                "timestamp": timestamp,
+            })
+
+        if match == table_match:
+            current_speaker = "table"
+            current_target = None
+        else:
+            current_speaker = match.group(1).lower()
+            current_target = match.group(2).lower() if match.group(2) else None
+
+        remaining = remaining[match.end() :]
+
+    # If no segments were created (no tags at all), return the whole text
+    if not segments and text.strip():
+        segments.append({
+            "role": "assistant",
+            "content": text.strip(),
+            "speaker": None,
+            "target": None,
+            "timestamp": timestamp,
+        })
+
+    return segments
+
+
 class Huddle:
     """Orchestrates multi-persona huddle sessions.
 
@@ -275,6 +343,8 @@ class Huddle:
                 ):
                     if hc.type == "_buffer":
                         text_buffer = hc.content
+                        current_speaker = hc.speaker
+                        current_target = hc.target
                     else:
                         current_speaker = hc.speaker
                         current_target = hc.target

@@ -238,6 +238,8 @@ class VaultManager:
                 {"name": f"{branch.title()} Index", "description": f"Index of {branch} entries"},
                 f"# {branch.title()}\n\n",
             )
+            # Auto-link new branch from root file so it's traversable
+            self._ensure_branch_linked(branch, index_path)
 
         full_index = self.vault_path / index_path
         content = full_index.read_text(encoding="utf-8")
@@ -247,6 +249,30 @@ class VaultManager:
             content = f"{content.rstrip()}\n{link_line}\n"
             full_index.write_text(content, encoding="utf-8")
             self.cache.update(index_path)
+
+    def _ensure_branch_linked(self, branch: str, index_path: str) -> None:
+        """Ensure the root file links to a branch index.
+
+        Called when a new branch index is first created so the branch
+        is reachable via graph traversal from the root.
+        """
+        root = self.vault_path / self.root_file
+        if not root.exists():
+            return
+
+        content = root.read_text(encoding="utf-8")
+        # Check if any link to this branch already exists
+        if f"[[{branch}/" in content:
+            return
+
+        # Derive the display path (strip .md for wikilink)
+        link_target = index_path.removesuffix(".md")
+        content = content.rstrip() + (
+            f"\n\n### {branch.replace('-', ' ').title()}\n"
+            f"- [[{link_target}|{branch.replace('-', ' ').title()}]]\n"
+        )
+        root.write_text(content, encoding="utf-8")
+        self.cache.update(self.root_file)
 
     def _check_path_access(self, full_path: Path) -> None:
         """Ensure the path is within the vault directory (prevent directory traversal)."""

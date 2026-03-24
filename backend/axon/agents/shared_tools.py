@@ -332,13 +332,24 @@ class SharedVaultToolExecutor:
         today_str = str(date.today())
         path = f"tasks/{today_str}-{slug}.md"
 
+        # Prevent overwriting existing tasks — return the existing one instead
+        try:
+            existing_meta, _ = self.vault.read_file(path)
+            existing_status = existing_meta.get("status", "")
+            return (
+                f"Task already exists: [[{path}]] "
+                f"(status: {existing_status}, assignee: {existing_meta.get('assignee', 'unassigned')}). "
+                f"Use task_update to modify it."
+            )
+        except FileNotFoundError:
+            pass  # Good — no collision
+
         labels_raw = args.get("labels", "")
         labels = [l.strip() for l in labels_raw.split(",") if l.strip()] if labels_raw else []
 
         assignee = args.get("assignee", "")
-        # Auto-set in_progress when agent assigns task to itself
-        self_assigned = assignee == self.agent_id
-        status = "in_progress" if self_assigned else "pending"
+        # Auto-set in_progress when task has an assignee
+        status = "in_progress" if assignee else "pending"
 
         metadata = {
             "name": title,
@@ -363,9 +374,9 @@ class SharedVaultToolExecutor:
         # Update index
         self.vault._update_branch_index("tasks", slug, title)
 
-        # Trigger immediate execution when self-assigned
-        if self_assigned:
-            await self._trigger_task_execution()
+        # Trigger immediate execution when task has an assignee
+        if assignee:
+            await self._trigger_task_execution(assignee)
 
         display_assignee = assignee or "unassigned"
         return f"Task created: [[{path}]] (assigned to {display_assignee}, status: {status}, priority {metadata['priority']})"

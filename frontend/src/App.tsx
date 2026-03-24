@@ -16,6 +16,7 @@ import { InboxView } from "./components/Inbox/InboxView";
 import { WorkerListView } from "./components/Workers/WorkerListView";
 import { WorkerDetailView } from "./components/Workers/WorkerDetailView";
 import { WorkerSetupView } from "./components/Workers/WorkerSetupView";
+import { DocumentView } from "./components/Documents/DocumentView";
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/workers" element={<WorkerListView />} />
         <Route path="/workers/new" element={<WorkerSetupView />} />
         <Route path="/workers/:agentId" element={<WorkerDetailView />} />
+        <Route path="/docs/:vaultId/*" element={<DocumentView />} />
       </Route>
     </Routes>
   );

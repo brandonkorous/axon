@@ -25,7 +25,7 @@ WORKER_TYPE_LABELS: dict[WorkerType, str] = {
 
 WORKER_TYPE_DESCRIPTIONS: dict[WorkerType, str] = {
     WorkerType.CODE: "Execute code changes via Claude Code CLI",
-    WorkerType.DOCUMENTS: "PDF/DOCX parsing and summarization",
+    WorkerType.DOCUMENTS: "PDF/DOCX parsing, analysis, and generation",
     WorkerType.EMAIL: "Gmail, O365, Resend read/send",
     WorkerType.IMAGES: "Image analysis and manipulation",
     WorkerType.BROWSER: "Playwright web automation",

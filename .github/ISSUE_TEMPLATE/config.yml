@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussion
+    url: https://github.com/axon-hq/axon/discussions
+    about: Ask questions and discuss ideas
+  - name: Discord Community
+    url: https://discord.gg/axon
+    about: Chat with the community

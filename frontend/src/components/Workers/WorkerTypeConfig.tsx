@@ -15,7 +15,14 @@ export function WorkerTypeConfig({
     case "code":
       return <CodeConfig path={codebasePath} onChange={onCodebaseChange} />;
     case "documents":
-      return <FolderConfig label="Document Folder" path={codebasePath} onChange={onCodebaseChange} />;
+      return (
+        <DocumentsConfig
+          workDir={codebasePath}
+          outputDir={typeConfig.output_dir || ""}
+          onWorkDirChange={onCodebaseChange}
+          onOutputDirChange={(v) => onTypeConfigChange("output_dir", v)}
+        />
+      );
     case "images":
       return <FolderConfig label="Image Folder" path={codebasePath} onChange={onCodebaseChange} />;
     case "shell":
@@ -96,6 +103,39 @@ function EmailConfig({ config, onChange }: { config: Record<string, string>; onC
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function DocumentsConfig({ workDir, outputDir, onWorkDirChange, onOutputDirChange }: {
+  workDir: string; outputDir: string; onWorkDirChange: (v: string) => void; onOutputDirChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="label text-sm font-medium">Document Folder</label>
+        <input
+          value={workDir}
+          onChange={(e) => onWorkDirChange(e.target.value)}
+          placeholder="e.g. D:\documents\reports"
+          className="input input-sm w-full font-mono"
+        />
+        <p className="text-xs text-neutral-content mt-1">
+          Source directory containing documents to parse
+        </p>
+      </div>
+      <div>
+        <label className="label text-sm font-medium">Output Directory</label>
+        <input
+          value={outputDir}
+          onChange={(e) => onOutputDirChange(e.target.value)}
+          placeholder="Defaults to document folder"
+          className="input input-sm w-full font-mono"
+        />
+        <p className="text-xs text-neutral-content mt-1">
+          Where generated documents (PDF/DOCX/HTML) are saved
+        </p>
+      </div>
     </div>
   );
 }

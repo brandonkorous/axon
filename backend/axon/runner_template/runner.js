@@ -27,7 +27,20 @@ const BRIDGE_MAP = {
 function loadBridge(workerType) {
   const mod = BRIDGE_MAP[workerType] || "./code_bridge";
   log("INFO", `Loading bridge: ${mod} (worker_type=${workerType || "code"})`);
-  return require(mod);
+  const bridge = require(mod);
+
+  if (typeof bridge.generatePlan !== "function")
+    throw new Error(`Bridge ${mod} missing generatePlan()`);
+  if (typeof bridge.executePlan !== "function")
+    throw new Error(`Bridge ${mod} missing executePlan()`);
+
+  if (bridge.meta) {
+    log("INFO", `Bridge: ${bridge.meta.name} — ${bridge.meta.description}`);
+    if (bridge.meta.capabilities.length)
+      log("INFO", `Capabilities: ${bridge.meta.capabilities.join(", ")}`);
+  }
+
+  return bridge;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -107,27 +107,28 @@ def scaffold_from_template(
     # Step 5: Generate huddle instructions with advisor roster
     _generate_huddle_instructions(personas_dest, template_personas_dir, advisor_ids)
 
-    # Step 6: Create per-advisor vault directories
+    # Step 6: Create per-advisor vault directories using vault templates
     vaults_dir = org_path / "vaults"
     for advisor_id in advisor_ids:
         vault_path = vaults_dir / advisor_id
-        vault_path.mkdir(parents=True, exist_ok=True)
-        root_file = vault_path / "second-brain.md"
-        if not root_file.exists():
-            root_file.write_text(
-                f"# {advisor_id.title()} Vault\n\nPersistent memory for {advisor_id}.\n",
-                encoding="utf-8",
-            )
+        # Load persona YAML for name/title placeholders
+        persona_yaml = template_personas_dir / f"{advisor_id}.yaml"
+        agent_name = advisor_id.title()
+        agent_title = ""
+        if persona_yaml.exists():
+            with open(persona_yaml, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            agent_name = data.get("name", agent_name)
+            agent_title = data.get("title", "")
+        _scaffold_vault_from_template(
+            vault_path, "advisor", agent_name, agent_title,
+        )
     # Also create axon and huddle vaults
-    for name in ("axon", "huddle"):
+    for name, template_type in (("axon", "orchestrator"), ("huddle", "orchestrator")):
         vault_path = vaults_dir / name
-        vault_path.mkdir(parents=True, exist_ok=True)
-        root_file = vault_path / "second-brain.md"
-        if not root_file.exists():
-            root_file.write_text(
-                f"# {name.title()} Vault\n\nPersistent memory for {name}.\n",
-                encoding="utf-8",
-            )
+        _scaffold_vault_from_template(
+            vault_path, template_type, name.title(), "",
+        )
 
     # Step 7: Write org.yaml with type
     org_yaml = org_path / "org.yaml"
@@ -179,6 +180,54 @@ def _load_template_info(template_dir: Path) -> dict | None:
         "icon": meta.get("icon", ""),
         "personas": personas,
     }
+
+
+def _scaffold_vault_from_template(
+    vault_path: Path,
+    template_type: str,
+    agent_name: str,
+    agent_title: str,
+) -> None:
+    """Scaffold a vault directory using a vault template.
+
+    Uses the vault_templates/{template_type}/second-brain.md with placeholder
+    replacement. Only creates files that don't already exist — safe for
+    existing vaults.
+    """
+    from axon.vault.scaffold import TEMPLATES_DIR as VAULT_TEMPLATES_DIR
+
+    vault_path.mkdir(parents=True, exist_ok=True)
+    root_file = vault_path / "second-brain.md"
+    if root_file.exists():
+        return  # Never overwrite existing vault data
+
+    # Try to use the vault template
+    template_dir = VAULT_TEMPLATES_DIR / template_type
+    template_root = template_dir / "second-brain.md"
+
+    if template_root.exists():
+        content = template_root.read_text(encoding="utf-8")
+        content = content.replace("{{AGENT_NAME}}", agent_name)
+        content = content.replace("{{AGENT_TITLE}}", agent_title)
+        root_file.write_text(content, encoding="utf-8")
+
+        # Copy any other template files (index files, etc.)
+        for item in template_dir.rglob("*"):
+            if item.is_file() and item != template_root:
+                relative = item.relative_to(template_dir)
+                target = vault_path / relative
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    file_content = item.read_text(encoding="utf-8")
+                    file_content = file_content.replace("{{AGENT_NAME}}", agent_name)
+                    file_content = file_content.replace("{{AGENT_TITLE}}", agent_title)
+                    target.write_text(file_content, encoding="utf-8")
+    else:
+        # Fallback stub if template doesn't exist
+        root_file.write_text(
+            f"# {agent_name} Vault\n\nPersistent memory for {agent_name}.\n",
+            encoding="utf-8",
+        )
 
 
 def _copy_persona_files(

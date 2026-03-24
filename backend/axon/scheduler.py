@@ -46,10 +46,15 @@ ACTION_PROMPTS = {
         "[SYSTEM] You have an in_progress task to complete. Here are the details:\n\n"
         "{task_details}\n\n"
         "Execute the work described in the task:\n"
-        "1. Research, analyze, or write as needed\n"
-        "2. Provide a conversational summary of your findings\n"
-        "3. Update the task status to 'done' via task_update with the exact path\n"
-        "Be thorough but concise in your response."
+        "1. Do the research, analysis, or work described — be thorough and substantive\n"
+        "2. Write your findings to the vault using vault_write — this is the primary deliverable. "
+        "Create a well-structured document with clear sections, specific details, data points, "
+        "and actionable insights. The vault document IS the work product.\n"
+        "3. Provide a brief conversational summary to the user highlighting key findings "
+        "and linking to the vault document\n"
+        "4. Update the task status to 'done' via task_update with the exact path\n"
+        "The vault document should be comprehensive enough that someone reading it "
+        "gets real value without needing to ask follow-up questions."
     ),
 }
 
@@ -65,6 +70,7 @@ class AgentScheduler:
     def __init__(self) -> None:
         self._last_run: dict[str, datetime] = {}  # "org:agent:action" → last fire time
         self._task: asyncio.Task | None = None
+        self._in_flight_tasks: set[str] = set()  # task paths currently being processed
 
     def start(self) -> None:
         """Start the scheduler as a background asyncio task."""
@@ -171,6 +177,10 @@ class AgentScheduler:
         if check.action == "work_on_tasks":
             return await self._fire_task_work(org_id, agent_id, agent, key, now)
 
+        # consolidate_memory bypasses agent.process() — calls memory manager directly
+        if check.action == "consolidate_memory":
+            return await self._fire_memory_consolidation(org_id, agent_id, agent, key, now)
+
         logger.info(
             "[SCHEDULER] Firing %s for %s/%s",
             check.action, org_id, agent_id,
@@ -215,6 +225,38 @@ class AgentScheduler:
                 response_text += chunk.content
         return response_text
 
+    async def _fire_memory_consolidation(
+        self,
+        org_id: str,
+        agent_id: str,
+        agent: "Agent",
+        key: str,
+        now: datetime,
+    ) -> bool:
+        """Run LLM-driven memory consolidation directly (bypasses agent.process)."""
+        if not hasattr(agent, "memory_manager") or not agent.memory_manager:
+            return False
+
+        logger.info("[SCHEDULER] Firing memory consolidation for %s/%s", org_id, agent_id)
+        self._last_run[key] = now
+
+        try:
+            await asyncio.wait_for(
+                agent.memory_manager.deep_consolidate(),
+                timeout=TASK_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "[SCHEDULER] Memory consolidation timed out for %s/%s after %ds",
+                org_id, agent_id, TASK_TIMEOUT,
+            )
+        except Exception as e:
+            logger.error(
+                "[SCHEDULER] Memory consolidation failed for %s/%s: %s",
+                org_id, agent_id, e,
+            )
+        return True
+
     async def _fire_task_work(
         self,
         org_id: str,
@@ -243,10 +285,20 @@ class AgentScheduler:
             ws_target = task_meta.get("ws_target", agent_id)
             is_external = (ws_target != agent_id)
 
+            # Skip tasks already being processed
+            if task_path in self._in_flight_tasks:
+                logger.info(
+                    "[SCHEDULER] Task '%s' already in-flight — skipping",
+                    task_title,
+                )
+                continue
+
             logger.info(
                 "[SCHEDULER] Processing task '%s' → %s/%s",
                 task_title, ws_target, conversation_id,
             )
+
+            self._in_flight_tasks.add(task_path)
 
             # Build task-specific prompt
             task_details = (
@@ -256,18 +308,24 @@ class AgentScheduler:
             )
             prompt = ACTION_PROMPTS["work_on_tasks"].format(task_details=task_details)
 
-            if is_external:
-                # Huddle-originated task: process standalone, push to ws_target
-                await self._process_external_task(
-                    agent, agent_id, ws_target, conversation_id,
-                    task_path, task_title, prompt,
-                )
-            else:
-                # Direct chat task: switch conversation, save history
-                await self._process_local_task(
-                    agent, agent_id, conversation_id,
-                    task_path, task_title, prompt,
-                )
+            try:
+                if is_external:
+                    # Huddle-originated task: process standalone, push to ws_target
+                    await self._process_external_task(
+                        agent, agent_id, ws_target, conversation_id,
+                        task_path, task_title, prompt,
+                    )
+                else:
+                    # Direct chat task: switch conversation, save history
+                    await self._process_local_task(
+                        agent, agent_id, conversation_id,
+                        task_path, task_title, prompt,
+                    )
+
+                # Auto-complete: if agent didn't mark the task done, do it now
+                self._auto_complete_task(agent, task_path, task_title)
+            finally:
+                self._in_flight_tasks.discard(task_path)
 
         # Only mark as run after all tasks processed successfully
         self._last_run[key] = now
@@ -320,7 +378,7 @@ class AgentScheduler:
 
             async def _stream_task() -> str:
                 text = ""
-                async for chunk in agent.process(prompt, save_history=True):
+                async for chunk in agent.process(prompt, save_history=False):
                     msg = {
                         "type": chunk.type,
                         "agent_id": chunk.agent_id,
@@ -337,6 +395,12 @@ class AgentScheduler:
             response_text = await asyncio.wait_for(
                 _stream_task(), timeout=TASK_TIMEOUT,
             )
+
+            # Save only the agent's response to history (not the [SYSTEM] prompt)
+            if response_text:
+                agent.conversation.add_assistant_message(
+                    response_text, agent_id=agent_id,
+                )
 
             await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
@@ -524,8 +588,30 @@ class AgentScheduler:
                     pass
 
     @staticmethod
+    def _auto_complete_task(agent: "Agent", task_path: str, task_title: str) -> None:
+        """Auto-mark a task as done if the agent didn't do it during processing."""
+        shared_vault = agent.shared_vault
+        if not shared_vault:
+            return
+        try:
+            metadata, body = shared_vault.read_file(task_path)
+            if metadata.get("status") in ("pending", "in_progress", "executing"):
+                metadata["status"] = "done"
+                metadata["updated_at"] = datetime.now().isoformat() + "Z"
+                shared_vault.write_file(task_path, metadata, body)
+                logger.info(
+                    "[SCHEDULER] Auto-completed task '%s' (%s)",
+                    task_title, task_path,
+                )
+        except Exception as e:
+            logger.warning(
+                "[SCHEDULER] Failed to auto-complete task '%s': %s",
+                task_title, e,
+            )
+
+    @staticmethod
     def _find_agent_tasks(agent: "Agent", agent_id: str) -> list[dict]:
-        """Find in_progress tasks assigned to this agent that have a conversation_id."""
+        """Find actionable tasks assigned to this agent that have a conversation_id."""
         shared_vault = agent.shared_vault
         if not shared_vault:
             logger.debug("[SCHEDULER] %s has no shared_vault — skipping task scan", agent_id)
@@ -551,7 +637,7 @@ class AgentScheduler:
                 )
                 if (
                     assignee == agent_id
-                    and status == "in_progress"
+                    and status in ("pending", "in_progress")
                     and conv_id
                 ):
                     metadata["path"] = f"tasks/{md_file.name}"

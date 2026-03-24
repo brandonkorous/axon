@@ -129,3 +129,20 @@ class MemoryManager:
             return
         apply_confidence_decay(self.vault, self.config, learnings)
         logger.debug("[%s] 🔄 CONSOLIDATE done — confidence decay applied", self.agent_id)
+
+    async def deep_consolidate(self) -> None:
+        """Run LLM-driven deep consolidation (called by scheduler)."""
+        if not self.config.deep_consolidation_enabled:
+            return
+        from axon.vault.memory_consolidation import deep_consolidate
+
+        report = await deep_consolidate(
+            self.vault, self.config, self.model,
+            usage_tracker=self._usage_tracker,
+            agent_id=self.agent_id, org_id=self._org_id,
+        )
+        logger.info(
+            "[%s] 🧠 Deep consolidation: reviewed=%d, merged=%d, archived=%d, contradictions=%d",
+            self.agent_id, report.entries_reviewed, report.llm_merged,
+            report.llm_archived + report.auto_archived, report.contradictions_flagged,
+        )

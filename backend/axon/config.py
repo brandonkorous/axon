@@ -116,6 +116,10 @@ class LearningConfig(BaseModel):
     consolidation_interval: int = 20  # every N turns, trigger consolidation
     confidence_decay_days: int = 90  # unvalidated entries decay after this
     max_recall_tokens: int = 4000  # token budget for recalled context
+    deep_consolidation_enabled: bool = True  # LLM-driven periodic consolidation
+    deep_consolidation_batch_size: int = 10  # entries per LLM call
+    deep_consolidation_min_entries: int = 5  # skip if fewer active entries
+    archive_confidence_threshold: float = 0.2  # auto-archive below this
 
 
 class BehaviorConfig(BaseModel):

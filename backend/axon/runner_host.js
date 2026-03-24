@@ -11,7 +11,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, execSync } = require("child_process");
 
 const POLL_INTERVAL = 3000; // ms
 const MAX_LOG_BYTES = 1_000_000; // 1 MB
@@ -93,12 +93,33 @@ function buildEnv() {
   return env;
 }
 
+function ensureDeps(runnerDir) {
+  const pkgPath = path.join(runnerDir, "package.json");
+  const modulesDir = path.join(runnerDir, "node_modules");
+  if (!fs.existsSync(pkgPath) || fs.existsSync(modulesDir)) return;
+
+  log("INFO", `Installing dependencies in ${runnerDir}...`);
+  try {
+    execSync("npm install --production --no-fund --no-audit", {
+      cwd: runnerDir,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 120_000,
+      env: buildEnv(),
+    });
+    log("INFO", "Dependencies installed");
+  } catch (err) {
+    log("ERROR", `npm install failed: ${err.message}`);
+  }
+}
+
 function startRunner(key, runnerDir) {
   const runnerScript = path.join(runnerDir, "runner.js");
   if (!fs.existsSync(runnerScript)) {
     log("WARN", `No runner.js in ${runnerDir} — skipping`);
     return;
   }
+
+  ensureDeps(runnerDir);
 
   const logPath = path.join(runnerDir, "runner.log");
   truncateLog(logPath);

@@ -19,6 +19,10 @@ delegation:
 behavior:
   auto_save: true
   first_message: true
+  proactive_checks:
+    - trigger: daily
+      action: consolidate_memory
+      description: "LLM-driven memory consolidation — merge duplicates, archive stale entries"
 
 learning:
   enabled: true
