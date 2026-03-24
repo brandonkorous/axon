@@ -19,7 +19,7 @@ This guide covers the process for contributing to the project. If you have quest
 1. Fork and clone the repository:
 
    ```bash
-   git clone https://github.com/<your-username>/axon.git
+   git clone https://github.com/brandonkorous/axon.git
    cd axon
    ```
 

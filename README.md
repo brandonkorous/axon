@@ -8,11 +8,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/axon-ai/axon/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-violet" alt="License" /></a>
-  <a href="https://github.com/axon-ai/axon/stargazers"><img src="https://img.shields.io/github/stars/axon-ai/axon?style=flat&color=yellow" alt="GitHub Stars" /></a>
-  <a href="https://hub.docker.com/r/axon-ai/axon"><img src="https://img.shields.io/docker/pulls/axon-ai/axon?color=blue" alt="Docker Pulls" /></a>
-  <a href="https://discord.gg/axon-ai"><img src="https://img.shields.io/discord/000000000000000000?label=discord&color=5865F2" alt="Discord" /></a>
-  <a href="https://github.com/axon-ai/axon/actions"><img src="https://img.shields.io/github/actions/workflow/status/axon-ai/axon/ci.yml?label=CI" alt="CI Status" /></a>
+  <a href="https://github.com/brandonkorous/axon/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-violet" alt="License" /></a>
+  <a href="https://github.com/brandonkorous/axon/stargazers"><img src="https://img.shields.io/github/stars/brandonkorous/axon?style=flat&color=yellow" alt="GitHub Stars" /></a>
+  <a href="https://hub.docker.com/r/brandonkorous/axon"><img src="https://img.shields.io/docker/pulls/brandonkorous/axon?color=blue" alt="Docker Pulls" /></a>
+  <a href="https://discord.gg/axon"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2" alt="Discord" /></a>
+  <a href="https://github.com/brandonkorous/axon/actions"><img src="https://img.shields.io/github/actions/workflow/status/brandonkorous/axon/ci.yml?label=CI" alt="CI Status" /></a>
 </p>
 
 ---
@@ -54,7 +54,7 @@ Get Axon running in under two minutes.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/axon-ai/axon.git && cd axon
+git clone https://github.com/brandonkorous/axon.git && cd axon
 
 # 2. Configure your environment
 cp .env.example .env
@@ -201,8 +201,8 @@ Before opening a large PR, please open an issue or discussion first so we can al
 
 ## Community
 
-- **Discord** — [Join the server](https://discord.gg/axon-ai) for support, feature discussions, and showcases
-- **GitHub Discussions** — [Ask questions and share ideas](https://github.com/axon-ai/axon/discussions)
+- **Discord** — [Join the server](https://discord.gg/axon) for support, feature discussions, and showcases
+- **GitHub Discussions** — [Ask questions and share ideas](https://github.com/brandonkorous/axon/discussions)
 - **Twitter / X** — Follow [@axon_ai](https://twitter.com/axon_ai) for updates
 
 ---
