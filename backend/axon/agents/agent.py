@@ -14,7 +14,7 @@ from axon.agents.conversation import Conversation, ConversationManager
 if TYPE_CHECKING:
     from axon.usage import UsageTracker
 from axon.agents.provider import stream_completion
-from axon.agents.shared_tools import ACHIEVEMENT_TOOLS, ISSUE_TOOLS, TASK_TOOLS, SharedVaultToolExecutor
+from axon.agents.shared_tools import ACHIEVEMENT_TOOLS, ISSUE_TOOLS, KNOWLEDGE_TOOLS, TASK_TOOLS, SharedVaultToolExecutor
 from axon.agents.tools import (
     DELEGATION_TOOLS,
     LEARNING_TOOLS,
@@ -445,11 +445,12 @@ class Agent:
         # All agents can request new agents
         tools.extend(RECRUITMENT_TOOLS)
 
-        # Shared vault tools (tasks + issues + achievements) when org has a shared vault
+        # Shared vault tools (tasks + issues + achievements + knowledge) when org has a shared vault
         if self.shared_vault:
             tools.extend(TASK_TOOLS)
             tools.extend(ISSUE_TOOLS)
             tools.extend(ACHIEVEMENT_TOOLS)
+            tools.extend(KNOWLEDGE_TOOLS)
 
         return tools
 

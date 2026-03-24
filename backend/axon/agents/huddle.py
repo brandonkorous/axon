@@ -1,22 +1,26 @@
-"""Huddle orchestrator — multi-persona advisory sessions."""
+"""Huddle orchestrator — multi-agent advisory sessions.
+
+Instead of a single LLM pretending to be multiple advisors, the huddle
+fans out user messages to real Agent instances sequentially.  Each advisor
+responds with their own tools, vault, and memory.  A lightweight "Table"
+synthesis pass runs at the end to tie everything together.
+"""
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from axon.agents.agent import StreamChunk
 from axon.agents.provider import stream_completion
 from axon.agents.conversation import Conversation, ConversationManager
-from axon.agents.shared_tools import SharedVaultToolExecutor, TASK_TOOLS
 from axon.config import PersonaConfig
 from axon.vault.navigator import MemoryNavigator
 from axon.vault.vault import VaultManager
 
 if TYPE_CHECKING:
+    from axon.agents.agent import Agent
     from axon.usage import UsageTracker
 
 logger = logging.getLogger(__name__)
@@ -42,7 +46,6 @@ MODE_PREFIXES = {
     "quick_take": "Quick take — one sentence each, no discussion: ",
     "decision": "We need a decision on this: ",
 }
-
 
 @dataclass
 class HuddleChunk:
@@ -79,7 +82,6 @@ def split_response_by_speaker(
             match = table_match
 
         if match is None:
-            # No more tags — emit remaining text with current speaker
             if remaining.strip():
                 segments.append({
                     "role": "assistant",
@@ -109,7 +111,6 @@ def split_response_by_speaker(
 
         remaining = remaining[match.end() :]
 
-    # If no segments were created (no tags at all), return the whole text
     if not segments and text.strip():
         segments.append({
             "role": "assistant",
@@ -123,10 +124,10 @@ def split_response_by_speaker(
 
 
 class Huddle:
-    """Orchestrates multi-persona huddle sessions.
+    """Orchestrates multi-agent huddle sessions.
 
-    Single LLM conversation with the huddle system prompt.
-    Parses **Speaker:** prefixes into tagged chunks for the UI.
+    Fans out user messages to real Agent instances, collects their responses
+    (with full tool-calling support), then runs a Table synthesis pass.
     """
 
     def __init__(
@@ -136,24 +137,26 @@ class Huddle:
         data_dir: str = "/data",
         usage_tracker: "UsageTracker | None" = None,
         shared_vault: VaultManager | None = None,
+        org_id: str = "",
+        advisor_agents: dict[str, "Agent"] | None = None,
     ):
         self.config = config
         self.advisor_configs = advisor_configs
+        self.advisor_agents: dict[str, "Agent"] = advisor_agents or {}
         self._usage_tracker = usage_tracker
 
         # Vault access — huddle vault + read-only advisor vaults
         self.vault = VaultManager(config.vault.path, config.vault.root_file)
         self.navigators: dict[str, MemoryNavigator] = {}
 
-        # Build navigators for all accessible vaults
-        self.navigators["huddle"] = MemoryNavigator(config.vault.path, config.vault.root_file, cache=self.vault.cache)
+        self.navigators["huddle"] = MemoryNavigator(
+            config.vault.path, config.vault.root_file, cache=self.vault.cache,
+        )
 
-        # Dynamically mount all advisor vaults (no need to list them in huddle.yaml)
         for aid, cfg in advisor_configs.items():
             if cfg.vault.path:
                 self.navigators[aid] = MemoryNavigator(cfg.vault.path, cfg.vault.root_file)
 
-        # Also mount any explicit read_only_mounts from config (for non-advisor vaults)
         for mount in config.vault.read_only_mounts:
             vault_name = mount.path.rstrip("/").split("/")[-1]
             if vault_name not in self.navigators:
@@ -162,25 +165,16 @@ class Huddle:
         # Conversations (multi-session)
         self.conversation_manager = ConversationManager(agent_id="huddle", data_dir=data_dir)
 
-        # Task tools — allows huddle advisors to create async tasks
-        self._shared_executor: SharedVaultToolExecutor | None = None
-        self._task_tools: list[dict[str, Any]] | None = None
-        if shared_vault:
-            self._shared_executor = SharedVaultToolExecutor(
-                shared_vault, "huddle",
-                conversation_manager=self.conversation_manager,
-                ws_target="huddle",
-            )
-            self._task_tools = TASK_TOOLS
-
-        # System prompt
-        self._system_prompt: str | None = None
-
-    def refresh_advisors(self, advisor_configs: dict[str, PersonaConfig]) -> None:
+    def refresh_advisors(
+        self,
+        advisor_configs: dict[str, PersonaConfig],
+        advisor_agents: dict[str, "Agent"] | None = None,
+    ) -> None:
         """Hot-reload advisor roster and vault navigators after team changes."""
         self.advisor_configs = advisor_configs
+        if advisor_agents is not None:
+            self.advisor_agents = advisor_agents
 
-        # Rebuild navigators: keep huddle + explicit mounts, replace advisor vaults
         refreshed: dict[str, MemoryNavigator] = {
             "huddle": self.navigators["huddle"],
         }
@@ -193,289 +187,233 @@ class Huddle:
                 refreshed[vault_name] = MemoryNavigator(mount.path, mount.root_file)
         self.navigators = refreshed
 
-        # Clear cached system prompt so roster regenerates on next use
-        self._system_prompt = None
-
     @property
     def conversation(self) -> Conversation:
         """Active conversation (backward-compat with single-conversation code)."""
         return self.conversation_manager.active
 
-    @property
-    def system_prompt(self) -> str:
-        if self._system_prompt is None:
-            raw = self.config.load_system_prompt(self.config.vault.path)
-            self._system_prompt = self._inject_roster(raw)
-        return self._system_prompt
-
-    def _inject_roster(self, raw: str) -> str:
-        """Inject a dynamic advisor roster built from live configs.
-
-        Handles both the {{ADVISOR_ROSTER}} placeholder (template) and
-        baked files (replaces the ## The Advisors section entirely).
-        """
-        roster = self._build_roster()
-
-        # Template placeholder
-        if "{{ADVISOR_ROSTER}}" in raw:
-            return raw.replace("{{ADVISOR_ROSTER}}", roster)
-
-        # Baked file — replace the section between "## The Advisors" and the next "##"
-        pattern = r"(## The Advisors\s*\n).*?(?=\n## )"
-        replacement = rf"\g<1>\n{roster}\n"
-        result = re.sub(pattern, replacement, raw, count=1, flags=re.DOTALL)
-        return result
-
-    def _build_roster(self) -> str:
-        """Build the advisor roster section from live advisor configs."""
-        lines = []
-        for aid, cfg in self.advisor_configs.items():
-            lines.append(f'### {cfg.name} — {cfg.title} ("{cfg.tagline}")')
-        return "\n\n".join(lines)
-
     async def process(
-        self, user_message: str, mode: str = "standard"
+        self, user_message: str, mode: str = "standard",
     ) -> AsyncIterator[HuddleChunk]:
-        """Process a user message through the huddle."""
+        """Orchestrate a huddle round: fan out to advisors, then synthesize."""
         yield HuddleChunk(speaker=None, target=None, type="thinking")
 
         # Apply mode prefix
         prefix = MODE_PREFIXES.get(mode, "")
         full_message = f"{prefix}{user_message}" if prefix else user_message
 
-        # Detect @mentions and add directive for addressed advisors
+        # Detect @mentions for advisor ordering
         mentions = MENTION_PATTERN.findall(user_message)
-        advisor_names = {cfg.name.lower(): cfg.name for cfg in self.advisor_configs.values()}
-        addressed = [advisor_names[m.lower()] for m in mentions if m.lower() in advisor_names]
-        if addressed:
-            names = ", ".join(addressed)
-            full_message += (
-                f"\n\n[The user is directly addressing {names}. "
-                f"{names} should respond FIRST and most substantively using the **Name:** format. "
-                f"Other advisors may add brief reactions.]"
-            )
-
-        # Gather context from all accessible vaults
-        vault_context = await self._gather_context(user_message)
-
-        # Build messages
-        messages = [
-            {"role": "system", "content": self.system_prompt},
+        name_to_id = {
+            cfg.name.lower(): aid for aid, cfg in self.advisor_configs.items()
+        }
+        addressed_ids = [
+            name_to_id[m.lower()] for m in mentions if m.lower() in name_to_id
         ]
 
-        if vault_context:
-            messages.append({
-                "role": "system",
-                "content": f"## Vault Context\n\n{vault_context}",
-            })
+        # Order: mentioned advisors first, then the rest
+        advisor_order = list(addressed_ids)
+        for aid in self.advisor_agents:
+            if aid not in advisor_order:
+                advisor_order.append(aid)
 
-        messages.extend(self.conversation.get_llm_messages())
-        messages.append({"role": "user", "content": full_message})
+        # Gather vault context once for all advisor prompts
+        vault_context = await self._gather_context(user_message)
 
-        # Save user message
+        # Save user message to huddle history
         self.conversation.add_user_message(full_message)
 
-        # Stream response with tool call support
-        full_response = ""
-        current_speaker: str | None = None
-        current_target: str | None = None
-        text_buffer = ""
-        tool_calls_buffer: dict[int, dict] = {}
-        max_tool_rounds = 3
+        # Phase 1: Fan out to each advisor sequentially
+        advisor_responses: dict[str, str] = {}
+        combined_transcript = ""
 
-        for _round in range(max_tool_rounds + 1):
-            tool_calls_buffer.clear()
+        for advisor_id in advisor_order:
+            agent = self.advisor_agents.get(advisor_id)
+            if not agent:
+                continue
 
-            async for chunk in stream_completion(
-                model=self.config.model.reasoning,
-                messages=messages,
-                tools=self._task_tools,
-                max_tokens=self.config.model.max_tokens,
-                temperature=self.config.model.temperature,
-            ):
-                if chunk["type"] == "usage":
-                    if self._usage_tracker:
-                        try:
-                            self._usage_tracker.record(
-                                model=self.config.model.reasoning,
-                                prompt_tokens=chunk.get("prompt_tokens", 0),
-                                completion_tokens=chunk.get("completion_tokens", 0),
-                                total_tokens=chunk.get("total_tokens", 0),
-                                cost=chunk.get("cost", 0.0),
-                                agent_id="huddle",
-                                call_type="stream",
-                                caller="huddle",
-                            )
-                        except Exception:
-                            pass
-                    continue
+            cfg = self.advisor_configs.get(advisor_id)
+            advisor_name = cfg.name if cfg else advisor_id
 
-                if chunk["type"] == "tool_call":
-                    idx = chunk.get("index", 0)
-                    if idx not in tool_calls_buffer:
-                        tool_calls_buffer[idx] = {
-                            "id": chunk.get("id", ""),
-                            "function": chunk.get("function", ""),
-                            "arguments": "",
-                        }
-                    if chunk.get("id"):
-                        tool_calls_buffer[idx]["id"] = chunk["id"]
-                    if chunk.get("function"):
-                        tool_calls_buffer[idx]["function"] = chunk["function"]
-                    if chunk.get("arguments"):
-                        tool_calls_buffer[idx]["arguments"] += chunk["arguments"]
-                    continue
-
-                if chunk["type"] == "finish":
-                    if chunk["reason"] == "tool_calls" and tool_calls_buffer:
-                        break  # Handle tool calls below
-                    continue
-
-                if chunk["type"] != "text":
-                    continue
-
-                text_buffer += chunk["content"]
-                full_response += chunk["content"]
-
-                # Parse speaker tags from streamed text
-                async for hc in self._parse_speaker_chunks(
-                    text_buffer, current_speaker, current_target
-                ):
-                    if hc.type == "_buffer":
-                        text_buffer = hc.content
-                        current_speaker = hc.speaker
-                        current_target = hc.target
-                    else:
-                        current_speaker = hc.speaker
-                        current_target = hc.target
-                        yield hc
-
-            # If no tool calls, we're done streaming
-            if not tool_calls_buffer:
-                break
-
-            # Execute tool calls and continue conversation
-            await self._execute_tool_calls(messages, tool_calls_buffer, full_response)
-
-        # Flush remaining buffer
-        if text_buffer.strip():
-            yield HuddleChunk(
-                speaker=current_speaker,
-                target=current_target,
-                type="text",
-                content=text_buffer,
+            # Build huddle-scoped prompt
+            prompt = self._build_advisor_prompt(
+                advisor_id, advisor_name, full_message,
+                vault_context, advisor_responses,
+                is_addressed=(advisor_id in addressed_ids),
+                mode=mode,
             )
 
-        # Save to history
-        if full_response:
-            self.conversation.add_assistant_message(full_response, agent_id="huddle")
+            # Stream advisor response as HuddleChunks
+            advisor_text = ""
+            try:
+                async for chunk in self._call_advisor(agent, prompt):
+                    advisor_text += chunk
+                    yield HuddleChunk(
+                        speaker=advisor_id, target=None,
+                        type="text", content=chunk,
+                    )
+            except Exception:
+                logger.exception("[HUDDLE] Advisor %s failed", advisor_id)
+                fallback = f"*[{advisor_name} is unavailable]*\n\n"
+                advisor_text = fallback
+                yield HuddleChunk(
+                    speaker=advisor_id, target=None,
+                    type="text", content=fallback,
+                )
+
+            advisor_responses[advisor_id] = advisor_text
+            combined_transcript += f"**{advisor_name}:**\n{advisor_text}\n\n"
+
+        # Phase 2: Table synthesis
+        table_text = ""
+        async for chunk in self._synthesize_table(full_message, advisor_responses):
+            table_text += chunk
+            yield HuddleChunk(
+                speaker="table", target=None,
+                type="text", content=chunk,
+            )
+        combined_transcript += f"**The Table:**\n{table_text}"
+
+        # Save combined transcript to huddle history
+        if combined_transcript:
+            self.conversation.add_assistant_message(combined_transcript, agent_id="huddle")
 
         yield HuddleChunk(speaker=None, target=None, type="done")
 
-    async def _parse_speaker_chunks(
+    def _build_advisor_prompt(
         self,
-        text_buffer: str,
-        current_speaker: str | None,
-        current_target: str | None,
-    ) -> AsyncIterator[HuddleChunk]:
-        """Parse speaker tags from the text buffer, yielding tagged chunks.
+        advisor_id: str,
+        advisor_name: str,
+        user_message: str,
+        vault_context: str,
+        prior_responses: dict[str, str],
+        is_addressed: bool,
+        mode: str = "standard",
+    ) -> str:
+        """Build the prompt an advisor sees during a huddle turn."""
+        parts = [
+            f"[HUDDLE SESSION] You are participating in a team huddle as {advisor_name}. "
+            f"Respond from your area of expertise. Keep it concise (2-4 sentences). "
+            f"If you need to take action (share knowledge, create tasks, save to vault), "
+            f"use your tools directly — don't just say you'll do it.",
+        ]
 
-        Yields HuddleChunk for text content and a special _buffer chunk
-        with the remaining unparsed text.
+        if mode == "vote":
+            parts.append("State your position (for/against/conditional) with one-sentence reasoning.")
+        elif mode == "devils_advocate":
+            parts.append("Argue AGAINST the proposed idea from your domain.")
+        elif mode == "pressure_test":
+            parts.append("Attack this from your domain — find the weaknesses.")
+        elif mode == "quick_take":
+            parts.append("One sentence only, no discussion.")
+        elif mode == "decision":
+            parts.append("State your recommendation clearly with brief reasoning.")
+
+        if prior_responses:
+            parts.append("\n**Other advisors have said:**")
+            for aid, resp in prior_responses.items():
+                cfg = self.advisor_configs.get(aid)
+                name = cfg.name if cfg else aid
+                # Truncate long responses in context
+                summary = resp[:500] + "..." if len(resp) > 500 else resp
+                parts.append(f"- **{name}:** {summary}")
+            parts.append(
+                "\nYou may react to, build on, or push back against their points."
+            )
+
+        if is_addressed:
+            parts.append(
+                "\nYou were directly @mentioned — respond substantively and first."
+            )
+
+        if vault_context:
+            parts.append(f"\n**Shared context:**\n{vault_context}")
+
+        parts.append(f"\n**User says:** {user_message}")
+
+        return "\n".join(parts)
+
+    async def _call_advisor(
+        self, agent: "Agent", prompt: str,
+    ) -> AsyncIterator[str]:
+        """Call an advisor agent and yield text chunks.
+
+        Uses agent.process(save_history=False) so huddle exchanges
+        don't pollute the advisor's direct chat history. Tool calls
+        execute normally within the agent's turn.
         """
-        while True:
-            speaker_match = SPEAKER_PATTERN.search(text_buffer)
-            table_match = TABLE_PATTERN.search(text_buffer)
+        async for chunk in agent.process(prompt, save_history=False):
+            if chunk.type == "text":
+                yield chunk.content
+            # tool_use, tool_result, thinking — handled internally by agent
 
-            match = None
-            if speaker_match and table_match:
-                match = speaker_match if speaker_match.start() < table_match.start() else table_match
-            elif speaker_match:
-                match = speaker_match
-            elif table_match:
-                match = table_match
-
-            if match is None:
-                if len(text_buffer) > 20:
-                    emit = text_buffer[:-20]
-                    text_buffer = text_buffer[-20:]
-                    if emit:
-                        yield HuddleChunk(
-                            speaker=current_speaker,
-                            target=current_target,
-                            type="text",
-                            content=emit,
-                        )
-                break
-
-            before = text_buffer[:match.start()]
-            if before.strip():
-                yield HuddleChunk(
-                    speaker=current_speaker,
-                    target=current_target,
-                    type="text",
-                    content=before,
-                )
-
-            if match == table_match:
-                current_speaker = "table"
-                current_target = None
-            else:
-                current_speaker = match.group(1).lower()
-                current_target = match.group(2).lower() if match.group(2) else None
-
-            text_buffer = text_buffer[match.end():]
-
-        # Return remaining buffer as a special chunk
-        yield HuddleChunk(speaker=current_speaker, target=current_target, type="_buffer", content=text_buffer)
-
-    async def _execute_tool_calls(
+    async def _synthesize_table(
         self,
-        messages: list[dict[str, Any]],
-        tool_calls: dict[int, dict],
-        response_so_far: str,
-    ) -> None:
-        """Execute buffered tool calls and append results to messages."""
-        if not self._shared_executor:
-            return
+        user_message: str,
+        advisor_responses: dict[str, str],
+    ) -> AsyncIterator[str]:
+        """Stream the Table synthesis from advisor responses."""
+        messages = self._build_table_messages(user_message, advisor_responses)
 
-        # Build assistant message with tool_calls
-        tool_call_objects = []
-        for tc_data in tool_calls.values():
-            tool_call_objects.append({
-                "id": tc_data["id"],
-                "type": "function",
-                "function": {
-                    "name": tc_data["function"],
-                    "arguments": tc_data["arguments"],
-                },
-            })
+        async for chunk in stream_completion(
+            model=self.config.model.reasoning,
+            messages=messages,
+            max_tokens=500,
+            temperature=self.config.model.temperature,
+        ):
+            if chunk["type"] == "text":
+                yield chunk["content"]
+            elif chunk["type"] == "usage" and self._usage_tracker:
+                try:
+                    self._usage_tracker.record(
+                        model=self.config.model.reasoning,
+                        prompt_tokens=chunk.get("prompt_tokens", 0),
+                        completion_tokens=chunk.get("completion_tokens", 0),
+                        total_tokens=chunk.get("total_tokens", 0),
+                        cost=chunk.get("cost", 0.0),
+                        agent_id="huddle",
+                        call_type="stream",
+                        caller="table_synthesis",
+                    )
+                except Exception:
+                    pass
 
-        messages.append({
-            "role": "assistant",
-            "content": response_so_far or None,
-            "tool_calls": tool_call_objects,
-        })
+    def _build_table_messages(
+        self,
+        user_message: str,
+        advisor_responses: dict[str, str],
+    ) -> list[dict[str, str]]:
+        """Build messages for the Table synthesis LLM call."""
+        advisor_summary = "\n\n".join(
+            f"**{self.advisor_configs[aid].name}:** {resp}"
+            for aid, resp in advisor_responses.items()
+            if aid in self.advisor_configs
+        )
 
-        for tc_data in tool_calls.values():
-            try:
-                result = await self._shared_executor.execute(
-                    tc_data["function"], tc_data["arguments"],
-                )
-            except Exception as e:
-                result = f"Error: {e}"
-                logger.exception("Huddle tool call failed: %s", tc_data["function"])
-
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc_data["id"],
-                "content": result,
-            })
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "You are 'The Table' — a neutral facilitator synthesizing "
+                    "advisor perspectives in a huddle session. Provide a concise "
+                    "synthesis (3-5 sentences): where do they agree? Where's the "
+                    "tension? What's the recommended path forward? Be direct and "
+                    "actionable. Do not repeat what each advisor said — synthesize."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"**Topic:** {user_message}\n\n"
+                    f"**Advisor responses:**\n\n{advisor_summary}"
+                ),
+            },
+        ]
 
     async def _gather_context(self, query: str) -> str:
         """Gather relevant context from all accessible vaults."""
         sections: list[str] = []
-        tokens_per_vault = 1000  # Split budget across vaults
+        tokens_per_vault = 1000
 
         for name, navigator in self.navigators.items():
             context = await navigator.retrieve(query, token_budget=tokens_per_vault)

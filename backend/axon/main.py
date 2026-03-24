@@ -51,6 +51,9 @@ from axon.routes import worker_control as worker_control_routes
 from axon.routes import worker_setup as worker_setup_routes
 
 
+logger = logging.getLogger(__name__)
+
+
 def _configure_logging() -> None:
     """Configure logging based on AXON_LOG_LEVEL setting (default: INFO)."""
     level = settings.axon_log_level.upper()
@@ -97,7 +100,7 @@ def _init_org_agents(
     if not personas and personas_dir.exists():
         personas = load_all_personas(str(personas_dir), vaults_base=str(vaults_dir))
 
-    print(f"  [{org_config.id}] Loaded {len(personas)} agents: {list(personas.keys())}")
+    logger.debug(f"[{org_config.id}] Loaded {len(personas)} agents: {list(personas.keys())}")
 
     # Initialize shared vault
     shared_vault_path = vaults_dir / "shared"
@@ -159,10 +162,16 @@ def _init_org_agents(
             k: v for k, v in personas.items()
             if v.type == AgentType.ADVISOR
         }
+        advisor_agents = {
+            k: org.agent_registry[k] for k in advisor_configs
+            if k in org.agent_registry
+        }
         org.huddle = Huddle(
             config, advisor_configs, data_dir=data_dir,
             usage_tracker=usage_tracker,
             shared_vault=shared_vault,
+            org_id=org_config.id,
+            advisor_agents=advisor_agents,
         )
 
     return org
@@ -179,10 +188,10 @@ def init_orgs() -> None:
     if not orgs_path.exists():
         raise RuntimeError(f"AXON_ORGS_DIR does not exist: {orgs_dir}")
 
-    print(f"[AXON] Loading organizations from: {orgs_dir}")
+    logger.info(f"Loading organizations from: {orgs_dir}")
     for org_path in discover_orgs(orgs_dir):
         org_config = load_org_config(org_path)
-        print(f"[AXON] Initializing org: {org_config.name} ({org_config.id})")
+        logger.debug(f"Initializing org: {org_config.name} ({org_config.id})")
         org = _init_org_agents(org_path, org_config)
         registry.org_registry[org_config.id] = org
 
@@ -206,7 +215,7 @@ def init_orgs() -> None:
 
     org_count = len(registry.org_registry)
     total_agents = sum(len(o.agent_registry) for o in registry.org_registry.values())
-    print(f"[AXON] Ready: {org_count} org(s), {total_agents} agent(s)")
+    logger.info(f"Ready: {org_count} org(s), {total_agents} agent(s)")
 
 
 @asynccontextmanager

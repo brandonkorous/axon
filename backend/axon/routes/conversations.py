@@ -97,7 +97,7 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
                     from axon.voice import transcribe
 
                     audio_bytes = base64.b64decode(audio_b64)
-                    logger.info(f"Transcribing {len(audio_bytes)} bytes (format={audio_format}, rate={sample_rate})")
+                    logger.debug(f"Transcribing {len(audio_bytes)} bytes (format={audio_format}, rate={sample_rate})")
                     # Run blocking STT in thread pool to avoid freezing the event loop
                     text = await asyncio.to_thread(
                         transcribe,
@@ -105,7 +105,7 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
                         sample_rate=sample_rate,
                         audio_format=audio_format,
                     )
-                    logger.info(f"Transcription result: '{text}'")
+                    logger.debug(f"Transcription result: '{text}'")
 
                     if not text:
                         await websocket.send_json({
@@ -269,13 +269,13 @@ async def _process_and_stream(
     # Synthesize TTS if requested and voice is configured
     if want_audio and full_response.strip():
         voice_config = getattr(target_agent.config, "voice", None)
-        print(f"[TTS] check: want_audio={want_audio}, engine={voice_config.engine if voice_config else 'None'}")
+        logger.debug(f"[TTS] check: want_audio={want_audio}, engine={voice_config.engine if voice_config else 'None'}")
         if voice_config and voice_config.engine != "disabled":
             try:
                 from axon.voice import synthesize
 
                 effective_voice = voice_id_override or voice_config.voice_id or "en_US-lessac-medium"
-                print(f"[TTS] Synthesizing: {len(full_response)} chars, voice={effective_voice}")
+                logger.debug(f"[TTS] Synthesizing: {len(full_response)} chars, voice={effective_voice}")
                 # Run blocking TTS in thread pool to avoid freezing the event loop
                 audio_bytes = await asyncio.to_thread(
                     synthesize,
@@ -283,14 +283,14 @@ async def _process_and_stream(
                     voice_id=effective_voice,
                     speed=voice_config.speed,
                 )
-                logger.info(f"TTS produced {len(audio_bytes)} bytes")
+                logger.debug(f"TTS produced {len(audio_bytes)} bytes")
                 audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
                 await websocket.send_json({
                     "type": "audio_response",
                     "agent_id": target_agent.id,
                     "audio": audio_b64,
                 })
-                logger.info("audio_response sent")
+                logger.debug("audio_response sent")
             except ImportError:
                 logger.warning("Voice not installed — skipping TTS")
             except Exception as e:

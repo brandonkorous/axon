@@ -15,10 +15,17 @@ router = APIRouter()
 org_router = APIRouter()
 
 
+class TaskAttachment(BaseModel):
+    type: str  # "vault_path", "url", "document"
+    path: str
+    label: str = ""
+
+
 class TaskCreate(BaseModel):
     title: str
     description: str = ""
     assignee: str = ""
+    owner: str = ""
     priority: str = "p2"
     due_date: str = ""
     labels: list[str] = []
@@ -35,6 +42,11 @@ class TaskUpdate(BaseModel):
     due_date: str | None = None
     labels: list[str] | None = None
     body: str | None = None
+
+
+class TaskRespond(BaseModel):
+    content: str
+    attachments: list[TaskAttachment] = []
 
 
 # ── Shared helpers ────────────────────────────────────────────────────
@@ -116,6 +128,7 @@ def _create_task(org_id: str, data: TaskCreate):
     metadata = {
         "name": data.title,
         "type": "task",
+        "owner": data.owner or "user",
         "assignee": data.assignee,
         "status": "pending",
         "priority": data.priority,
@@ -127,6 +140,7 @@ def _create_task(org_id: str, data: TaskCreate):
         "created_by": "user",
         "created_at": datetime.utcnow().isoformat() + "Z",
         "updated_at": datetime.utcnow().isoformat() + "Z",
+        "responses": [],
     }
 
     content = f"# {data.title}\n\n{data.description}"
@@ -164,6 +178,28 @@ def _update_task(org_id: str, task_path: str, data: TaskUpdate):
     return {**metadata, "path": task_path, "body": body}
 
 
+def _respond_to_task(org_id: str, task_path: str, data: TaskRespond):
+    vault = _get_shared_vault(org_id)
+    try:
+        metadata, body = vault.read_file(task_path)
+    except FileNotFoundError:
+        raise HTTPException(404, f"Task not found: {task_path}")
+
+    response_entry = {
+        "from": "user",
+        "content": data.content,
+        "attachments": [a.model_dump() for a in data.attachments],
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+    if "responses" not in metadata:
+        metadata["responses"] = []
+    metadata["responses"].append(response_entry)
+    metadata["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    vault.write_file(task_path, metadata, body)
+
+    return {**metadata, "path": task_path, "body": body}
+
+
 # ── Org-scoped routes ─────────────────────────────────────────────────
 
 
@@ -189,6 +225,13 @@ async def get_task_org(org_id: str, task_path: str):
 @org_router.post("")
 async def create_task_org(org_id: str, data: TaskCreate):
     return _create_task(org_id, data)
+
+
+@org_router.put("/{task_path:path}/respond")
+async def respond_task_org(org_id: str, task_path: str, data: TaskRespond):
+    if not task_path.startswith("tasks/"):
+        task_path = f"tasks/{task_path}"
+    return _respond_to_task(org_id, task_path, data)
 
 
 @org_router.put("/{task_path:path}")
@@ -222,6 +265,13 @@ async def get_task_legacy(task_path: str):
 @router.post("")
 async def create_task_legacy(data: TaskCreate):
     return _create_task(registry.default_org_id, data)
+
+
+@router.put("/{task_path:path}/respond")
+async def respond_task_legacy(task_path: str, data: TaskRespond):
+    if not task_path.startswith("tasks/"):
+        task_path = f"tasks/{task_path}"
+    return _respond_to_task(registry.default_org_id, task_path, data)
 
 
 @router.put("/{task_path:path}")

@@ -245,6 +245,7 @@ class ToolExecutor:
         memory_manager: "MemoryManager | None" = None,
         conversation_manager: "Any | None" = None,
         ws_target: str = "",
+        advisor_ids: list[str] | None = None,
     ):
         self.vault = vault
         self.agent_id = agent_id
@@ -254,7 +255,7 @@ class ToolExecutor:
         self._audit_logger: "AuditLogger | None" = audit_logger
         self._memory_manager = memory_manager
 
-        # Shared vault executor for task/issue tools
+        # Shared vault executor for task/issue/knowledge tools
         self._shared_executor: "SharedVaultToolExecutor | None" = None
         if shared_vault:
             from axon.agents.shared_tools import SharedVaultToolExecutor
@@ -263,9 +264,10 @@ class ToolExecutor:
                 conversation_manager=conversation_manager,
                 ws_target=ws_target,
                 org_id=org_id,
+                advisor_ids=advisor_ids or [],
             )
 
-    _SHARED_TOOL_PREFIXES = ("task_", "issue_", "achievement_")
+    _SHARED_TOOL_PREFIXES = ("task_", "issue_", "achievement_", "knowledge_")
 
     async def execute(self, tool_name: str, arguments: str) -> str:
         """Execute a tool call and return the result as a string."""

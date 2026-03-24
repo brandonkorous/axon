@@ -272,6 +272,10 @@ def _refresh_orchestrator_roster(org) -> None:
         if isinstance(agent, AxonAgent):
             agent.available_agents = specialists
             agent._update_system_prompt()
-    # Refresh huddle advisor roster + vault navigators
+    # Refresh huddle advisor roster + vault navigators + agent refs
     if org.huddle:
-        org.huddle.refresh_advisors(specialists)
+        advisor_agents = {
+            aid: org.agent_registry[aid] for aid in specialists
+            if aid in org.agent_registry
+        }
+        org.huddle.refresh_advisors(specialists, advisor_agents=advisor_agents)

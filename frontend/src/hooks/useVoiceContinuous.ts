@@ -106,7 +106,6 @@ export function useVoiceContinuous({
         }
         const base64 = btoa(binary);
         const format = mimeType.includes("opus") ? "webm/opus" : "webm";
-        console.log("[VAD] Sending audio segment:", Math.round(blob.size / 1024), "KB");
         onAudioRef.current(base64, 48000, format);
       } catch (err) {
         console.error("[VAD] Failed to process audio segment:", err);
@@ -118,7 +117,6 @@ export function useVoiceContinuous({
     recorder.start(100);
     isRecordingRef.current = true;
     setSpeaking(true);
-    console.log("[VAD] Speech detected — recording started");
     onSpeechStartRef.current?.();
   }, []);
 
@@ -132,9 +130,6 @@ export function useVoiceContinuous({
     }
 
     const data = new Uint8Array(analyser.frequencyBinCount);
-    let logCountdown = 0; // throttle debug logs
-
-    console.log("[VAD] Started monitoring mic input");
 
     const tick = () => {
       if (!enabledRef.current) {
@@ -162,13 +157,6 @@ export function useVoiceContinuous({
         store.setAmplitude(Math.min(1, rms * 2.5));
       }
 
-      // Periodic debug log
-      if (logCountdown <= 0 && rms > 0.005) {
-        console.log("[VAD] RMS:", rms.toFixed(4), "threshold:", speechThreshold.toFixed(4), "recording:", isRecordingRef.current);
-        logCountdown = 60; // ~1 second between logs at 60fps
-      }
-      logCountdown--;
-
       const isSpeech = rms > speechThreshold && !store.muted;
 
       if (isSpeech) {
@@ -195,7 +183,6 @@ export function useVoiceContinuous({
             performance.now() - silenceStartRef.current >
             silenceTimeout
           ) {
-            console.log("[VAD] Silence detected — stopping recording");
             stopCurrentRecording();
             silenceStartRef.current = 0;
           }
@@ -235,7 +222,6 @@ export function useVoiceContinuous({
 
     (async () => {
       try {
-        console.log("[VAD] Requesting mic access...");
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             channelCount: 1,
@@ -250,7 +236,6 @@ export function useVoiceContinuous({
           return;
         }
 
-        console.log("[VAD] Mic stream acquired");
         streamRef.current = stream;
 
         const ctx = new AudioContext();
@@ -258,7 +243,6 @@ export function useVoiceContinuous({
         if (ctx.state === "suspended") {
           await ctx.resume();
         }
-        console.log("[VAD] AudioContext state:", ctx.state);
         audioCtxRef.current = ctx;
 
         const source = ctx.createMediaStreamSource(stream);

@@ -56,6 +56,10 @@ TASK_TOOLS: list[dict[str, Any]] = [
                         "type": "string",
                         "description": "Conversation ID to deliver results back to when task completes (for async work)",
                     },
+                    "owner": {
+                        "type": "string",
+                        "description": "Agent ID of who needs the result (gets notified on responses). Defaults to you.",
+                    },
                 },
                 "required": ["title", "description"],
             },
@@ -111,6 +115,44 @@ TASK_TOOLS: list[dict[str, Any]] = [
                     },
                 },
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "task_respond",
+            "description": (
+                "Add a response to a task thread. Use this to send results, "
+                "updates, documents, or deliverables back to the task owner "
+                "without closing the task."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the task file (e.g., 'tasks/2026-03-21-implement-auth.md')",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Response content — findings, results, updates, or questions",
+                    },
+                    "attachments": {
+                        "type": "string",
+                        "description": (
+                            "JSON array of attachments. Each has 'type' (vault_path|url|document), "
+                            "'path' (vault path or URL), and 'label' (short description). "
+                            'Example: [{"type":"vault_path","path":"notes/analysis.md","label":"Full analysis"}]'
+                        ),
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_progress", "done", "blocked"],
+                        "description": "Optionally update task status with your response",
+                    },
+                },
+                "required": ["path", "content"],
             },
         },
     },
@@ -276,12 +318,78 @@ ACHIEVEMENT_TOOLS: list[dict[str, Any]] = [
     },
 ]
 
+KNOWLEDGE_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "knowledge_share",
+            "description": (
+                "Share knowledge, documents, or key information with the team. "
+                "Creates a knowledge entry in the shared vault and automatically "
+                "creates review tasks so target advisors wake up, read it, and "
+                "extract learnings relevant to their domain. Use this when an "
+                "advisor commits to sharing information, a document needs team "
+                "review, or key insights should be distributed across the team."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Short, descriptive title for the knowledge entry",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": (
+                            "The knowledge content to share — key information, "
+                            "document summary, analysis, data points, or insights"
+                        ),
+                    },
+                    "from_advisor": {
+                        "type": "string",
+                        "description": "Agent ID of the advisor sharing this knowledge",
+                    },
+                    "for_advisors": {
+                        "type": "string",
+                        "description": (
+                            "Comma-separated agent IDs who should review this "
+                            "(e.g., 'raj, diana'). Use 'all' to share with everyone."
+                        ),
+                    },
+                    "knowledge_type": {
+                        "type": "string",
+                        "enum": [
+                            "document", "analysis", "strategy",
+                            "data", "decision", "insight",
+                        ],
+                        "description": "Type of knowledge being shared",
+                        "default": "document",
+                    },
+                    "review_prompt": {
+                        "type": "string",
+                        "description": (
+                            "Specific guidance for reviewers — what to focus on, "
+                            "what to extract, what applies to their domain "
+                            "(optional — a sensible default is generated)"
+                        ),
+                    },
+                    "labels": {
+                        "type": "string",
+                        "description": "Comma-separated labels (e.g., 'fundraising, strategy, urgent')",
+                    },
+                },
+                "required": ["title", "content", "from_advisor", "for_advisors"],
+            },
+        },
+    },
+]
+
 
 # ── Executor ────────────────────────────────────────────────────────
 
 
 class SharedVaultToolExecutor:
-    """Executes task, issue, and achievement tool calls against the shared org vault."""
+    """Executes task, issue, achievement, and knowledge tool calls against the shared org vault."""
 
     def __init__(
         self,
@@ -290,12 +398,14 @@ class SharedVaultToolExecutor:
         conversation_manager: Any = None,
         ws_target: str = "",
         org_id: str = "",
+        advisor_ids: list[str] | None = None,
     ):
         self.vault = shared_vault
         self.agent_id = agent_id
         self.conversation_manager = conversation_manager
         self.ws_target = ws_target or agent_id
         self.org_id = org_id
+        self.advisor_ids = advisor_ids or []
 
     async def execute(self, tool_name: str, arguments: str) -> str:
         """Execute a shared vault tool call."""
@@ -307,10 +417,12 @@ class SharedVaultToolExecutor:
         handlers = {
             "task_create": self._task_create,
             "task_update": self._task_update,
+            "task_respond": self._task_respond,
             "task_list": self._task_list,
             "issue_create": self._issue_create,
             "issue_update": self._issue_update,
             "issue_comment": self._issue_comment,
+            "knowledge_share": self._knowledge_share,
             "issue_list": self._issue_list,
             "achievement_create": self._achievement_create,
         }
@@ -354,6 +466,7 @@ class SharedVaultToolExecutor:
         metadata = {
             "name": title,
             "type": "task",
+            "owner": args.get("owner", self.agent_id),
             "assignee": assignee,
             "status": status,
             "priority": args.get("priority", "p2"),
@@ -366,6 +479,7 @@ class SharedVaultToolExecutor:
             "created_by": self.agent_id,
             "created_at": datetime.utcnow().isoformat() + "Z",
             "updated_at": datetime.utcnow().isoformat() + "Z",
+            "responses": [],
         }
 
         content = f"# {title}\n\n{args['description']}"
@@ -405,6 +519,44 @@ class SharedVaultToolExecutor:
             await self._trigger_task_execution(assignee)
 
         return f"Task updated: {path} ({', '.join(changes)})"
+
+    async def _task_respond(self, args: dict) -> str:
+        path = args["path"]
+        try:
+            metadata, body = self.vault.read_file(path)
+        except FileNotFoundError:
+            return f"Task not found: {path}"
+
+        # Parse attachments if provided
+        attachments: list[dict[str, str]] = []
+        attachments_raw = args.get("attachments", "")
+        if attachments_raw:
+            try:
+                attachments = json.loads(attachments_raw)
+            except json.JSONDecodeError:
+                return "Error: Invalid JSON in attachments parameter"
+
+        response_entry = {
+            "from": self.agent_id,
+            "content": args["content"],
+            "attachments": attachments,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+
+        if "responses" not in metadata:
+            metadata["responses"] = []
+        metadata["responses"].append(response_entry)
+        metadata["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+        # Optionally update status with the response
+        if args.get("status"):
+            metadata["status"] = args["status"]
+
+        self.vault.write_file(path, metadata, body)
+
+        owner = metadata.get("owner", "")
+        total = len(metadata["responses"])
+        return f"Response added to {path} (owner: {owner or 'unset'}, {total} response{'s' if total != 1 else ''})"
 
     async def _trigger_task_execution(self, target_agent_id: str = "") -> None:
         """Trigger the scheduler to process tasks for an agent after current response completes."""
@@ -624,6 +776,112 @@ class SharedVaultToolExecutor:
         self.vault._update_branch_index("achievements", slug, title)
 
         return f"Achievement recorded: [[{path}]] — {title}"
+
+    # ── Knowledge Sharing ────────────────────────────────────────────
+
+    async def _knowledge_share(self, args: dict) -> str:
+        title = args["title"]
+        slug = _slugify(title)
+        today_str = str(date.today())
+        path = f"knowledge/{today_str}-{slug}.md"
+
+        from_advisor = args.get("from_advisor", self.agent_id)
+        for_raw = args.get("for_advisors", "all")
+        knowledge_type = args.get("knowledge_type", "document")
+        review_prompt = args.get("review_prompt", "")
+
+        labels_raw = args.get("labels", "")
+        labels = [l.strip() for l in labels_raw.split(",") if l.strip()] if labels_raw else []
+
+        # Resolve "all" to actual advisor IDs
+        if for_raw.strip().lower() == "all":
+            advisor_pool = self.advisor_ids
+            if not advisor_pool and self.org_id:
+                # Resolve dynamically from registry
+                import axon.registry as registry
+                org = registry.org_registry.get(self.org_id)
+                if org:
+                    advisor_pool = list(org.agent_registry.keys())
+            target_advisors = [a for a in advisor_pool if a != from_advisor]
+        else:
+            target_advisors = [a.strip() for a in for_raw.split(",") if a.strip()]
+
+        metadata = {
+            "name": title,
+            "type": "knowledge",
+            "knowledge_type": knowledge_type,
+            "from": from_advisor,
+            "for": target_advisors,
+            "labels": labels,
+            "status": "shared",
+            "review_prompt": review_prompt,
+            "created_by": self.agent_id,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+        content = f"# {title}\n\n**Shared by:** {from_advisor}\n\n{args['content']}"
+        self.vault.write_file(path, metadata, content)
+        self.vault._update_branch_index("knowledge", slug, title)
+
+        # Create review tasks for each target advisor
+        created_tasks = []
+        for advisor_id in target_advisors:
+            default_prompt = (
+                f"Review the shared knowledge document [[{path}]] from {from_advisor}. "
+                f"Extract key insights relevant to your domain and save them to your vault."
+            )
+            task_title = f"Review: {title}"
+            task_slug = _slugify(task_title)
+            task_path = f"tasks/{today_str}-{task_slug}-{advisor_id}.md"
+
+            # Skip if task already exists
+            try:
+                self.vault.read_file(task_path)
+                continue
+            except FileNotFoundError:
+                pass
+
+            task_meta = {
+                "name": task_title,
+                "type": "task",
+                "assignee": advisor_id,
+                "status": "in_progress",
+                "priority": "p2",
+                "labels": ["knowledge-review"],
+                "knowledge_ref": path,
+                "conversation_id": (
+                    self.conversation_manager.active_id
+                    if self.conversation_manager else ""
+                ),
+                "ws_target": self.ws_target,
+                "created_by": self.agent_id,
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+            }
+
+            task_content = (
+                f"# {task_title}\n\n"
+                f"**Source:** [[{path}]]\n"
+                f"**From:** {from_advisor}\n\n"
+                f"## Instructions\n\n"
+                f"{review_prompt or default_prompt}\n\n"
+                f"After reviewing:\n"
+                f"1. Read the knowledge document from the shared vault\n"
+                f"2. Extract insights relevant to your expertise\n"
+                f"3. Save key takeaways to your own vault under learnings/\n"
+                f"4. Note any concerns, gaps, or action items from your perspective"
+            )
+            self.vault.write_file(task_path, task_meta, task_content)
+            created_tasks.append(advisor_id)
+
+            # Trigger immediate execution
+            await self._trigger_task_execution(advisor_id)
+
+        reviewers = ", ".join(created_tasks) if created_tasks else "none (already pending)"
+        return (
+            f"Knowledge shared: [[{path}]] — {title}\n"
+            f"Review tasks created for: {reviewers}"
+        )
 
     def _next_issue_id(self) -> int:
         """Get and increment the auto-increment issue ID."""

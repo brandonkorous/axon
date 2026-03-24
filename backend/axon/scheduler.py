@@ -56,6 +56,18 @@ ACTION_PROMPTS = {
         "The vault document should be comprehensive enough that someone reading it "
         "gets real value without needing to ask follow-up questions."
     ),
+    "review_knowledge": (
+        "[SYSTEM] A team member has shared knowledge for your review.\n\n"
+        "{task_details}\n\n"
+        "Review the shared knowledge document:\n"
+        "1. Read the knowledge document from the shared vault using the path in the task\n"
+        "2. Extract insights that are specifically relevant to YOUR domain and expertise\n"
+        "3. Save your key takeaways to your own vault under learnings/ using vault_write — "
+        "focus on what matters for your role, not a generic summary\n"
+        "4. If you spot concerns, gaps, or conflicts with your existing knowledge, note them\n"
+        "5. Update the task status to 'done' via task_update with the exact path\n"
+        "Be selective — only save what genuinely informs your future advice."
+    ),
 }
 
 DEFAULT_PROMPT = (
@@ -300,13 +312,30 @@ class AgentScheduler:
 
             self._in_flight_tasks.add(task_path)
 
-            # Build task-specific prompt
+            # Build task-specific prompt (including response thread)
             task_details = (
                 f"**Task:** {task_title}\n"
                 f"**Path:** {task_path}\n"
+                f"**Owner:** {task_meta.get('owner', 'unknown')}\n"
                 f"**Description:**\n{task_meta.get('body', 'No description')}"
             )
-            prompt = ACTION_PROMPTS["work_on_tasks"].format(task_details=task_details)
+            responses = task_meta.get("responses", [])
+            if responses:
+                task_details += "\n\n**Thread:**"
+                for resp in responses:
+                    from_agent = resp.get("from", "unknown")
+                    ts = resp.get("timestamp", "")
+                    task_details += f"\n---\n**{from_agent}** ({ts}):\n{resp.get('content', '')}"
+                    for att in resp.get("attachments", []):
+                        task_details += f"\n  - [{att.get('label', 'attachment')}] → {att.get('path', '')}"
+            task_labels = task_meta.get("labels", [])
+            if isinstance(task_labels, str):
+                task_labels = [l.strip() for l in task_labels.split(",")]
+            action_key = (
+                "review_knowledge" if "knowledge-review" in task_labels
+                else "work_on_tasks"
+            )
+            prompt = ACTION_PROMPTS[action_key].format(task_details=task_details)
 
             try:
                 if is_external:
