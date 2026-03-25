@@ -128,7 +128,7 @@ export function useConversationSwitching({
         id: `hist-${i}`,
         role: m.role as "user" | "assistant" | "system",
         content: m.content,
-        agentId: m.agent_id,
+        agentId: m.agent_id || m.speaker,
         speaker: m.speaker,
         target: m.target,
         timestamp: m.timestamp * 1000,

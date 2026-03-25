@@ -122,6 +122,18 @@ export function AgentView() {
           }
           break;
         }
+        case "command_result": {
+          const success = data.success as boolean;
+          const command = data.command as string;
+          addMessage(agentId, {
+            id: `cmd-${Date.now()}`,
+            role: "system",
+            content,
+            timestamp: Date.now(),
+            metadata: { type: "command_result", command, success },
+          });
+          break;
+        }
         case "done":
           setIsThinking(false);
           isThinkingRef.current = false;
@@ -213,6 +225,18 @@ export function AgentView() {
     send({ type: "message", content });
   };
 
+  const handleCommand = (name: string, args: string) => {
+    if (!agentId) return;
+    addMessage(agentId, {
+      id: `user-cmd-${Date.now()}`,
+      role: "user",
+      content: `/${name}${args ? " " + args : ""}`,
+      timestamp: Date.now(),
+      metadata: { type: "command" },
+    });
+    send({ type: "command", name, args });
+  };
+
   const handleAudio = (audioBase64: string, sampleRate: number, format: string) => {
     send({ type: "audio", audio: audioBase64, sample_rate: sampleRate, format });
   };
@@ -284,6 +308,7 @@ export function AgentView() {
 
       <ChatInput
         onSend={handleSend}
+        onCommand={handleCommand}
         onAudio={handleAudio}
         placeholder={`Message ${agent.name}...`}
         disabled={!connected}

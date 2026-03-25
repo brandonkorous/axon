@@ -15,8 +15,29 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
   const agent = agents.find((a) => a.id === message.agentId);
 
   const isUser = message.role === "user";
+  const isCommandResult = message.metadata?.type === "command_result";
   const agentColor = agent?.ui.color || "#8B5CF6";
   const agentName = agent?.name || message.speaker || "Axon";
+
+  if (isCommandResult) {
+    const success = message.metadata?.success as boolean;
+    const command = message.metadata?.command as string;
+    return (
+      <div className="flex gap-3">
+        <div className="w-8 h-8 shrink-0" />
+        <div
+          className={`max-w-[80%] border-l-2 pl-3 py-2 ${
+            success !== false ? "border-success" : "border-error"
+          }`}
+        >
+          <span className="badge badge-ghost badge-sm font-mono mb-1">/{command}</span>
+          <div className="text-sm text-base-content/80 whitespace-pre-wrap font-mono">
+            {message.content}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const markdownComponents = useMemo(() => ({
     a: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { children?: ReactNode }) => {

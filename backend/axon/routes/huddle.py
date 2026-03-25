@@ -15,10 +15,20 @@ org_router = APIRouter()
 
 
 def _build_history(messages) -> list[dict]:
-    """Build history with per-speaker splitting for assistant messages."""
+    """Build history with per-speaker messages for assistant messages."""
     history: list[dict] = []
     for m in messages:
-        if m.role == "assistant":
+        if m.role == "assistant" and m.agent_id and m.agent_id != "huddle":
+            # New per-advisor format: each message is already one speaker
+            history.append({
+                "role": "assistant",
+                "content": m.content,
+                "speaker": m.agent_id,
+                "target": None,
+                "timestamp": m.timestamp,
+            })
+        elif m.role == "assistant":
+            # Legacy combined format — fall back to regex split
             history.extend(split_response_by_speaker(m.content, m.timestamp))
         else:
             history.append({
@@ -45,11 +55,12 @@ async def _handle_huddle(websocket: WebSocket, huddle):
       { "type": "done" }
       { "type": "switched", "conversation_id": "...", "messages": [...] }
     """
+    await websocket.accept()
+
     if not huddle:
+        await websocket.send_json({"type": "error", "content": "Huddle not configured"})
         await websocket.close(code=4004, reason="Huddle not configured")
         return
-
-    await websocket.accept()
     active_conv_id = huddle.conversation_manager.active_id
     ws_registry.register("huddle", active_conv_id, websocket)
 
@@ -198,7 +209,7 @@ async def list_org_huddle_conversations(org_id: str):
     """List all huddle conversations (org-scoped)."""
     huddle = registry.get_huddle(org_id)
     if not huddle:
-        raise HTTPException(status_code=404, detail="Huddle not configured")
+        return {"conversations": [], "active_id": None}
     return {
         "conversations": huddle.conversation_manager.list_conversations(),
         "active_id": huddle.conversation_manager.active_id,

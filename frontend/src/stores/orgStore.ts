@@ -102,25 +102,17 @@ export const useOrgStore = create<OrgStore>((set, get) => ({
 }));
 
 /**
- * Build an org-scoped API path.
- * If multi-org is active, returns /api/orgs/{orgId}/{path}
- * Otherwise returns /api/{path} (legacy route).
+ * Build an org-scoped API path: /api/orgs/{orgId}/{path}
  */
 export function orgApiPath(path: string): string {
-  const { isMultiOrg, activeOrgId } = useOrgStore.getState();
-  if (isMultiOrg) {
-    return `/api/orgs/${activeOrgId}/${path}`;
-  }
-  return `/api/${path}`;
+  const { activeOrgId } = useOrgStore.getState();
+  return `/api/orgs/${activeOrgId}/${path}`;
 }
 
 /**
  * Build an org-scoped WebSocket path segment.
  */
 export function orgWsPath(path: string): string {
-  const { isMultiOrg, activeOrgId } = useOrgStore.getState();
-  if (isMultiOrg) {
-    return `/api/orgs/${activeOrgId}/${path}`;
-  }
-  return `/api/${path}`;
+  const { activeOrgId } = useOrgStore.getState();
+  return `/api/orgs/${activeOrgId}/${path}`;
 }

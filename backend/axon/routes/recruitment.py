@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 import axon.registry as registry
 from axon.config import AgentType, PersonaConfig, _load_agent_yaml, settings
+from axon.org import ensure_huddle
 from axon.vault.scaffold import scaffold_vault
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,9 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
         # Update orchestrator's specialist roster
         _refresh_orchestrator_roster(org)
 
+        # Auto-create huddle if this is the first advisor
+        ensure_huddle(org, settings.axon_orgs_dir)
+
         logger.info("Agent '%s' created and loaded in org '%s'", agent_id, org_id)
     except Exception as e:
         logger.exception("Failed to hot-load agent '%s'", agent_id)
@@ -145,13 +149,10 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
     # Update the recruitment task status
     if org.shared_vault:
         try:
-            content = org.shared_vault.read_file(task_path)
-            meta = content.get("metadata", {})
+            meta, body_text = org.shared_vault.read_file(task_path)
             meta["status"] = "done"
             meta["approved_agent_id"] = agent_id
-            org.shared_vault.write_file(
-                task_path, meta, content.get("body", "")
-            )
+            org.shared_vault.write_file(task_path, meta, body_text)
         except Exception:
             pass  # Non-critical
 

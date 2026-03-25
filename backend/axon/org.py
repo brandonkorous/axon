@@ -246,6 +246,115 @@ def _write_default_shared_vault(vault_path: Path, org_name: str) -> None:
     (vault_path / "audit").mkdir(exist_ok=True)
 
 
+# ── Huddle auto-creation ────────────────────────────────────────────
+
+
+def ensure_huddle(org: "OrgInstance", orgs_dir: str | Path) -> bool:
+    """Ensure the org has a huddle if it has advisors.
+
+    Creates the huddle vault, config, and Huddle instance on-the-fly.
+    Returns True if a huddle was created, False if one already existed
+    or there are no advisors.
+    """
+    if org.huddle:
+        return False
+
+    from axon.config import AgentType, PersonaConfig, VaultConfig, _load_agent_yaml
+    from axon.agents.huddle import Huddle
+
+    # Collect advisor configs and agents
+    advisor_configs: dict[str, PersonaConfig] = {}
+    advisor_agents: dict[str, "Agent"] = {}
+    for aid, agent in org.agent_registry.items():
+        if hasattr(agent, "config") and agent.config.type == AgentType.ADVISOR:
+            advisor_configs[aid] = agent.config
+            advisor_agents[aid] = agent
+
+    if not advisor_configs:
+        return False
+
+    org_dir = Path(orgs_dir) / org.config.id
+    vaults_dir = org_dir / "vaults"
+    data_dir = str(org_dir / "data")
+    huddle_vault_path = vaults_dir / "huddle"
+
+    # Scaffold huddle vault if it doesn't exist
+    if not huddle_vault_path.exists() or not (huddle_vault_path / "agent.yaml").exists():
+        huddle_vault_path.mkdir(parents=True, exist_ok=True)
+
+        # Build read-only mounts for all advisors
+        mounts = [
+            {"path": str(vaults_dir / aid), "root_file": "second-brain.md"}
+            for aid in advisor_configs
+        ]
+
+        huddle_config = {
+            "id": "huddle",
+            "name": "The Huddle",
+            "title": "Advisory Group Session",
+            "tagline": "Where your team debates, disagrees, and converges",
+            "type": "huddle",
+            "model": {"max_tokens": 8192, "temperature": 0.8},
+            "voice": {"engine": "disabled", "voice_id": "", "speed": 1.0},
+            "vault": {
+                "root_file": "second-brain.md",
+                "read_only_mounts": mounts,
+                "writable_paths": [str(huddle_vault_path)],
+            },
+            "memory": {"max_context_tokens": 6000},
+            "delegation": {"can_delegate_to": [], "accepts_from": ["axon"]},
+            "behavior": {"auto_save": True, "first_message": True, "proactive_checks": []},
+            "ui": {"color": "#F59E0B", "avatar": "", "sparkle_color": "#FBBF24"},
+        }
+
+        agent_yaml_path = huddle_vault_path / "agent.yaml"
+        with open(agent_yaml_path, "w", encoding="utf-8") as f:
+            yaml.dump(huddle_config, f, default_flow_style=False, sort_keys=False)
+
+        # Create a minimal second-brain.md
+        root_file = huddle_vault_path / "second-brain.md"
+        if not root_file.exists():
+            root_file.write_text(
+                "# The Huddle\n\nGroup advisory session memory.\n",
+                encoding="utf-8",
+            )
+
+        # Write default instructions
+        instructions_path = huddle_vault_path / "instructions.md"
+        if not instructions_path.exists():
+            roster = "\n".join(
+                f"- **{cfg.name}** — {cfg.title}" for cfg in advisor_configs.values()
+            )
+            instructions_path.write_text(
+                f"# The Huddle\n\n"
+                f"You orchestrate a group advisory session. Each advisor speaks in character "
+                f"with their own expertise and perspective.\n\n"
+                f"## Advisors\n\n{roster}\n\n"
+                f"## Rules\n\n"
+                f"- Each advisor speaks in turn, using **Name:** prefix\n"
+                f"- Advisors may disagree — that's the point\n"
+                f"- End with a **Table:** synthesis summarizing consensus and open questions\n",
+                encoding="utf-8",
+            )
+
+    # Load the config and create the Huddle instance
+    agent_yaml_path = huddle_vault_path / "agent.yaml"
+    config = _load_agent_yaml(agent_yaml_path, huddle_vault_path)
+
+    org.huddle = Huddle(
+        config,
+        advisor_configs,
+        data_dir=data_dir,
+        usage_tracker=org.usage_tracker,
+        shared_vault=org.shared_vault,
+        org_id=org.config.id,
+        advisor_agents=advisor_agents,
+    )
+
+    logger.info("Auto-created huddle for org '%s' with %d advisors", org.config.id, len(advisor_configs))
+    return True
+
+
 # ── Migration ───────────────────────────────────────────────────────
 
 

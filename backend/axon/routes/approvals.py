@@ -63,7 +63,11 @@ async def list_pending_approvals(org_id: str):
 
 @org_router.post("/{task_path:path}/approve")
 async def approve_task(org_id: str, task_path: str):
-    """Approve a task plan. Sets status to 'approved'."""
+    """Approve a task plan. Sets status to 'approved'.
+
+    Recruitment tasks are detected automatically and delegated to the
+    recruitment handler which scaffolds a vault and hot-loads the agent.
+    """
     org = _get_shared_vault(org_id)
     vault = org.shared_vault
 
@@ -77,6 +81,15 @@ async def approve_task(org_id: str, task_path: str):
 
     if metadata.get("status") != "awaiting_approval":
         raise HTTPException(400, f"Task is not awaiting approval (status: {metadata.get('status')})")
+
+    # Recruitment tasks need the specialized handler that actually creates the agent
+    if metadata.get("type") == "recruitment":
+        from axon.routes.recruitment import ApproveRequest, approve_recruitment
+
+        role = metadata.get("role", "New Agent")
+        agent_id = role.lower().replace(" ", "_")
+        body_req = ApproveRequest(name=role, agent_id=agent_id)
+        return await approve_recruitment(org_id, task_path, body_req)
 
     metadata["status"] = "approved"
     metadata["approved_at"] = datetime.utcnow().isoformat() + "Z"

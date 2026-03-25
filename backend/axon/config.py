@@ -11,6 +11,8 @@ import yaml
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
+from axon.reasoning.config import ReasoningConfig  # noqa: E402 — no circular import risk (lazy __init__)
+
 logger = logging.getLogger(__name__)
 
 
@@ -153,6 +155,7 @@ class PersonaConfig(BaseModel):
     delegation: DelegationConfig = DelegationConfig()
     behavior: BehaviorConfig = BehaviorConfig()
     learning: LearningConfig = LearningConfig()
+    reasoning: ReasoningConfig = ReasoningConfig()
     ui: UIConfig = UIConfig()
     external: bool = False  # Legacy — use type: external instead
     system_prompt_file: str = ""

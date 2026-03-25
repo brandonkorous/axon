@@ -8,6 +8,7 @@ synthesis pass runs at the end to tie everything together.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
@@ -225,7 +226,6 @@ class Huddle:
 
         # Phase 1: Fan out to each advisor sequentially
         advisor_responses: dict[str, str] = {}
-        combined_transcript = ""
 
         for advisor_id in advisor_order:
             agent = self.advisor_agents.get(advisor_id)
@@ -261,8 +261,14 @@ class Huddle:
                     type="text", content=fallback,
                 )
 
+            # Strip self-attribution if the LLM prefixed with its own name
+            advisor_text = re.sub(
+                rf"^\s*\*\*{re.escape(advisor_name)}:\*\*\s*",
+                "", advisor_text,
+            )
             advisor_responses[advisor_id] = advisor_text
-            combined_transcript += f"**{advisor_name}:**\n{advisor_text}\n\n"
+            # Save each advisor's response as its own message
+            self.conversation.add_assistant_message(advisor_text, agent_id=advisor_id)
 
         # Phase 2: Table synthesis
         table_text = ""
@@ -272,11 +278,21 @@ class Huddle:
                 speaker="table", target=None,
                 type="text", content=chunk,
             )
-        combined_transcript += f"**The Table:**\n{table_text}"
 
-        # Save combined transcript to huddle history
-        if combined_transcript:
-            self.conversation.add_assistant_message(combined_transcript, agent_id="huddle")
+        # Save table synthesis as its own message
+        if table_text:
+            self.conversation.add_assistant_message(table_text, agent_id="table")
+
+        # Fire-and-forget: ingest huddle conclusions into reasoning graph
+        if advisor_responses:
+            combined = "\n\n".join(
+                f"**{self.advisor_configs[aid].name}:**\n{resp}"
+                for aid, resp in advisor_responses.items()
+                if aid in self.advisor_configs
+            )
+            if table_text:
+                combined += f"\n\n**The Table:**\n{table_text}"
+            self._ingest_into_reasoning(combined, full_message)
 
         yield HuddleChunk(speaker=None, target=None, type="done")
 
@@ -293,7 +309,9 @@ class Huddle:
         """Build the prompt an advisor sees during a huddle turn."""
         parts = [
             f"[HUDDLE SESSION] You are participating in a team huddle as {advisor_name}. "
-            f"Respond from your area of expertise. Keep it concise (2-4 sentences). "
+            f"Respond ONLY as yourself. Do NOT write dialogue for other advisors or "
+            f"prefix your response with your name. Do NOT simulate a roundtable — "
+            f"just give your own perspective. Keep it concise (2-4 sentences). "
             f"If you need to take action (share knowledge, create tasks, save to vault), "
             f"use your tools directly — don't just say you'll do it.",
         ]
@@ -318,7 +336,7 @@ class Huddle:
                 summary = resp[:500] + "..." if len(resp) > 500 else resp
                 parts.append(f"- **{name}:** {summary}")
             parts.append(
-                "\nYou may react to, build on, or push back against their points."
+                "\nYou may reference their points, but respond only as yourself."
             )
 
         if is_addressed:
@@ -409,6 +427,15 @@ class Huddle:
                 ),
             },
         ]
+
+    def _ingest_into_reasoning(self, transcript: str, topic: str) -> None:
+        """Fire-and-forget: feed huddle conclusions to any advisor's reasoning engine."""
+        for agent in self.advisor_agents.values():
+            if hasattr(agent, "reasoning_engine") and agent.reasoning_engine:
+                asyncio.create_task(
+                    agent.reasoning_engine.ingest_huddle_conclusion(transcript, topic)
+                )
+                break  # Only ingest once — into the first agent with reasoning
 
     async def _gather_context(self, query: str) -> str:
         """Gather relevant context from all accessible vaults."""

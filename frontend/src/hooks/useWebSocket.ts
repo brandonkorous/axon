@@ -42,12 +42,13 @@ export function useWebSocket({ url, onMessage, autoConnect = true }: UseWebSocke
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => setConnected(true);
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setConnected(false);
-      // Only reconnect if this wasn't an intentional disconnect
-      if (!intentionalCloseRef.current) {
-        reconnectTimerRef.current = setTimeout(connect, 2000);
+      // Don't reconnect on intentional close or permanent errors (4004 = not found)
+      if (intentionalCloseRef.current || event.code === 4004) {
+        return;
       }
+      reconnectTimerRef.current = setTimeout(connect, 2000);
     };
     ws.onerror = () => ws.close();
     ws.onmessage = (event) => {

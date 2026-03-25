@@ -64,7 +64,7 @@ def _scan_vault_decisions(vaults_dir: Path, limit: int = 10) -> list[dict[str, A
             except Exception:
                 continue
 
-    decisions.sort(key=lambda d: d.get("date", ""), reverse=True)
+    decisions.sort(key=lambda d: str(d.get("date", "")), reverse=True)
     return decisions[:limit]
 
 

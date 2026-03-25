@@ -243,6 +243,7 @@ class ToolExecutor:
         audit_logger: "AuditLogger | None" = None,
         org_id: str = "",
         memory_manager: "MemoryManager | None" = None,
+        reasoning_engine: "ReasoningEngine | None" = None,
         conversation_manager: "Any | None" = None,
         ws_target: str = "",
         advisor_ids: list[str] | None = None,
@@ -254,6 +255,12 @@ class ToolExecutor:
         self._pending_recruitment: dict | None = None
         self._audit_logger: "AuditLogger | None" = audit_logger
         self._memory_manager = memory_manager
+
+        # Reasoning engine executor
+        self._reasoning_executor: "ReasoningToolExecutor | None" = None
+        if reasoning_engine:
+            from axon.reasoning.tools import ReasoningToolExecutor
+            self._reasoning_executor = ReasoningToolExecutor(reasoning_engine)
 
         # Shared vault executor for task/issue/knowledge tools
         self._shared_executor: "SharedVaultToolExecutor | None" = None
@@ -271,6 +278,12 @@ class ToolExecutor:
 
     async def execute(self, tool_name: str, arguments: str) -> str:
         """Execute a tool call and return the result as a string."""
+        # Route reasoning tools to the reasoning executor
+        if self._reasoning_executor and tool_name.startswith("reason_"):
+            result = await self._reasoning_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
         # Route shared vault tools to the shared executor
         if self._shared_executor and tool_name.startswith(self._SHARED_TOOL_PREFIXES):
             result = await self._shared_executor.execute(tool_name, arguments)

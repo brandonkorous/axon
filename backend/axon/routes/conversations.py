@@ -23,6 +23,7 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
 
     Client sends:
       { "type": "message", "content": "..." }
+      { "type": "command", "name": "...", "args": "..." }
       { "type": "audio", "audio": "<base64 PCM>", "sample_rate": 16000 }
       { "type": "greeting" }
       { "type": "clear" }
@@ -38,13 +39,15 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
       { "type": "transcription", "content": "..." }
       { "type": "audio_response", "audio": "<base64 WAV>", "agent_id": "..." }
       { "type": "switched", "conversation_id": "...", "messages": [...] }
+      { "type": "command_result", "agent_id": "...", "command": "...", "content": "...", "success": true }
     """
+    await websocket.accept()
+
     agent = agent_reg.get(agent_id)
     if not agent:
+        await websocket.send_json({"type": "error", "content": f"Agent not found: {agent_id}"})
         await websocket.close(code=4004, reason=f"Agent not found: {agent_id}")
         return
-
-    await websocket.accept()
 
     # Track active conversation for ws_registry
     active_conv_id = agent.conversation_manager.active_id
@@ -139,6 +142,11 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
                         "content": f"Voice error: {e}",
                     })
 
+            elif message.get("type") == "command":
+                cmd_name = message.get("name", "")
+                cmd_args = message.get("args", "")
+                await _handle_command(websocket, agent, cmd_name, cmd_args)
+
             elif message.get("type") == "greeting":
                 # Generate first-message greeting
                 async for chunk in agent.generate_greeting():
@@ -171,6 +179,23 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
             pass
     finally:
         ws_registry.unregister(agent_id, active_conv_id, websocket)
+
+
+async def _handle_command(websocket: WebSocket, agent, name: str, args: str):
+    """Handle a slash command — execute directly without LLM."""
+    from axon.commands.slash_commands import execute_command
+
+    try:
+        await execute_command(agent, name, args, websocket)
+    except Exception as e:
+        logger.error("Slash command /%s failed: %s", name, e, exc_info=True)
+        await websocket.send_json({
+            "type": "command_result",
+            "agent_id": agent.id,
+            "command": name,
+            "content": f"Command error: {e}",
+            "success": False,
+        })
 
 
 async def _handle_switch(websocket: WebSocket, agent, message: dict):
@@ -387,6 +412,8 @@ async def org_conversation_websocket(websocket: WebSocket, org_id: str, agent_id
     """WebSocket endpoint for streaming conversations (org-scoped)."""
     org = registry.get_org(org_id)
     if not org:
+        await websocket.accept()
+        await websocket.send_json({"type": "error", "content": f"Organization not found: {org_id}"})
         await websocket.close(code=4004, reason=f"Organization not found: {org_id}")
         return
     await _handle_conversation(websocket, org.agent_registry, agent_id)

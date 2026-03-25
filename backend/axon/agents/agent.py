@@ -91,6 +91,29 @@ class Agent:
         else:
             logger.debug("[%s] Learning disabled — using deterministic navigator", config.id)
 
+        # Reasoning engine (structured decision making)
+        self.reasoning_engine = None
+        if config.reasoning and config.reasoning.enabled:
+            from axon.reasoning.engine import ReasoningEngine
+
+            reasoning_model = config.reasoning.model or config.model.reasoning
+            bg_model = config.reasoning.background_model or (
+                config.learning.memory_model if config.learning.enabled else ""
+            )
+            self.reasoning_engine = ReasoningEngine(
+                vault=self.vault,
+                config=config.reasoning,
+                model=reasoning_model,
+                background_model=bg_model or reasoning_model,
+                agent_id=config.id,
+                usage_tracker=usage_tracker,
+                org_id=org_id,
+            )
+            logger.debug(
+                "[%s] ReasoningEngine initialized (model=%s, bg=%s)",
+                config.id, reasoning_model, bg_model or reasoning_model,
+            )
+
         # Shared vault (org-level tasks/issues)
         self.shared_vault = shared_vault
 
@@ -105,6 +128,7 @@ class Agent:
             audit_logger=audit_logger,
             org_id=org_id,
             memory_manager=self.memory_manager,
+            reasoning_engine=self.reasoning_engine,
             conversation_manager=self.conversation_manager,
         )
         self.tools = self._build_tool_list()
@@ -441,6 +465,11 @@ class Agent:
         # Learning tools (outcome linking) when memory manager is active
         if self.memory_manager:
             tools.extend(LEARNING_TOOLS)
+
+        # Reasoning tools when engine is active
+        if self.reasoning_engine:
+            from axon.reasoning.tools import REASONING_TOOLS
+            tools.extend(REASONING_TOOLS)
 
         # All agents can request new agents
         tools.extend(RECRUITMENT_TOOLS)

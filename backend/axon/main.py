@@ -25,6 +25,7 @@ from axon.org import (
     OrgConfig,
     OrgInstance,
     discover_orgs,
+    ensure_huddle,
     load_org_config,
     scaffold_org,
 )
@@ -173,6 +174,10 @@ def _init_org_agents(
             org_id=org_config.id,
             advisor_agents=advisor_agents,
         )
+
+    # Auto-create huddle if advisors exist but no huddle persona was defined
+    if not org.huddle:
+        ensure_huddle(org, settings.axon_orgs_dir)
 
     return org
 
