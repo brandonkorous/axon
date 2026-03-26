@@ -93,7 +93,8 @@ def _list_tasks(
     tasks = _parse_tasks(vault)
 
     if status:
-        tasks = [t for t in tasks if t.get("status") == status]
+        statuses = {s.strip() for s in status.split(",")}
+        tasks = [t for t in tasks if t.get("status") in statuses]
     if assignee:
         tasks = [t for t in tasks if t.get("assignee") == assignee]
     if priority:

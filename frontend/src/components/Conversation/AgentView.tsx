@@ -10,6 +10,7 @@ import { AgentControls } from "../AgentControls/AgentControls";
 import { StatusBadge } from "../AgentControls/AgentControls";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useAgentRuntimeStore, useAgentRuntime } from "../../stores/agentRuntimeStore";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
 import { playAudioBase64 } from "../../hooks/useVoice";
@@ -18,21 +19,10 @@ import { DocumentDrawer } from "../Documents/DocumentDrawer";
 
 export function AgentView() {
   const { agentId } = useParams<{ agentId: string }>();
-  const {
-    messages,
-    addMessage,
-    appendToLast,
-    runningTasks,
-    addRunningTask,
-    removeRunningTask,
-    setRunningTasks,
-    appendTaskLog,
-    clearTaskLog,
-  } = useConversationStore();
-  const { agents, setAgentStatus } = useAgentStore();
-  const [isThinking, setIsThinking] = useState(false);
+  const { messages, addMessage, appendToLast } = useConversationStore();
+  const { agents } = useAgentStore();
+  const runtime = useAgentRuntime(agentId || "");
   const [openDocPath, setOpenDocPath] = useState<string | null>(null);
-  const isThinkingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasGreetedRef = useRef<string | null>(null);
   const historyLoadedRef = useRef(false);
@@ -40,30 +30,25 @@ export function AgentView() {
 
   const agent = agents.find((a) => a.id === agentId);
   const conversationMessages = messages[agentId || ""] || [];
-  const agentRunningTasks = runningTasks[agentId || ""] || [];
 
   const handleWsMessage = useCallback(
     (data: Record<string, unknown>) => {
       if (!agentId) return;
       const type = data.type as string;
       const content = (data.content as string) || "";
-
       const taskPath = data.task_path as string | undefined;
+      const rs = useAgentRuntimeStore.getState();
 
       switch (type) {
         case "thinking":
-          setIsThinking(true);
-          isThinkingRef.current = true;
-          setAgentStatus(agentId, "thinking");
+          rs.setThinking(agentId, true, "chat");
           break;
         case "text":
-          // Capture task execution output as log
           if (taskPath) {
-            appendTaskLog(agentId, taskPath, content);
+            rs.appendTaskLog(agentId, taskPath, content);
           }
-          if (isThinkingRef.current) {
-            setIsThinking(false);
-            isThinkingRef.current = false;
+          if (rs.agents[agentId]?.thinking) {
+            rs.setThinking(agentId, false);
             addMessage(agentId, {
               id: `msg-${Date.now()}`,
               role: "assistant",
@@ -110,15 +95,15 @@ export function AgentView() {
           const taskTitle = data.task_title as string;
           const status = data.status as string;
           if (status === "in_progress" || status === "executing") {
-            addRunningTask(agentId, {
+            rs.addRunningTask(agentId, {
               path: tPath,
               title: taskTitle,
               agentId,
               startedAt: Date.now(),
             });
           } else if (status === "done" || status === "failed") {
-            removeRunningTask(agentId, tPath);
-            clearTaskLog(agentId, tPath);
+            rs.removeRunningTask(agentId, tPath);
+            rs.clearTaskLog(agentId, tPath);
           }
           break;
         }
@@ -135,13 +120,10 @@ export function AgentView() {
           break;
         }
         case "done":
-          setIsThinking(false);
-          isThinkingRef.current = false;
-          setAgentStatus(agentId, "idle");
+          rs.setThinking(agentId, false);
           break;
         case "error":
-          setIsThinking(false);
-          isThinkingRef.current = false;
+          rs.setThinking(agentId, false);
           addMessage(agentId, {
             id: `err-${Date.now()}`,
             role: "system",
@@ -151,7 +133,7 @@ export function AgentView() {
           break;
       }
     },
-    [agentId, addMessage, appendToLast, setAgentStatus, addRunningTask, removeRunningTask, appendTaskLog, clearTaskLog]
+    [agentId, addMessage, appendToLast]
   );
 
   const { connected, send } = useWebSocket({
@@ -205,14 +187,14 @@ export function AgentView() {
             agentId: agentId,
             startedAt: new Date(t.updated_at || t.created_at).getTime(),
           }));
-        setRunningTasks(agentId, recovered);
+        useAgentRuntimeStore.getState().setRunningTasks(agentId, recovered);
       })
       .catch(() => {});
-  }, [connected, agentId, setRunningTasks]);
+  }, [connected, agentId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversationMessages.length, isThinking]);
+  }, [conversationMessages.length, runtime.thinking]);
 
   const handleSend = (content: string) => {
     if (!agentId) return;
@@ -296,14 +278,14 @@ export function AgentView() {
             <ChatMessage key={msg.id} message={msg} onDocumentOpen={setOpenDocPath} />
           )
         )}
-        {isThinking && (
+        {runtime.thinking && (
           <ThinkingIndicator color={agent.ui.color} agentName={agent.name} />
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {agentRunningTasks.length > 0 && (
-        <WorkingIndicator chatId={agentId!} tasks={agentRunningTasks} color={agent.ui.color} />
+      {runtime.runningTasks.length > 0 && (
+        <WorkingIndicator tasks={runtime.runningTasks} color={agent.ui.color} />
       )}
 
       <ChatInput

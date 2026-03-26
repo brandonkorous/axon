@@ -30,7 +30,16 @@ def _build_org_chart(org_id: str):
             "color": config.ui.color,
             "status": lifecycle.get("status", "active"),
             "has_strategy_override": bool(lifecycle.get("strategy_override")),
+            "parent_id": config.parent_id,
         })
+
+        # Parent-child hierarchy edge
+        if config.parent_id and config.parent_id in org.agent_registry:
+            edges.append({
+                "from": config.parent_id,
+                "to": agent_id,
+                "type": "parent_child",
+            })
 
         # Build delegation edges
         delegates = config.delegation.can_delegate_to

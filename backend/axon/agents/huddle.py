@@ -1,24 +1,28 @@
-"""Huddle orchestrator — multi-agent advisory sessions.
+"""Huddle — group chat room for AI advisors.
 
-Instead of a single LLM pretending to be multiple advisors, the huddle
-fans out user messages to real Agent instances sequentially.  Each advisor
-responds with their own tools, vault, and memory.  A lightweight "Table"
-synthesis pass runs at the end to tie everything together.
+The huddle is a shared space where the user can message all advisors or
+specific ones via @mentions.  Each advisor runs as an independent task —
+they stream responses directly to the WebSocket as they finish, like real
+people typing in a group chat.  The huddle itself is just a message
+router, not an orchestrator.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from axon.agents.provider import stream_completion
+from axon.agents.provider import stream_completion, complete
 from axon.agents.conversation import Conversation, ConversationManager
 from axon.config import PersonaConfig
 from axon.vault.navigator import MemoryNavigator
 from axon.vault.vault import VaultManager
+import axon.ws_registry as ws_registry
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent
@@ -38,6 +42,9 @@ TABLE_PATTERN = re.compile(r"\*\*The Table:\*\*")
 # @mention detection: matches @name (case-insensitive)
 MENTION_PATTERN = re.compile(r"@(\w+)", re.IGNORECASE)
 
+# Modes that benefit from table synthesis after individual responses
+TABLE_MODES = {"vote", "decision", "pressure_test"}
+
 # Mode prefixes that get injected into the user message
 MODE_PREFIXES = {
     "standard": "",
@@ -48,14 +55,23 @@ MODE_PREFIXES = {
     "decision": "We need a decision on this: ",
 }
 
+
 @dataclass
 class HuddleChunk:
     """A chunk of huddle output tagged with speaker info."""
 
-    speaker: str | None  # "marcus", "raj", "diana", "table", or None (narrative)
+    speaker: str | None  # advisor id, "table", or None (control)
     target: str | None  # For "marcus → raj" style messages
-    type: str  # "text", "thinking", "done"
+    type: str  # "text", "thinking", "speaker_done", "done"
     content: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "speaker": self.speaker,
+            "target": self.target,
+            "content": self.content,
+        }
 
 
 def split_response_by_speaker(
@@ -125,10 +141,13 @@ def split_response_by_speaker(
 
 
 class Huddle:
-    """Orchestrates multi-agent huddle sessions.
+    """Group chat room for AI advisors.
 
-    Fans out user messages to real Agent instances, collects their responses
-    (with full tool-calling support), then runs a Table synthesis pass.
+    Messages are dispatched to advisors as independent tasks. Each advisor
+    streams its response directly to the WebSocket via ws_registry — whoever
+    finishes first appears first, just like a real group chat. The huddle
+    is just a router: it determines who should respond, dispatches the
+    message, and optionally runs a Table synthesis after everyone finishes.
     """
 
     def __init__(
@@ -145,6 +164,8 @@ class Huddle:
         self.advisor_configs = advisor_configs
         self.advisor_agents: dict[str, "Agent"] = advisor_agents or {}
         self._usage_tracker = usage_tracker
+        self._shared_vault = shared_vault
+        self._org_id = org_id
 
         # Vault access — huddle vault + read-only advisor vaults
         self.vault = VaultManager(config.vault.path, config.vault.root_file)
@@ -193,17 +214,26 @@ class Huddle:
         """Active conversation (backward-compat with single-conversation code)."""
         return self.conversation_manager.active
 
-    async def process(
+    async def _push(self, conv_id: str, chunk: HuddleChunk) -> None:
+        """Push a chunk to all connected huddle WebSocket clients."""
+        await ws_registry.push("huddle", conv_id, chunk.to_dict())
+
+    async def dispatch(
         self, user_message: str, mode: str = "standard",
-    ) -> AsyncIterator[HuddleChunk]:
-        """Orchestrate a huddle round: fan out to advisors, then synthesize."""
-        yield HuddleChunk(speaker=None, target=None, type="thinking")
+    ) -> None:
+        """Dispatch a user message to all appropriate advisors.
+
+        Each advisor runs as an independent background task that streams
+        directly to the WebSocket.  This method returns once all tasks
+        are launched — it does NOT wait for advisors to finish.
+        """
+        conv_id = self.conversation_manager.active_id
 
         # Apply mode prefix
         prefix = MODE_PREFIXES.get(mode, "")
         full_message = f"{prefix}{user_message}" if prefix else user_message
 
-        # Detect @mentions for advisor ordering
+        # Detect @mentions to filter which advisors respond
         mentions = MENTION_PATTERN.findall(user_message)
         name_to_id = {
             cfg.name.lower(): aid for aid, cfg in self.advisor_configs.items()
@@ -212,11 +242,22 @@ class Huddle:
             name_to_id[m.lower()] for m in mentions if m.lower() in name_to_id
         ]
 
-        # Order: mentioned advisors first, then the rest
-        advisor_order = list(addressed_ids)
-        for aid in self.advisor_agents:
-            if aid not in advisor_order:
-                advisor_order.append(aid)
+        # Determine which advisors should respond
+        responding_ids = (
+            addressed_ids if addressed_ids
+            else list(self.advisor_agents.keys())
+        )
+
+        # Filter to only advisors that actually exist
+        responding_ids = [
+            aid for aid in responding_ids if aid in self.advisor_agents
+        ]
+
+        if not responding_ids:
+            await self._push(conv_id, HuddleChunk(
+                speaker=None, target=None, type="done",
+            ))
+            return
 
         # Gather vault context once for all advisor prompts
         vault_context = await self._gather_context(user_message)
@@ -224,77 +265,127 @@ class Huddle:
         # Save user message to huddle history
         self.conversation.add_user_message(full_message)
 
-        # Phase 1: Fan out to each advisor sequentially
-        advisor_responses: dict[str, str] = {}
+        # Send per-advisor thinking indicators immediately
+        for advisor_id in responding_ids:
+            await self._push(conv_id, HuddleChunk(
+                speaker=advisor_id, target=None, type="thinking",
+            ))
 
-        for advisor_id in advisor_order:
+        # Track responses for table synthesis and reasoning ingestion
+        advisor_responses: dict[str, str] = {}
+        response_lock = asyncio.Lock()
+        pending = len(responding_ids)
+        pending_lock = asyncio.Lock()
+
+        async def _on_all_done() -> None:
+            """Called when all advisors have finished responding."""
+            # Table synthesis for modes that benefit from it
+            if mode in TABLE_MODES and len(advisor_responses) > 1:
+                await self._push(conv_id, HuddleChunk(
+                    speaker="table", target=None, type="thinking",
+                ))
+                table_text = ""
+                async for chunk in self._synthesize_table(
+                    full_message, advisor_responses,
+                ):
+                    table_text += chunk
+                    await self._push(conv_id, HuddleChunk(
+                        speaker="table", target=None,
+                        type="text", content=chunk,
+                    ))
+
+                if table_text:
+                    self.conversation.add_assistant_message(
+                        table_text, agent_id="table",
+                    )
+                await self._push(conv_id, HuddleChunk(
+                    speaker="table", target=None, type="speaker_done",
+                ))
+
+            # Fire-and-forget: extract actions (vault saves, tasks)
+            if advisor_responses:
+                asyncio.create_task(
+                    self._extract_and_execute_actions(
+                        full_message, advisor_responses,
+                    )
+                )
+
+            # Ingest into reasoning graph
+            if advisor_responses:
+                combined = "\n\n".join(
+                    f"**{self.advisor_configs[aid].name}:**\n{resp}"
+                    for aid, resp in advisor_responses.items()
+                    if aid in self.advisor_configs
+                )
+                self._ingest_into_reasoning(combined, full_message)
+
+            await self._push(conv_id, HuddleChunk(
+                speaker=None, target=None, type="done",
+            ))
+
+        async def _run_advisor(advisor_id: str) -> None:
+            """Run a single advisor — streams directly to WebSocket."""
+            nonlocal pending
             agent = self.advisor_agents.get(advisor_id)
             if not agent:
-                continue
+                return
 
             cfg = self.advisor_configs.get(advisor_id)
             advisor_name = cfg.name if cfg else advisor_id
 
-            # Build huddle-scoped prompt
             prompt = self._build_advisor_prompt(
                 advisor_id, advisor_name, full_message,
-                vault_context, advisor_responses,
+                vault_context,
                 is_addressed=(advisor_id in addressed_ids),
                 mode=mode,
             )
 
-            # Stream advisor response as HuddleChunks
             advisor_text = ""
             try:
                 async for chunk in self._call_advisor(agent, prompt):
                     advisor_text += chunk
-                    yield HuddleChunk(
+                    await self._push(conv_id, HuddleChunk(
                         speaker=advisor_id, target=None,
                         type="text", content=chunk,
-                    )
+                    ))
             except Exception:
                 logger.exception("[HUDDLE] Advisor %s failed", advisor_id)
                 fallback = f"*[{advisor_name} is unavailable]*\n\n"
                 advisor_text = fallback
-                yield HuddleChunk(
+                await self._push(conv_id, HuddleChunk(
                     speaker=advisor_id, target=None,
                     type="text", content=fallback,
-                )
+                ))
 
             # Strip self-attribution if the LLM prefixed with its own name
             advisor_text = re.sub(
                 rf"^\s*\*\*{re.escape(advisor_name)}:\*\*\s*",
                 "", advisor_text,
             )
-            advisor_responses[advisor_id] = advisor_text
-            # Save each advisor's response as its own message
-            self.conversation.add_assistant_message(advisor_text, agent_id=advisor_id)
 
-        # Phase 2: Table synthesis
-        table_text = ""
-        async for chunk in self._synthesize_table(full_message, advisor_responses):
-            table_text += chunk
-            yield HuddleChunk(
-                speaker="table", target=None,
-                type="text", content=chunk,
+            # Signal this advisor is done
+            await self._push(conv_id, HuddleChunk(
+                speaker=advisor_id, target=None, type="speaker_done",
+            ))
+
+            # Save to conversation history
+            async with response_lock:
+                advisor_responses[advisor_id] = advisor_text
+            self.conversation.add_assistant_message(
+                advisor_text, agent_id=advisor_id,
             )
 
-        # Save table synthesis as its own message
-        if table_text:
-            self.conversation.add_assistant_message(table_text, agent_id="table")
+            # Check if all advisors are done
+            async with pending_lock:
+                pending -= 1
+                all_done = pending == 0
 
-        # Fire-and-forget: ingest huddle conclusions into reasoning graph
-        if advisor_responses:
-            combined = "\n\n".join(
-                f"**{self.advisor_configs[aid].name}:**\n{resp}"
-                for aid, resp in advisor_responses.items()
-                if aid in self.advisor_configs
-            )
-            if table_text:
-                combined += f"\n\n**The Table:**\n{table_text}"
-            self._ingest_into_reasoning(combined, full_message)
+            if all_done:
+                await _on_all_done()
 
-        yield HuddleChunk(speaker=None, target=None, type="done")
+        # Launch each advisor as an independent fire-and-forget task
+        for aid in responding_ids:
+            asyncio.create_task(_run_advisor(aid))
 
     def _build_advisor_prompt(
         self,
@@ -302,47 +393,48 @@ class Huddle:
         advisor_name: str,
         user_message: str,
         vault_context: str,
-        prior_responses: dict[str, str],
         is_addressed: bool,
         mode: str = "standard",
     ) -> str:
         """Build the prompt an advisor sees during a huddle turn."""
         parts = [
-            f"[HUDDLE SESSION] You are participating in a team huddle as {advisor_name}. "
-            f"Respond ONLY as yourself. Do NOT write dialogue for other advisors or "
-            f"prefix your response with your name. Do NOT simulate a roundtable — "
-            f"just give your own perspective. Keep it concise (2-4 sentences). "
+            f"[HUDDLE SESSION] You are participating in a group chat as {advisor_name}. "
+            f"Respond ONLY as yourself — do NOT write dialogue for other advisors or "
+            f"prefix your response with your name. "
+            f"When the user shares structured data (color values, specifications, "
+            f"configurations, numbers), extract and reference the exact values — "
+            f"do not paraphrase or guess. "
             f"If you need to take action (share knowledge, create tasks, save to vault, "
             f"request new team members via `request_agent`), "
             f"use your tools directly — don't just say you'll do it.",
         ]
 
-        if mode == "vote":
-            parts.append("State your position (for/against/conditional) with one-sentence reasoning.")
+        if mode == "standard":
+            parts.append(
+                "Respond substantively from your domain expertise. "
+                "Be concise but thorough — say what needs to be said."
+            )
+        elif mode == "vote":
+            parts.append(
+                "State your position (for/against/conditional) "
+                "with one-sentence reasoning."
+            )
         elif mode == "devils_advocate":
             parts.append("Argue AGAINST the proposed idea from your domain.")
         elif mode == "pressure_test":
-            parts.append("Attack this from your domain — find the weaknesses.")
+            parts.append(
+                "Attack this from your domain — find the weaknesses."
+            )
         elif mode == "quick_take":
             parts.append("One sentence only, no discussion.")
         elif mode == "decision":
-            parts.append("State your recommendation clearly with brief reasoning.")
-
-        if prior_responses:
-            parts.append("\n**Other advisors have said:**")
-            for aid, resp in prior_responses.items():
-                cfg = self.advisor_configs.get(aid)
-                name = cfg.name if cfg else aid
-                # Truncate long responses in context
-                summary = resp[:500] + "..." if len(resp) > 500 else resp
-                parts.append(f"- **{name}:** {summary}")
             parts.append(
-                "\nYou may reference their points, but respond only as yourself."
+                "State your recommendation clearly with brief reasoning."
             )
 
         if is_addressed:
             parts.append(
-                "\nYou were directly @mentioned — respond substantively and first."
+                "\nYou were directly @mentioned — respond substantively."
             )
 
         if vault_context:
@@ -428,6 +520,206 @@ class Huddle:
                 ),
             },
         ]
+
+    async def _extract_and_execute_actions(
+        self,
+        user_message: str,
+        advisor_responses: dict[str, str],
+    ) -> None:
+        """Review the huddle exchange and execute any needed actions.
+
+        Runs as a background task after all advisors finish. Identifies:
+        - Key data or decisions to save to the shared huddle vault
+        - Tasks that should be created and assigned to specific advisors
+        """
+        advisor_names = {
+            aid: cfg.name for aid, cfg in self.advisor_configs.items()
+        }
+        advisor_list = ", ".join(
+            f"{name} (id: {aid})" for aid, name in advisor_names.items()
+        )
+        advisor_summary = "\n\n".join(
+            f"**{advisor_names.get(aid, aid)}:** {resp}"
+            for aid, resp in advisor_responses.items()
+        )
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a silent post-processing agent for a group chat. "
+                    "Review the user's message and advisor responses. Identify "
+                    "actions that should be taken.\n\n"
+                    "## Save to vault when the user:\n"
+                    "- Shares reference data (colors, specs, configs, brand guidelines)\n"
+                    "- Makes a decision or announces a policy\n"
+                    "- Provides context advisors will need in future conversations\n"
+                    "- Corrects a misunderstanding that should not recur\n\n"
+                    "## Create tasks when:\n"
+                    "- The user explicitly requests work to be done\n"
+                    "- An advisor commits to a specific deliverable\n"
+                    "- A clear action item emerges from the discussion\n"
+                    "- Work is agreed upon that needs tracking\n\n"
+                    "## Do NOT act on:\n"
+                    "- General discussion, opinions, or brainstorming\n"
+                    "- Information already in the vault\n"
+                    "- Trivial or ephemeral exchanges\n"
+                    "- Vague intentions without clear deliverables\n\n"
+                    f"## Available advisors:\n{advisor_list}\n\n"
+                    "## Response format\n"
+                    "Respond with a JSON array of actions:\n\n"
+                    "Vault save:\n"
+                    '  {"action": "vault_write", "path": "reference/<slug>.md", '
+                    '"name": "...", "description": "...", "tags": "...", '
+                    '"content": "..."}\n\n'
+                    "Task creation:\n"
+                    '  {"action": "task_create", "title": "...", '
+                    '"description": "...", "assignee": "<agent_id>", '
+                    '"priority": "p2"}\n\n'
+                    "Memory nudge (remind an advisor to save important info "
+                    "to their own vault — use when the user shares key data "
+                    "that each advisor should have in personal memory):\n"
+                    '  {"action": "memory_nudge", "agent_id": "<agent_id>", '
+                    '"content": "Verify you have saved ... to your vault. '
+                    'If not, save it now."}\n\n'
+                    "If nothing needs doing, respond with: []"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"**User said:** {user_message}\n\n"
+                    f"**Advisor responses:**\n\n{advisor_summary}"
+                ),
+            },
+        ]
+
+        try:
+            result = await complete(
+                model=self.config.model.reasoning,
+                messages=messages,
+                max_tokens=1000,
+                temperature=0.0,
+            )
+            content = result.get("content", "").strip()
+
+            # Extract JSON from the response (handle markdown code blocks)
+            json_match = re.search(r"\[.*\]", content, re.DOTALL)
+            if not json_match:
+                return
+
+            actions = json.loads(json_match.group())
+            if not isinstance(actions, list) or not actions:
+                return
+
+            for action in actions:
+                action_type = action.get("action")
+                if action_type == "vault_write":
+                    self._execute_vault_write(action)
+                elif action_type == "task_create":
+                    await self._execute_task_create(action)
+                elif action_type == "memory_nudge":
+                    self._execute_memory_nudge(action)
+
+        except Exception:
+            logger.exception("[HUDDLE] Action extraction failed")
+
+    def _execute_vault_write(self, action: dict[str, Any]) -> None:
+        """Save a reference entry to the huddle vault."""
+        path = action.get("path", "")
+        if not path:
+            return
+
+        metadata = {
+            "name": action.get("name", ""),
+            "description": action.get("description", ""),
+            "type": "reference",
+            "date": str(date.today()),
+            "status": "active",
+            "tags": action.get("tags", ""),
+            "source": "huddle",
+        }
+        self.vault.write_file(path, metadata, action.get("content", ""))
+        logger.info("[HUDDLE] Auto-saved to vault: %s", path)
+
+    async def _execute_task_create(self, action: dict[str, Any]) -> None:
+        """Create a task in the shared org vault and trigger execution."""
+        if not self._shared_vault:
+            logger.warning("[HUDDLE] Cannot create task — no shared vault")
+            return
+
+        title = action.get("title", "")
+        if not title:
+            return
+
+        from datetime import datetime
+
+        slug = re.sub(r"[^\w\s-]", "", title.lower().strip())
+        slug = re.sub(r"[\s_]+", "-", slug)
+        slug = re.sub(r"-+", "-", slug).strip("-")[:50]
+        today_str = str(date.today())
+        path = f"tasks/{today_str}-{slug}.md"
+
+        assignee = action.get("assignee", "")
+        status = "in_progress" if assignee else "pending"
+
+        metadata = {
+            "name": title,
+            "type": "task",
+            "owner": "huddle",
+            "assignee": assignee,
+            "status": status,
+            "priority": action.get("priority", "p2"),
+            "labels": [],
+            "conversation_id": self.conversation_manager.active_id,
+            "ws_target": "huddle",
+            "created_by": "huddle",
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "responses": [],
+        }
+        content = f"# {title}\n\n{action.get('description', '')}"
+        self._shared_vault.write_file(path, metadata, content)
+        self._shared_vault._update_branch_index("tasks", slug, title)
+        logger.info("[HUDDLE] Task created: %s → %s", path, assignee or "unassigned")
+
+        # Trigger scheduler to pick up the task if it has an assignee
+        if assignee and self._org_id:
+            from axon.scheduler import scheduler
+            await asyncio.sleep(2)
+            await scheduler.trigger_task_execution(self._org_id, assignee)
+
+    def _execute_memory_nudge(self, action: dict[str, Any]) -> None:
+        """Drop a memory nudge into an advisor's inbox.
+
+        The advisor will see this on their next conversation turn and
+        verify/save the information to their personal vault.
+        """
+        agent_id = action.get("agent_id", "")
+        content = action.get("content", "")
+        if not agent_id or not content:
+            return
+
+        agent = self.advisor_agents.get(agent_id)
+        if not agent:
+            logger.warning("[HUDDLE] Memory nudge target not found: %s", agent_id)
+            return
+
+        from datetime import datetime
+
+        today_str = str(date.today())
+        slug = f"huddle-memory-{today_str}-{id(action) % 10000:04d}"
+        inbox_path = f"inbox/{slug}.md"
+
+        metadata = {
+            "from": "huddle",
+            "type": "memory_nudge",
+            "date": today_str,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat() + "Z",
+        }
+        agent.vault.write_file(inbox_path, metadata, content)
+        logger.info("[HUDDLE] Memory nudge → %s: %s", agent_id, inbox_path)
 
     def _ingest_into_reasoning(self, transcript: str, topic: str) -> None:
         """Fire-and-forget: feed huddle conclusions to any advisor's reasoning engine."""

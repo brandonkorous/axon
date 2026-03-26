@@ -49,10 +49,11 @@ async def _handle_huddle(websocket: WebSocket, huddle):
       { "type": "clear" }
       { "type": "switch", "conversation_id": "..." }
 
-    Server sends:
-      { "type": "thinking" }
-      { "type": "text", "speaker": "marcus", "target": null, "content": "..." }
-      { "type": "done" }
+    Server sends (pushed directly by advisor tasks via ws_registry):
+      { "type": "thinking", "speaker": "marcus" }       — advisor started processing
+      { "type": "text", "speaker": "marcus", "content": "..." }  — streamed text
+      { "type": "speaker_done", "speaker": "marcus" }   — advisor finished
+      { "type": "done" }                                 — all advisors finished
       { "type": "switched", "conversation_id": "...", "messages": [...] }
     """
     await websocket.accept()
@@ -84,13 +85,8 @@ async def _handle_huddle(websocket: WebSocket, huddle):
                 mgr = huddle.conversation_manager
                 mgr.auto_title_from_message(mgr.active_id, content)
 
-                async for chunk in huddle.process(content, mode=mode):
-                    await websocket.send_json({
-                        "type": chunk.type,
-                        "speaker": chunk.speaker,
-                        "target": chunk.target,
-                        "content": chunk.content,
-                    })
+                # Dispatch to advisors — each streams directly via ws_registry
+                await huddle.dispatch(content, mode=mode)
 
             elif message.get("type") == "clear":
                 huddle.conversation.clear()

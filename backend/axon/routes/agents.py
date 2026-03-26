@@ -60,6 +60,7 @@ def _list_agents_for_registry(agent_reg: dict, email_domain: str = "") -> list[d
             "email": _agent_email(agent, email_domain),
             "comms_enabled": getattr(agent.config.comms, "enabled", False) if hasattr(agent.config, "comms") else False,
             "email_alias": getattr(agent.config.comms, "email_alias", "") if hasattr(agent.config, "comms") else "",
+            "parent_id": agent.config.parent_id,
         })
     return agents
 
@@ -89,6 +90,7 @@ def _get_agent_detail(agent, email_domain: str = "") -> dict:
         "status": agent.lifecycle.status.value if hasattr(agent, "lifecycle") else "idle",
         "lifecycle": agent.lifecycle.to_dict() if hasattr(agent, "lifecycle") else None,
         "email": _agent_email(agent, email_domain),
+        "parent_id": agent.config.parent_id,
     }
 
 
@@ -204,7 +206,7 @@ def _refresh_orchestrator_roster(org) -> None:
 
     specialists = {}
     for aid, agent in org.agent_registry.items():
-        if hasattr(agent, "config") and agent.config.type == AgentType.ADVISOR:
+        if hasattr(agent, "config") and agent.config.type == AgentType.ADVISOR and not agent.config.parent_id:
             specialists[aid] = agent.config
 
     for agent in org.agent_registry.values():

@@ -660,6 +660,9 @@ class AgentScheduler:
                 assignee = metadata.get("assignee", "")
                 status = metadata.get("status", "")
                 conv_id = metadata.get("conversation_id", "")
+                # Skip completed tasks early — no need to log or evaluate them
+                if status in ("done", "failed", "closed", "declined"):
+                    continue
                 logger.debug(
                     "[SCHEDULER] Task %s: assignee=%r status=%r conv_id=%r (want agent=%r)",
                     md_file.name, assignee, status, bool(conv_id), agent_id,

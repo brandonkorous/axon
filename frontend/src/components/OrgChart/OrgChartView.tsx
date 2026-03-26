@@ -19,6 +19,7 @@ interface ChartNode {
   color: string;
   status: string;
   has_strategy_override: boolean;
+  parent_id?: string;
 }
 
 interface ChartEdge {
@@ -39,13 +40,14 @@ const STATUS_RING: Record<string, string> = {
   terminated: "var(--color-error)",
 };
 
-function AgentNode({ data }: { data: ChartNode }) {
+function AgentNode({ data }: { data: ChartNode & { isSubAgent?: boolean } }) {
   const ringColor = STATUS_RING[data.status] || STATUS_RING.active;
+  const isChild = data.isSubAgent;
 
   return (
-    <div className="card bg-base-300 border border-secondary px-4 py-3 min-w-[160px] text-center shadow-lg">
+    <div className={`card bg-base-300 border border-secondary text-center shadow-lg ${isChild ? "px-3 py-2 min-w-[140px]" : "px-4 py-3 min-w-[160px]"}`}>
       <div
-        className="w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center text-sm font-bold text-white"
+        className={`rounded-full mx-auto mb-2 flex items-center justify-center font-bold text-white ${isChild ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm"}`}
         style={{
           backgroundColor: data.color,
           boxShadow: `0 0 0 3px ${ringColor}`,
@@ -54,8 +56,8 @@ function AgentNode({ data }: { data: ChartNode }) {
       >
         {data.name[0]}
       </div>
-      <div className="text-sm font-semibold text-base-content">{data.name}</div>
-      <div className="text-[10px] text-base-content/60">{data.title}</div>
+      <div className={`font-semibold text-base-content ${isChild ? "text-xs" : "text-sm"}`}>{data.name}</div>
+      <div className={`text-base-content/60 ${isChild ? "text-[9px]" : "text-[10px]"}`}>{data.title}</div>
       {data.has_strategy_override && (
         <div className="text-[9px] text-accent mt-1">strategy override</div>
       )}
@@ -83,11 +85,22 @@ export function OrgChartView() {
     if (!chartData) return { nodes: [], edges: [] };
 
     const axonNode = chartData.nodes.find((n) => n.id === "axon");
-    const others = chartData.nodes.filter((n) => n.id !== "axon");
+    const topLevel = chartData.nodes.filter((n) => n.id !== "axon" && !n.parent_id);
+    const subAgents = chartData.nodes.filter((n) => n.parent_id);
+
+    // Group sub-agents by parent
+    const childrenOf = new Map<string, ChartNode[]>();
+    for (const sub of subAgents) {
+      const list = childrenOf.get(sub.parent_id!) || [];
+      list.push(sub);
+      childrenOf.set(sub.parent_id!, list);
+    }
 
     const nodes: Node[] = [];
     const centerX = 300;
+    const spacing = 200;
 
+    // Tier 0: Axon (orchestrator)
     if (axonNode) {
       nodes.push({
         id: axonNode.id,
@@ -99,34 +112,75 @@ export function OrgChartView() {
       });
     }
 
-    const spacing = 200;
-    const startX = centerX - ((others.length - 1) * spacing) / 2;
-    others.forEach((node, i) => {
+    // Tier 1: top-level agents
+    const startX = centerX - ((topLevel.length - 1) * spacing) / 2;
+    topLevel.forEach((node, i) => {
+      const x = startX + i * spacing;
       nodes.push({
         id: node.id,
         type: "agent",
-        position: { x: startX + i * spacing, y: 250 },
+        position: { x, y: 250 },
         data: node as unknown as Record<string, unknown>,
-        sourcePosition: Position.Top,
+        sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
+      });
+
+      // Tier 2: children of this agent
+      const children = childrenOf.get(node.id) || [];
+      const childSpacing = 170;
+      const childStartX = x - ((children.length - 1) * childSpacing) / 2;
+      children.forEach((child, j) => {
+        nodes.push({
+          id: child.id,
+          type: "agent",
+          position: { x: childStartX + j * childSpacing, y: 450 },
+          data: { ...child, isSubAgent: true } as unknown as Record<string, unknown>,
+          sourcePosition: Position.Bottom,
+          targetPosition: Position.Top,
+        });
       });
     });
 
+    // Edges
     const edges: Edge[] = [];
     const seen = new Set<string>();
 
+    // Separate parent_child edges from delegation edges — parent_child take priority
+    const parentChildPairs = new Set<string>();
     for (const edge of chartData.edges) {
-      const key = `${edge.from}-${edge.to}`;
+      if (edge.type === "parent_child") {
+        parentChildPairs.add(`${edge.from}-${edge.to}`);
+      }
+    }
+
+    for (const edge of chartData.edges) {
+      const pairKey = `${edge.from}-${edge.to}`;
+      const key = `${pairKey}-${edge.type}`;
       if (seen.has(key)) continue;
       seen.add(key);
+
+      const isParentChild = edge.type === "parent_child";
+
+      // Skip delegation edges that duplicate a parent_child relationship
+      if (!isParentChild && parentChildPairs.has(pairKey)) continue;
 
       edges.push({
         id: key,
         source: edge.from,
         target: edge.to,
-        animated: edge.type === "can_delegate_to",
-        style: { stroke: edge.type === "can_delegate_to" ? "var(--color-primary)" : "var(--color-neutral)" },
-        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--color-primary)" },
+        animated: !isParentChild && edge.type === "can_delegate_to",
+        style: {
+          stroke: isParentChild
+            ? "var(--color-secondary)"
+            : edge.type === "can_delegate_to"
+              ? "var(--color-primary)"
+              : "var(--color-neutral)",
+          strokeWidth: isParentChild ? 2 : 1,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: isParentChild ? "var(--color-secondary)" : "var(--color-primary)",
+        },
       });
     }
 

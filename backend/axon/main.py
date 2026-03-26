@@ -96,6 +96,13 @@ def _init_org_agents(
     # Discover agents from vault folders containing agent.yaml
     agents = discover_agents_from_vaults(vaults_dir)
 
+    # Auto-wire parent delegation: parent can_delegate_to children
+    for agent_id, config in agents.items():
+        if config.parent_id and config.parent_id in agents:
+            parent_cfg = agents[config.parent_id]
+            if agent_id not in parent_cfg.delegation.can_delegate_to and "*" not in parent_cfg.delegation.can_delegate_to:
+                parent_cfg.delegation.can_delegate_to.append(agent_id)
+
     logger.debug(f"[{org_config.id}] Loaded {len(agents)} agents: {list(agents.keys())}")
 
     # Initialize shared vault
@@ -138,7 +145,7 @@ def _init_org_agents(
             org_comms_config=org_comms,
         )
         org.agent_registry[persona_id] = agent
-        if not is_external:
+        if not is_external and not config.parent_id:
             specialists[persona_id] = config
 
     # Initialize orchestrators
@@ -161,7 +168,7 @@ def _init_org_agents(
             continue
         advisor_configs = {
             k: v for k, v in agents.items()
-            if v.type == AgentType.ADVISOR
+            if v.type == AgentType.ADVISOR and not v.parent_id
         }
         advisor_agents = {
             k: org.agent_registry[k] for k in advisor_configs

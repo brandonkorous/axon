@@ -259,14 +259,18 @@ async def delete_worker(org_id: str, agent_id: str):
 
 def _resolve_axon_url(request: Request) -> str:
     """Best-effort URL for the runner to connect to."""
-    return f"{request.url.scheme}://{request.url.netloc}"
+    host = request.url.hostname or "localhost"
+    port = request.url.port
+    if port and port not in (80, 443):
+        return f"{request.url.scheme}://{host}:{port}"
+    return f"{request.url.scheme}://{host}"
 
 
 def _refresh_orchestrator_roster(org) -> None:
     from axon.agents.axon_agent import AxonAgent
     specialists = {}
     for aid, agent in org.agent_registry.items():
-        if hasattr(agent, "config") and agent.config.type == AgentType.ADVISOR:
+        if hasattr(agent, "config") and agent.config.type == AgentType.ADVISOR and not agent.config.parent_id:
             specialists[aid] = agent.config
     for agent in org.agent_registry.values():
         if isinstance(agent, AxonAgent):

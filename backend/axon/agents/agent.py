@@ -361,8 +361,8 @@ class Agent:
                 if metadata.get("status") != "pending":
                     continue
                 item_type = metadata.get("type", "")
-                # Only surface actionable notifications (plan results, task completions)
-                if item_type not in ("plan_ready", "task_completed", "task_failed"):
+                # Only surface actionable notifications
+                if item_type not in ("plan_ready", "task_completed", "task_failed", "memory_nudge"):
                     continue
                 from_agent = metadata.get("from", "unknown")
                 items.append(f"### From {from_agent} ({item_type})\n{body[:2000]}")

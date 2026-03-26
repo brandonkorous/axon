@@ -1,16 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useConversationStore } from "../../stores/conversationStore";
+import { useAgentRuntimeStore, type RunningTask } from "../../stores/agentRuntimeStore";
 import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
-export interface RunningTask {
-  path: string;
-  title: string;
-  agentId: string;
-  startedAt: number;
-}
-
 interface Props {
-  chatId: string;
   tasks: RunningTask[];
   color?: string;
 }
@@ -24,10 +16,10 @@ function formatElapsed(startedAt: number): string {
   return `${hours}h ${minutes % 60}m`;
 }
 
-function TaskRow({ chatId, task, color }: { chatId: string; task: RunningTask; color: string }) {
+function TaskRow({ task, color }: { task: RunningTask; color: string }) {
   const [expanded, setExpanded] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
-  const log = useConversationStore((s) => s.taskLogs[chatId]?.[task.path] || "");
+  const log = useAgentRuntimeStore((s) => s.agents[task.agentId]?.taskLogs[task.path] || "");
 
   // Auto-scroll log to bottom
   useEffect(() => {
@@ -77,7 +69,7 @@ function TaskRow({ chatId, task, color }: { chatId: string; task: RunningTask; c
   );
 }
 
-export function WorkingIndicator({ chatId, tasks, color = DEFAULT_AGENT_COLOR }: Props) {
+export function WorkingIndicator({ tasks, color = DEFAULT_AGENT_COLOR }: Props) {
   const [, setTick] = useState(0);
 
   // Update elapsed time every 10 seconds
@@ -91,7 +83,7 @@ export function WorkingIndicator({ chatId, tasks, color = DEFAULT_AGENT_COLOR }:
   return (
     <div className="border-t border-neutral/20 bg-base-200/50">
       {tasks.map((task) => (
-        <TaskRow key={task.path} chatId={chatId} task={task} color={color} />
+        <TaskRow key={task.path} task={task} color={color} />
       ))}
     </div>
   );

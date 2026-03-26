@@ -25,6 +25,7 @@ class ApproveRequest(BaseModel):
     template: str = "advisor"  # Vault template to scaffold from
     tagline: str = ""
     color: str = "#6B7280"
+    parent_id: str = ""  # If set, creates a sub-agent under this parent
 
 
 class DeclineRequest(BaseModel):
@@ -113,6 +114,8 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
         data.setdefault("ui", {})["color"] = body.color
         if body.tagline:
             data["tagline"] = body.tagline
+        if body.parent_id:
+            data["parent_id"] = body.parent_id
         with open(agent_yaml_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
@@ -134,6 +137,13 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
             org_id=org_id,
         )
         org.agent_registry[agent_id] = agent
+
+        # Auto-wire parent delegation for sub-agents
+        if config.parent_id:
+            parent_agent = org.agent_registry.get(config.parent_id)
+            if parent_agent and hasattr(parent_agent, "config"):
+                if agent_id not in parent_agent.config.delegation.can_delegate_to and "*" not in parent_agent.config.delegation.can_delegate_to:
+                    parent_agent.config.delegation.can_delegate_to.append(agent_id)
 
         # Update orchestrator's specialist roster
         _refresh_orchestrator_roster(org)
@@ -195,6 +205,7 @@ def _refresh_orchestrator_roster(org) -> None:
         if (
             hasattr(agent, "config")
             and agent.config.type == AgentType.ADVISOR
+            and not agent.config.parent_id
         ):
             specialists[aid] = agent.config
 

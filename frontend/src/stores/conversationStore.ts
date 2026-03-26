@@ -19,31 +19,18 @@ export interface ConversationMeta {
   message_count: number;
 }
 
-export interface RunningTask {
-  path: string;
-  title: string;
-  agentId: string;
-  startedAt: number;
-}
-
 interface ConversationStore {
   messages: Record<string, ChatMessage[]>; // keyed by agent/huddle ID
   conversationLists: Record<string, ConversationMeta[]>; // keyed by agent ID
   activeConversationId: Record<string, string>; // keyed by agent ID
-  runningTasks: Record<string, RunningTask[]>; // keyed by agent ID
-  taskLogs: Record<string, Record<string, string>>; // [chatId][taskPath] → log text
 
   addMessage: (conversationId: string, message: ChatMessage) => void;
   appendToLast: (conversationId: string, content: string) => void;
+  appendToSpeaker: (conversationId: string, speaker: string, content: string) => void;
   clearMessages: (conversationId: string) => void;
   replaceMessages: (conversationId: string, messages: ChatMessage[]) => void;
   setConversationList: (agentId: string, conversations: ConversationMeta[]) => void;
   setActiveConversation: (agentId: string, conversationId: string) => void;
-  addRunningTask: (agentId: string, task: RunningTask) => void;
-  removeRunningTask: (agentId: string, taskPath: string) => void;
-  setRunningTasks: (agentId: string, tasks: RunningTask[]) => void;
-  appendTaskLog: (chatId: string, taskPath: string, content: string) => void;
-  clearTaskLog: (chatId: string, taskPath: string) => void;
 }
 
 let messageCounter = 0;
@@ -52,8 +39,6 @@ export const useConversationStore = create<ConversationStore>((set) => ({
   messages: {},
   conversationLists: {},
   activeConversationId: {},
-  runningTasks: {},
-  taskLogs: {},
 
   addMessage: (conversationId, message) =>
     set((state) => ({
@@ -82,6 +67,29 @@ export const useConversationStore = create<ConversationStore>((set) => ({
       };
     }),
 
+  appendToSpeaker: (conversationId, speaker, content) =>
+    set((state) => {
+      const msgs = state.messages[conversationId];
+      if (!msgs) return state;
+      // Find the last message from this speaker
+      let idx = -1;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].speaker === speaker) { idx = i; break; }
+      }
+      if (idx === -1) return state;
+      const msg = msgs[idx];
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: [
+            ...msgs.slice(0, idx),
+            { ...msg, content: msg.content + content },
+            ...msgs.slice(idx + 1),
+          ],
+        },
+      };
+    }),
+
   clearMessages: (conversationId) =>
     set((state) => ({
       messages: { ...state.messages, [conversationId]: [] },
@@ -101,55 +109,4 @@ export const useConversationStore = create<ConversationStore>((set) => ({
     set((state) => ({
       activeConversationId: { ...state.activeConversationId, [agentId]: conversationId },
     })),
-
-  addRunningTask: (agentId, task) =>
-    set((state) => {
-      const existing = state.runningTasks[agentId] || [];
-      // Avoid duplicates
-      if (existing.some((t) => t.path === task.path)) return state;
-      return {
-        runningTasks: {
-          ...state.runningTasks,
-          [agentId]: [...existing, task],
-        },
-      };
-    }),
-
-  removeRunningTask: (agentId, taskPath) =>
-    set((state) => ({
-      runningTasks: {
-        ...state.runningTasks,
-        [agentId]: (state.runningTasks[agentId] || []).filter(
-          (t) => t.path !== taskPath,
-        ),
-      },
-    })),
-
-  setRunningTasks: (agentId, tasks) =>
-    set((state) => ({
-      runningTasks: { ...state.runningTasks, [agentId]: tasks },
-    })),
-
-  appendTaskLog: (chatId, taskPath, content) =>
-    set((state) => {
-      const chatLogs = state.taskLogs[chatId] || {};
-      return {
-        taskLogs: {
-          ...state.taskLogs,
-          [chatId]: {
-            ...chatLogs,
-            [taskPath]: (chatLogs[taskPath] || "") + content,
-          },
-        },
-      };
-    }),
-
-  clearTaskLog: (chatId, taskPath) =>
-    set((state) => {
-      const chatLogs = { ...(state.taskLogs[chatId] || {}) };
-      delete chatLogs[taskPath];
-      return {
-        taskLogs: { ...state.taskLogs, [chatId]: chatLogs },
-      };
-    }),
 }));

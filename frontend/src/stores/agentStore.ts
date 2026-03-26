@@ -22,6 +22,7 @@ export interface AgentInfo {
     sparkle_color: string;
   };
   type: "advisor" | "orchestrator" | "huddle" | "external";
+  parent_id?: string;
   model: string;
   status: string;
   lifecycle?: LifecycleState;
@@ -46,7 +47,6 @@ interface AgentStore {
   agents: AgentInfo[];
   loading: boolean;
   fetchAgents: () => Promise<void>;
-  setAgentStatus: (id: string, status: AgentInfo["status"]) => void;
   lifecycleAction: (agentId: string, action: string, body?: object) => Promise<void>;
   updatePersona: (agentId: string, update: PersonaUpdate) => Promise<void>;
   fetchAgentDetail: (agentId: string) => Promise<AgentInfo | null>;
@@ -65,11 +65,6 @@ export const useAgentStore = create<AgentStore>((set) => ({
       set({ loading: false });
     }
   },
-
-  setAgentStatus: (id, status) =>
-    set((state) => ({
-      agents: state.agents.map((a) => (a.id === id ? { ...a, status } : a)),
-    })),
 
   fetchAgentDetail: async (agentId) => {
     try {

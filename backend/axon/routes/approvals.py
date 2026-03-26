@@ -99,7 +99,8 @@ async def approve_task(org_id: str, task_path: str):
 
         role = metadata.get("role", "New Agent")
         agent_id = role.lower().replace(" ", "_")
-        body_req = ApproveRequest(name=role, agent_id=agent_id)
+        requested_by = metadata.get("requested_by", "")
+        body_req = ApproveRequest(name=role, agent_id=agent_id, parent_id=requested_by)
         return await approve_recruitment(org_id, task_path, body_req)
 
     metadata["status"] = "approved"

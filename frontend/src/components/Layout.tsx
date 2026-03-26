@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAgentStore } from "../stores/agentStore";
+import { useThinkingAgents } from "../stores/agentRuntimeStore";
 import { useOrgStore } from "../stores/orgStore";
 import { StatusBadge } from "./AgentControls/AgentControls";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -21,6 +22,7 @@ function getInitialTheme(): "axon" | "axon-dark" {
 
 export function Layout() {
   const { agents, fetchAgents, loading } = useAgentStore();
+  const thinkingAgentIds = useThinkingAgents();
   const { fetchOrgs } = useOrgStore();
   const openVoiceSettings = useVoiceChatStore((s) => s.openSettings);
   const approvalCount = useApprovalStore((s) => s.approvals.length);
@@ -159,26 +161,52 @@ export function Layout() {
             <li className="menu-title mt-4">Agents</li>
             {!loading &&
               agents
-                .filter((a) => a.id !== "axon" && a.type !== "external")
-                .map((agent) => (
-                  <li key={agent.id}>
-                    <NavLink
-                      to={`/agent/${agent.id}`}
-                      className={({ isActive }) => isActive ? "menu-active" : ""}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: agent.ui.color }}
-                        />
-                        {agent.name}
-                        {agent.lifecycle && agent.lifecycle.status !== "active" && (
-                          <StatusBadge status={agent.lifecycle.status} />
-                        )}
-                      </span>
-                    </NavLink>
-                  </li>
-                ))}
+                .filter((a) => a.id !== "axon" && a.type !== "external" && !a.parent_id)
+                .map((agent) => {
+                  const children = agents.filter((a) => a.parent_id === agent.id);
+                  return (
+                    <li key={agent.id}>
+                      <NavLink
+                        to={`/agent/${agent.id}`}
+                        className={({ isActive }) => isActive ? "menu-active" : ""}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full${thinkingAgentIds.includes(agent.id) ? " animate-pulse" : ""}`}
+                            style={{ backgroundColor: agent.ui.color }}
+                          />
+                          {agent.name}
+                          {agent.lifecycle && agent.lifecycle.status !== "active" && (
+                            <StatusBadge status={agent.lifecycle.status} />
+                          )}
+                        </span>
+                      </NavLink>
+                      {children.length > 0 && (
+                        <ul className="ml-2 border-l border-base-content/10">
+                          {children.map((child) => (
+                            <li key={child.id}>
+                              <NavLink
+                                to={`/agent/${child.id}`}
+                                className={({ isActive }) => isActive ? "menu-active" : ""}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full${thinkingAgentIds.includes(child.id) ? " animate-pulse" : ""}`}
+                                    style={{ backgroundColor: child.ui.color }}
+                                  />
+                                  <span className="text-xs">{child.name}</span>
+                                  {child.lifecycle && child.lifecycle.status !== "active" && (
+                                    <StatusBadge status={child.lifecycle.status} />
+                                  )}
+                                </span>
+                              </NavLink>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                })}
 
             <li className="menu-title mt-4">Workers</li>
             <li>

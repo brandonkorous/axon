@@ -8,6 +8,7 @@ import { ToolUseBadge } from "../Conversation/ToolUseBadge";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useAgentRuntimeStore, useAgentRuntime } from "../../stores/agentRuntimeStore";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
 import { playAudioBase64 } from "../../hooks/useVoice";
@@ -17,10 +18,9 @@ const AGENT_ID = "axon";
 
 export function AxonView() {
   const { messages, addMessage, appendToLast } = useConversationStore();
-  const { agents, setAgentStatus } = useAgentStore();
-  const [isThinking, setIsThinking] = useState(false);
-  const isThinkingRef = useRef(false);
+  const { agents } = useAgentStore();
   const [activeAgent, setActiveAgent] = useState<string>("axon");
+  const runtime = useAgentRuntime(activeAgent);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasGreetedRef = useRef(false);
   const historyLoadedRef = useRef(false);
@@ -33,19 +33,17 @@ export function AxonView() {
       const type = data.type as string;
       const agentId = (data.agent_id as string) || "axon";
       const content = (data.content as string) || "";
+      const rs = useAgentRuntimeStore.getState();
 
       switch (type) {
         case "thinking":
-          setIsThinking(true);
-          isThinkingRef.current = true;
+          rs.setThinking(agentId, true, "axon");
           setActiveAgent(agentId);
-          setAgentStatus(agentId, "thinking");
           break;
 
         case "text":
-          if (isThinkingRef.current) {
-            setIsThinking(false);
-            isThinkingRef.current = false;
+          if (rs.agents[agentId]?.thinking) {
+            rs.setThinking(agentId, false);
             addMessage(AGENT_ID, {
               id: `msg-${Date.now()}`,
               role: "assistant",
@@ -128,14 +126,11 @@ export function AxonView() {
           break;
 
         case "done":
-          setIsThinking(false);
-          isThinkingRef.current = false;
-          setAgentStatus(agentId, "idle");
+          rs.setThinking(agentId, false);
           break;
 
         case "error":
-          setIsThinking(false);
-          isThinkingRef.current = false;
+          rs.setThinking(agentId, false);
           addMessage(AGENT_ID, {
             id: `err-${Date.now()}`,
             role: "system",
@@ -145,7 +140,7 @@ export function AxonView() {
           break;
       }
     },
-    [addMessage, appendToLast, setAgentStatus, agents]
+    [addMessage, appendToLast, agents]
   );
 
   const { connected, send } = useWebSocket({
@@ -180,7 +175,7 @@ export function AxonView() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversationMessages.length, isThinking]);
+  }, [conversationMessages.length, runtime.thinking]);
 
   const handleSend = (content: string) => {
     addMessage(AGENT_ID, {
@@ -269,7 +264,7 @@ export function AxonView() {
 
           return <ChatMessage key={msg.id} message={msg} />;
         })}
-        {isThinking && currentAgent && (
+        {runtime.thinking && currentAgent && (
           <ThinkingIndicator
             color={currentAgent.ui.color}
             agentName={currentAgent.name}

@@ -151,6 +151,7 @@ class PersonaConfig(BaseModel):
     title: str = ""
     tagline: str = ""
     type: AgentType = AgentType.ADVISOR
+    parent_id: str = ""  # If set, this agent is a sub-agent of the given parent
     model: ModelConfig = ModelConfig()
     voice: VoiceConfig = VoiceConfig()
     vault: VaultConfig = VaultConfig()
@@ -226,6 +227,11 @@ def _load_agent_yaml(yaml_path: Path, vault_dir: Path) -> PersonaConfig:
         data["type"] = AgentType.EXTERNAL
 
     config = PersonaConfig(**data)
+
+    # Auto-wire child delegation: ensure child accepts work from parent
+    if config.parent_id:
+        if config.parent_id not in config.delegation.accepts_from and "*" not in config.delegation.accepts_from:
+            config.delegation.accepts_from.append(config.parent_id)
 
     # Resolve empty models to the global default
     default = settings.default_model

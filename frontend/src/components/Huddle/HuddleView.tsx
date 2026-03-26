@@ -5,9 +5,12 @@ import { ConversationSwitcher } from "../Conversation/ConversationSwitcher";
 import { WorkingIndicator } from "../Conversation/WorkingIndicator";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
 import { useConversationStore } from "../../stores/conversationStore";
+import { useAgentStore } from "../../stores/agentStore";
+import { useAgentRuntimeStore, useThinkingAgents } from "../../stores/agentRuntimeStore";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
-import { orgApiPath } from "../../stores/orgStore";
+
+import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 const MODES = [
   { id: "standard", label: "Standard" },
@@ -21,26 +24,18 @@ const MODES = [
 const AGENT_ID = "huddle";
 
 export function HuddleView() {
-  const {
-    messages,
-    addMessage,
-    appendToLast,
-    runningTasks,
-    addRunningTask,
-    removeRunningTask,
-    setRunningTasks,
-    appendTaskLog,
-    clearTaskLog,
-  } = useConversationStore();
-  const [isThinking, setIsThinking] = useState(false);
+  const { messages, addMessage, appendToSpeaker } = useConversationStore();
+  const { agents } = useAgentStore();
+  const thinkingAgentIds = useThinkingAgents();
+  const huddleRunningTasks = useAgentRuntimeStore(
+    (s) => Object.values(s.agents).flatMap((a) => a.runningTasks),
+  );
   const [mode, setMode] = useState("standard");
-  const currentSpeakerRef = useRef<string | null>(null);
-  const isThinkingRef = useRef(false);
+  const activeSpeakers = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const switchedHandlerRef = useRef<(data: Record<string, unknown>) => void>(() => {});
 
   const conversationMessages = messages[AGENT_ID] || [];
-  const huddleRunningTasks = runningTasks[AGENT_ID] || [];
 
   const handleWsMessage = useCallback(
     (data: Record<string, unknown>) => {
@@ -49,48 +44,64 @@ export function HuddleView() {
       const target = data.target as string | null;
       const content = (data.content as string) || "";
       const taskPath = data.task_path as string | undefined;
+      const rs = useAgentRuntimeStore.getState();
 
       switch (type) {
         case "thinking":
-          setIsThinking(true);
-          isThinkingRef.current = true;
+          if (speaker) {
+            rs.setThinking(speaker, true, "huddle");
+          }
           break;
         case "text":
-          // Capture task execution output as log
-          if (taskPath) {
-            appendTaskLog(AGENT_ID, taskPath, content);
+          if (taskPath && speaker) {
+            rs.appendTaskLog(speaker, taskPath, content);
           }
-          if (isThinkingRef.current || speaker !== currentSpeakerRef.current) {
-            setIsThinking(false);
-            isThinkingRef.current = false;
-            currentSpeakerRef.current = speaker;
+          if (speaker) {
+            rs.setThinking(speaker, false);
+          }
+          if (speaker && activeSpeakers.current.has(speaker)) {
+            appendToSpeaker(AGENT_ID, speaker, content);
+          } else if (speaker) {
+            activeSpeakers.current.add(speaker);
             addMessage(AGENT_ID, {
               id: `msg-${Date.now()}-${Math.random()}`,
               role: "assistant",
               content,
-              agentId: speaker || undefined,
-              speaker: speaker || undefined,
+              agentId: speaker,
+              speaker,
               target: target || undefined,
               timestamp: Date.now(),
             });
           } else {
-            appendToLast(AGENT_ID, content);
+            addMessage(AGENT_ID, {
+              id: `msg-${Date.now()}-${Math.random()}`,
+              role: "assistant",
+              content,
+              timestamp: Date.now(),
+            });
+          }
+          break;
+        case "speaker_done":
+          if (speaker) {
+            rs.setThinking(speaker, false);
+            activeSpeakers.current.delete(speaker);
           }
           break;
         case "task_update": {
           const tPath = data.task_path as string;
           const taskTitle = data.task_title as string;
           const status = data.status as string;
+          const taskAgentId = (data.agent_id as string) || AGENT_ID;
           if (status === "in_progress" || status === "executing") {
-            addRunningTask(AGENT_ID, {
+            rs.addRunningTask(taskAgentId, {
               path: tPath,
               title: taskTitle,
-              agentId: (data.agent_id as string) || AGENT_ID,
+              agentId: taskAgentId,
               startedAt: Date.now(),
             });
           } else if (status === "done" || status === "failed") {
-            removeRunningTask(AGENT_ID, tPath);
-            clearTaskLog(AGENT_ID, tPath);
+            rs.removeRunningTask(taskAgentId, tPath);
+            rs.clearTaskLog(taskAgentId, tPath);
           }
           break;
         }
@@ -98,13 +109,11 @@ export function HuddleView() {
           switchedHandlerRef.current(data);
           break;
         case "done":
-          setIsThinking(false);
-          isThinkingRef.current = false;
-          currentSpeakerRef.current = null;
+          activeSpeakers.current.clear();
           break;
       }
     },
-    [addMessage, appendToLast, addRunningTask, removeRunningTask, appendTaskLog, clearTaskLog]
+    [addMessage, appendToSpeaker]
   );
 
   const { connected, send } = useWebSocket({
@@ -127,28 +136,9 @@ export function HuddleView() {
 
   switchedHandlerRef.current = handleSwitched;
 
-  // Recover running tasks on connect (handles page refresh mid-task)
-  useEffect(() => {
-    if (!connected) return;
-    fetch(orgApiPath(`tasks?ws_target=huddle&status=in_progress`))
-      .then((res) => res.json())
-      .then((tasks: Array<Record<string, string>>) => {
-        const recovered = tasks
-          .filter((t) => t.conversation_id)
-          .map((t) => ({
-            path: t.path,
-            title: t.name || "Task",
-            agentId: t.assignee || AGENT_ID,
-            startedAt: new Date(t.updated_at || t.created_at).getTime(),
-          }));
-        setRunningTasks(AGENT_ID, recovered);
-      })
-      .catch(() => {});
-  }, [connected, setRunningTasks]);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversationMessages.length, isThinking]);
+  }, [conversationMessages.length, thinkingAgentIds.length]);
 
   const handleSend = (content: string) => {
     addMessage(AGENT_ID, {
@@ -157,11 +147,19 @@ export function HuddleView() {
       content,
       timestamp: Date.now(),
     });
-    send({ type: "message", content, mode });
+    send({ type: "message", content, mode: mode });
   };
 
   const handleAudio = (audioBase64: string, sampleRate: number, format: string) => {
     send({ type: "audio", audio: audioBase64, sample_rate: sampleRate, format });
+  };
+
+  const getAgentDisplay = (speakerId: string) => {
+    const agent = agents.find((a) => a.id === speakerId);
+    return {
+      name: agent?.name || speakerId,
+      color: agent?.ui.color || DEFAULT_AGENT_COLOR,
+    };
   };
 
   return (
@@ -183,7 +181,7 @@ export function HuddleView() {
                   onDelete={deleteConversation}
                 />
               </div>
-              <p className="text-xs text-base-content/60">Group advisory session</p>
+              <p className="text-xs text-base-content/60">Group chat</p>
             </div>
           </div>
 
@@ -211,20 +209,27 @@ export function HuddleView() {
         {conversationMessages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} />
         ))}
-        {isThinking && (
-          <ThinkingIndicator color="#F59E0B" agentName="Huddle" />
-        )}
+        {thinkingAgentIds.map((speakerId) => {
+          const display = getAgentDisplay(speakerId);
+          return (
+            <ThinkingIndicator
+              key={speakerId}
+              color={display.color}
+              agentName={display.name}
+            />
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
       {huddleRunningTasks.length > 0 && (
-        <WorkingIndicator chatId={AGENT_ID} tasks={huddleRunningTasks} color="#F59E0B" />
+        <WorkingIndicator tasks={huddleRunningTasks} color="#F59E0B" />
       )}
 
       <ChatInput
         onSend={handleSend}
         onAudio={handleAudio}
-        placeholder="What should we discuss?"
+        placeholder="Message the group, or @mention specific advisors..."
         disabled={!connected}
       />
     </div>
