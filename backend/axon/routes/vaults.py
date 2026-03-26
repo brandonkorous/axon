@@ -186,6 +186,21 @@ async def create_link(agent_id: str, body: LinkRequest):
 # ── Org-scoped routes ───────────────────────────────────────────────
 
 
+@org_router.get("/resolve/{file_path:path}")
+async def resolve_org_vault_file(org_id: str, file_path: str):
+    """Search all vaults in the org for a file and return the first match."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    for aid, agent in org.agent_registry.items():
+        try:
+            result = await _read_vault_file(agent, file_path)
+            return {**result, "vault_id": aid}
+        except HTTPException:
+            continue
+    raise HTTPException(status_code=404, detail=f"File not found in any vault: {file_path}")
+
+
 @org_router.get("/{agent_id}/graph")
 async def get_org_vault_graph(org_id: str, agent_id: str):
     org = registry.get_org(org_id)

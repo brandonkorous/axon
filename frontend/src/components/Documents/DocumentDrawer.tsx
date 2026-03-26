@@ -20,11 +20,20 @@ export function DocumentDrawer({ vaultId, filePath, onClose, onNavigate }: Props
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`${orgApiPath("vaults")}/${vaultId}/files/${filePath}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Document not found (${res.status})`);
-        return res.json();
-      })
+
+    const fetchFile = async () => {
+      // Try the specified vault first
+      const res = await fetch(`${orgApiPath("vaults")}/${vaultId}/files/${filePath}`);
+      if (res.ok) return res.json();
+
+      // Fallback: resolve across all vaults in the org
+      const resolveRes = await fetch(`${orgApiPath("vaults")}/resolve/${filePath}`);
+      if (resolveRes.ok) return resolveRes.json();
+
+      throw new Error(`Document not found (${res.status})`);
+    };
+
+    fetchFile()
       .then((data: FileData) => {
         setFile(data);
         setLoading(false);
