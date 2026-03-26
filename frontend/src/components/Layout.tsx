@@ -206,9 +206,15 @@ export function Layout() {
               </button>
             </li>
             <li>
-              <button onClick={() => setTheme(theme === "axon" ? "axon-dark" : "axon")}>
-                {theme === "axon" ? "Dark Mode" : "Light Mode"}
-              </button>
+              <label className="flex items-center justify-between gap-2 cursor-pointer">
+                <span>{theme === "axon" ? "Dark Mode" : "Light Mode"}</span>
+                <input
+                  type="checkbox"
+                  className="toggle toggle-sm"
+                  checked={theme === "axon-dark"}
+                  onChange={() => setTheme(theme === "axon" ? "axon-dark" : "axon")}
+                />
+              </label>
             </li>
           </ul>
         </nav>
