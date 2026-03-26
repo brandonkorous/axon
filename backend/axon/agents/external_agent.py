@@ -34,6 +34,7 @@ class ExternalAgent(Agent):
         audit_logger: "AuditLogger | None" = None,
         usage_tracker: "UsageTracker | None" = None,
         org_id: str = "",
+        org_comms_config: "OrgCommsConfig | None" = None,
     ):
         # Minimal init — vault and lifecycle only, no LLM/memory/tools
         self.config = config

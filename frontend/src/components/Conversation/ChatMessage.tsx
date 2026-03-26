@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { ChatMessage as ChatMessageType } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { parseVaultDocLink } from "./docLinkUtils";
+import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 interface Props {
   message: ChatMessageType;
@@ -16,7 +17,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
 
   const isUser = message.role === "user";
   const isCommandResult = message.metadata?.type === "command_result";
-  const agentColor = agent?.ui.color || "#8B5CF6";
+  const agentColor = agent?.ui.color || DEFAULT_AGENT_COLOR;
   const agentName = agent?.name || message.speaker || "Axon";
 
   if (isCommandResult) {
@@ -86,11 +87,11 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
           <div className="text-xs font-semibold mb-1" style={{ color: agentColor }}>
             {agentName}
             {message.target && (
-              <span className="text-neutral-content"> → {message.target}</span>
+              <span className="text-base-content/60"> → {message.target}</span>
             )}
           </div>
         )}
-        <div className="prose prose-sm prose-invert max-w-none">
+        <div className="prose prose-sm max-w-none">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
             {message.content}
           </ReactMarkdown>

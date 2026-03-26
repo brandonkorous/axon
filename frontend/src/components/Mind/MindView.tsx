@@ -73,7 +73,7 @@ export function MindView() {
 
   if (store.error) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-2 text-neutral-content">
+      <div className="h-full flex flex-col items-center justify-center gap-2 text-base-content/60">
         <p className="text-error text-sm">Failed to load vault graph.</p>
         <button
           onClick={() => store.fetchGraph(selectedAgentId)}

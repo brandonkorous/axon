@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import TYPE_CHECKING
 
 import discord
@@ -183,12 +182,14 @@ def build_channel_map() -> dict[str, tuple[str, str]]:
     return channel_map
 
 
-def get_bot_token() -> str | None:
-    """Get the Discord bot token from any org's config."""
-    for org in registry.org_registry.values():
-        discord_config = org.config.discord
-        if discord_config and discord_config.bot_token_env:
-            token = os.environ.get(discord_config.bot_token_env)
+async def get_bot_token() -> str | None:
+    """Get the Discord bot token from any org's credential DB."""
+    from axon.comms.credentials import resolve_credential
+
+    for org_id, org in registry.org_registry.items():
+        discord_config = org.config.comms.discord or org.config.discord
+        if discord_config:
+            token = await resolve_credential(org_id, "discord")
             if token:
                 return token
     return None
@@ -200,7 +201,7 @@ async def start_discord_bot() -> AxonDiscordBot | None:
     Returns the bot instance (or None if no config found).
     The bot runs as a background task.
     """
-    token = get_bot_token()
+    token = await get_bot_token()
     if not token:
         return None
 

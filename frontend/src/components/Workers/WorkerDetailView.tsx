@@ -129,13 +129,13 @@ export function WorkerDetailView() {
               </span>
             )}
           </div>
-          <p className="text-xs text-neutral-content mt-1">{worker.agent_id}</p>
+          <p className="text-xs text-base-content/60 mt-1">{worker.agent_id}</p>
         </div>
         <div className="flex items-center gap-3">
           <WorkerControls agentId={worker.agent_id} processState={state} />
           <div className="flex items-center gap-2">
             <div className={`w-2.5 h-2.5 rounded-full ${STATE_DOT[state] || STATE_DOT.stopped}`} />
-            <span className="text-xs text-neutral-content">
+            <span className="text-xs text-base-content/60">
               {STATE_LABEL[state] || "Stopped"}
             </span>
           </div>
@@ -187,7 +187,7 @@ export function WorkerDetailView() {
           {/* Danger zone */}
           <div className="border border-error/30 rounded-lg p-4 space-y-3">
             <h2 className="text-sm font-semibold text-error">Danger Zone</h2>
-            <p className="text-xs text-neutral-content">
+            <p className="text-xs text-base-content/60">
               Stop the runner and remove this worker from the registry. Vault files are preserved.
             </p>
             <button onClick={handleDelete} className="btn btn-error btn-sm btn-outline">
@@ -205,23 +205,23 @@ function ConfigDisplay({ worker }: { worker: WorkerInfo }) {
   return (
     <div className="space-y-3 text-sm">
       <div>
-        <span className="text-neutral-content">Type</span>
+        <span className="text-base-content/60">Type</span>
         <p className="text-xs mt-0.5">{typeInfo?.description || worker.worker_type}</p>
       </div>
       <div>
-        <span className="text-neutral-content">
+        <span className="text-base-content/60">
           {worker.worker_type === "code" ? "Codebase" : "Working Directory"}
         </span>
         <p className="font-mono text-xs mt-0.5">{worker.codebase_path || "\u2014"}</p>
       </div>
       <div>
-        <span className="text-neutral-content">Accepts from</span>
+        <span className="text-base-content/60">Accepts from</span>
         <div className="flex flex-wrap gap-1.5 mt-1">
           {worker.accepts_from.length > 0
             ? worker.accepts_from.map((a) => (
                 <span key={a} className="badge badge-ghost badge-xs">{a}</span>
               ))
-            : <span className="text-xs text-neutral-content">None</span>}
+            : <span className="text-xs text-base-content/60">None</span>}
         </div>
       </div>
     </div>

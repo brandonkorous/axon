@@ -1,11 +1,12 @@
 import { motion } from "framer-motion";
+import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 interface Props {
   color?: string;
   agentName?: string;
 }
 
-export function ThinkingIndicator({ color = "#8B5CF6", agentName = "Axon" }: Props) {
+export function ThinkingIndicator({ color = DEFAULT_AGENT_COLOR, agentName = "Axon" }: Props) {
   return (
     <div className="flex items-center gap-3 px-4 py-3" role="status" aria-label={`${agentName} is thinking`}>
       <motion.div
@@ -33,7 +34,7 @@ export function ThinkingIndicator({ color = "#8B5CF6", agentName = "Axon" }: Pro
           />
         ))}
       </div>
-      <span className="text-sm text-neutral-content">{agentName} is thinking...</span>
+      <span className="text-sm text-base-content/60">{agentName} is thinking...</span>
     </div>
   );
 }

@@ -19,7 +19,7 @@ function IssueRow({
       role="button"
       className="hover cursor-pointer"
     >
-      <td className="text-neutral-content text-sm">#{issue.id}</td>
+      <td className="text-base-content/60 text-sm">#{issue.id}</td>
       <td>
         <div className="flex items-center gap-2">
           <span className="text-sm text-base-content font-medium">{issue.name}</span>
@@ -36,12 +36,12 @@ function IssueRow({
         </span>
       </td>
       <td>
-        <span className={`text-xs font-bold uppercase ${PRIORITY_BADGE[issue.priority] || "text-neutral-content"}`}>
+        <span className={`text-xs font-bold uppercase ${PRIORITY_BADGE[issue.priority] || "text-base-content/60"}`}>
           {issue.priority}
         </span>
       </td>
-      <td className="text-sm text-neutral-content">{issue.assignee || "Unassigned"}</td>
-      <td className="text-sm text-neutral-content">{issue.comment_count || 0}</td>
+      <td className="text-sm text-base-content/60">{issue.assignee || "Unassigned"}</td>
+      <td className="text-sm text-base-content/60">{issue.comment_count || 0}</td>
     </tr>
   );
 }
@@ -79,13 +79,13 @@ function IssueDetail({
       <div className="modal-box max-w-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <span className="text-neutral-content text-sm">#{issue.id}</span>
+            <span className="text-base-content/60 text-sm">#{issue.id}</span>
             <h3 className="text-lg font-bold text-base-content">{issue.name}</h3>
             <div className="flex items-center gap-2 mt-1">
               <span className={`badge badge-soft badge-xs ${STATUS_BADGE[issue.status] || "badge-ghost"}`}>
                 {issue.status.replace("_", " ")}
               </span>
-              <span className="text-xs text-neutral-content">
+              <span className="text-xs text-base-content/60">
                 by {issue.created_by} on {new Date(issue.created_at).toLocaleDateString()}
               </span>
             </div>
@@ -96,7 +96,7 @@ function IssueDetail({
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-4">
-          <div className="prose prose-sm prose-invert max-w-none">
+          <div className="prose prose-sm max-w-none">
             <p className="text-base-content/80 text-sm whitespace-pre-wrap">{issue.body}</p>
           </div>
 
@@ -115,14 +115,14 @@ function IssueDetail({
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold text-neutral-content mb-2">
+            <h4 className="text-sm font-semibold text-base-content/60 mb-2">
               Comments ({comments.length})
             </h4>
             <div className="space-y-2">
               {comments.map((c, i) => (
                 <div key={i} className="card bg-base-300 border border-secondary">
                   <div className="card-body p-3">
-                    <div className="flex justify-between text-xs text-neutral-content mb-1">
+                    <div className="flex justify-between text-xs text-base-content/60 mb-1">
                       <span>{c.author}</span>
                       <span>{new Date(c.created_at).toLocaleString()}</span>
                     </div>
@@ -314,7 +314,7 @@ export function IssueListView() {
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-neutral-content">
+        <div className="flex-1 flex items-center justify-center text-base-content/60">
           No issues found
         </div>
       ) : (

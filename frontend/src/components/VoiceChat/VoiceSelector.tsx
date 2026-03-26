@@ -91,7 +91,7 @@ export function VoiceSelector() {
 
       {/* Loading state */}
       {loading && (
-        <div className="text-xs text-base-content/40 flex items-center gap-2">
+        <div className="text-xs text-base-content/50 flex items-center gap-2">
           <span className="loading loading-spinner loading-xs" />
           Loading voices from catalog...
         </div>
@@ -126,7 +126,7 @@ export function VoiceSelector() {
                 >
                   <div className="min-w-0">
                     <div className="text-xs truncate">{formatVoiceName(v)}</div>
-                    <div className="text-[10px] text-base-content/40">
+                    <div className="text-[10px] text-base-content/50">
                       {v.quality} &middot; {v.size_mb} MB
                     </div>
                   </div>

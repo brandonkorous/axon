@@ -55,7 +55,7 @@ function AgentNode({ data }: { data: ChartNode }) {
         {data.name[0]}
       </div>
       <div className="text-sm font-semibold text-base-content">{data.name}</div>
-      <div className="text-[10px] text-neutral-content">{data.title}</div>
+      <div className="text-[10px] text-base-content/60">{data.title}</div>
       {data.has_strategy_override && (
         <div className="text-[9px] text-accent mt-1">strategy override</div>
       )}
@@ -147,7 +147,7 @@ export function OrgChartView() {
     <div className="h-full flex flex-col">
       <div className="px-6 py-4 border-b border-neutral">
         <h1 className="text-xl font-bold text-base-content">Org Chart</h1>
-        <p className="text-xs text-neutral-content">
+        <p className="text-xs text-base-content/60">
           Agent hierarchy and delegation relationships
         </p>
       </div>

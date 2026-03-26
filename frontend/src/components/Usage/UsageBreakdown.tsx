@@ -27,7 +27,7 @@ export function UsageBreakdown({ title, data, totalCost }: Props) {
           {title}
         </h2>
         {entries.length === 0 ? (
-          <p className="text-sm text-neutral-content">No data yet.</p>
+          <p className="text-sm text-base-content/60">No data yet.</p>
         ) : (
           <div className="space-y-3">
             {entries.map(([name, entry]) => {
@@ -41,7 +41,7 @@ export function UsageBreakdown({ title, data, totalCost }: Props) {
                     >
                       {name || "(unknown)"}
                     </span>
-                    <div className="flex items-center gap-3 text-neutral-content shrink-0">
+                    <div className="flex items-center gap-3 text-base-content/60 shrink-0">
                       <span>{entry.count} req</span>
                       <span>{formatTokens(entry.tokens)} tok</span>
                       <span className="text-base-content font-medium">

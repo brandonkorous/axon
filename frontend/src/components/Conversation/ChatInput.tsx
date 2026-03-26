@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback, type KeyboardEvent } from "react";
 import { useVoice } from "../../hooks/useVoice";
-import { SLASH_COMMANDS, type SlashCommandDef } from "../../constants/slashCommands";
-import { CommandAutocomplete } from "./CommandAutocomplete";
+import { SLASH_COMMANDS } from "../../constants/slashCommands";
+import { InputAutocomplete, type AutocompleteItem } from "./CommandAutocomplete";
+import type { AgentInfo } from "../../stores/agentStore";
 
 interface Props {
   onSend: (message: string) => void;
   onCommand?: (name: string, args: string) => void;
   onAudio?: (audioBase64: string, sampleRate: number, format: string) => void;
+  agents?: AgentInfo[];
   placeholder?: string;
   disabled?: boolean;
 }
@@ -15,13 +17,14 @@ export function ChatInput({
   onSend,
   onCommand,
   onAudio,
+  agents = [],
   placeholder = "Message Axon...",
   disabled = false,
 }: Props) {
   const [input, setInput] = useState("");
-  const [showCommands, setShowCommands] = useState(false);
+  const [acItems, setAcItems] = useState<AutocompleteItem[]>([]);
+  const [acMode, setAcMode] = useState<"command" | "mention" | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [filteredCommands, setFilteredCommands] = useState<SlashCommandDef[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleAudio = useCallback(
@@ -48,35 +51,76 @@ export function ChatInput({
       onSend(trimmed);
     }
     setInput("");
-    setShowCommands(false);
+    closeAutocomplete();
     inputRef.current?.focus();
+  };
+
+  const closeAutocomplete = () => {
+    setAcItems([]);
+    setAcMode(null);
   };
 
   const handleInputChange = (val: string) => {
     setInput(val);
+
+    // Slash commands: trigger on "/" at start, before any space
     if (val.startsWith("/") && !val.includes(" ")) {
       const prefix = val.slice(1).toLowerCase();
-      const filtered = SLASH_COMMANDS.filter((c) => c.name.startsWith(prefix));
-      setFilteredCommands(filtered);
-      setShowCommands(filtered.length > 0);
-      setSelectedIndex(0);
-    } else {
-      setShowCommands(false);
+      const items: AutocompleteItem[] = SLASH_COMMANDS
+        .filter((c) => c.name.startsWith(prefix))
+        .map((c) => ({
+          key: c.name,
+          label: `/${c.name}`,
+          detail: c.description,
+          hint: c.argHint,
+        }));
+      if (items.length > 0) {
+        setAcItems(items);
+        setAcMode("command");
+        setSelectedIndex(0);
+        return;
+      }
     }
+
+    // @mentions: trigger on "@" at start, before any space
+    if (val.startsWith("@") && !val.includes(" ")) {
+      const prefix = val.slice(1).toLowerCase();
+      const items: AutocompleteItem[] = agents
+        .filter((a) => a.id.startsWith(prefix) || a.name.toLowerCase().startsWith(prefix))
+        .map((a) => ({
+          key: a.id,
+          label: `@${a.name.toLowerCase()}`,
+          detail: a.title,
+          color: a.ui.color,
+        }));
+      if (items.length > 0) {
+        setAcItems(items);
+        setAcMode("mention");
+        setSelectedIndex(0);
+        return;
+      }
+    }
+
+    closeAutocomplete();
   };
 
-  const selectCommand = (cmd: SlashCommandDef) => {
-    const suffix = cmd.hasArgs ? " " : "";
-    setInput(`/${cmd.name}${suffix}`);
-    setShowCommands(false);
+  const selectItem = (item: AutocompleteItem) => {
+    if (acMode === "command") {
+      const cmd = SLASH_COMMANDS.find((c) => c.name === item.key);
+      const suffix = cmd?.hasArgs ? " " : "";
+      setInput(`/${item.key}${suffix}`);
+    } else if (acMode === "mention") {
+      setInput(`@${item.key} `);
+    }
+    closeAutocomplete();
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (showCommands) {
+    if (acMode) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, filteredCommands.length - 1));
+        setSelectedIndex((i) => Math.min(i + 1, acItems.length - 1));
         return;
       }
       if (e.key === "ArrowUp") {
@@ -86,12 +130,12 @@ export function ChatInput({
       }
       if (e.key === "Tab") {
         e.preventDefault();
-        const cmd = filteredCommands[selectedIndex];
-        if (cmd) selectCommand(cmd);
+        const item = acItems[selectedIndex];
+        if (item) selectItem(item);
         return;
       }
       if (e.key === "Escape") {
-        setShowCommands(false);
+        closeAutocomplete();
         return;
       }
     }
@@ -104,11 +148,11 @@ export function ChatInput({
   return (
     <div className="border-t border-neutral bg-base-200 p-4">
       <div className="relative flex gap-2 items-end max-w-4xl mx-auto">
-        {showCommands && (
-          <CommandAutocomplete
-            commands={filteredCommands}
+        {acMode && (
+          <InputAutocomplete
+            items={acItems}
             selectedIndex={selectedIndex}
-            onSelect={selectCommand}
+            onSelect={selectItem}
           />
         )}
 

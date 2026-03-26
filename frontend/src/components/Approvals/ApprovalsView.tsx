@@ -36,16 +36,21 @@ function ApprovalRow({
       className="hover cursor-pointer"
     >
       <td>
-        <span className="text-sm text-base-content font-medium">{approval.title}</span>
+        <div className="flex items-center gap-2">
+          {approval.type === "comms_outbound" && (
+            <span className="badge badge-info badge-xs">{approval.channel || "msg"}</span>
+          )}
+          <span className="text-sm text-base-content font-medium">{approval.title}</span>
+        </div>
       </td>
-      <td className="text-sm text-neutral-content">{approval.delegated_by}</td>
-      <td className="text-sm text-neutral-content">{approval.assignee}</td>
+      <td className="text-sm text-base-content/60">{approval.delegated_by}</td>
+      <td className="text-sm text-base-content/60">{approval.assignee}</td>
       <td>
         <span className={`badge badge-soft badge-xs ${PRIORITY_BADGE[approval.priority] || "badge-ghost"}`}>
           {approval.priority}
         </span>
       </td>
-      <td className="text-sm text-neutral-content">
+      <td className="text-sm text-base-content/60">
         {new Date(approval.created_at).toLocaleDateString()}
       </td>
       <td>
@@ -94,7 +99,7 @@ export function ApprovalsView() {
           <span className="loading loading-spinner loading-md text-primary" />
         </div>
       ) : approvals.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-neutral-content">
+        <div className="flex-1 flex items-center justify-center text-base-content/60">
           No pending approvals
         </div>
       ) : (

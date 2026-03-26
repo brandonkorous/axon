@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 org_registry: dict[str, "OrgInstance"] = {}
 """All loaded organizations, keyed by org ID."""
 
-default_org_id: str = "default"
-"""The currently active default org (used by legacy routes)."""
+default_org_id: str = ""
+"""The currently active default org (used by legacy routes). Set during init_orgs()."""
 
 
 # ── Legacy aliases (backward compat for Phase 1 transition) ────────
@@ -64,6 +64,12 @@ def list_orgs() -> list[dict]:
             "name": org.config.name,
             "description": org.config.description,
             "type": org.config.type,
+            "comms": {
+                "require_approval": org.config.comms.require_approval,
+                "email_domain": org.config.comms.email_domain,
+                "email_signature": org.config.comms.email_signature,
+                "inbound_polling": org.config.comms.inbound_polling,
+            },
             "agent_count": len(org.agent_registry),
             "has_huddle": org.huddle is not None,
         }

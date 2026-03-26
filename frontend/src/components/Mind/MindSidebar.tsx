@@ -90,7 +90,7 @@ export function MindSidebar({
 
       {/* Stats */}
       {stats && (
-        <div className="px-3 py-2 border-b border-neutral flex gap-3 text-[10px] text-neutral-content">
+        <div className="px-3 py-2 border-b border-neutral flex gap-3 text-[10px] text-base-content/60">
           <span>{stats.node_count} files</span>
           <span>{stats.edge_count} links</span>
         </div>
@@ -100,7 +100,7 @@ export function MindSidebar({
       <div className="flex-1 overflow-y-auto p-2">
         {searchQuery && searchResults.length > 0 ? (
           <div className="space-y-1">
-            <p className="px-2 text-xs text-neutral-content">{searchResults.length} results</p>
+            <p className="px-2 text-xs text-base-content/60">{searchResults.length} results</p>
             {searchResults.map((r) => (
               <button
                 key={r.path}
@@ -108,7 +108,7 @@ export function MindSidebar({
                 className="w-full text-left px-2 py-1.5 rounded text-sm text-base-content/80 hover:bg-base-300"
               >
                 <div className="font-medium">{r.title}</div>
-                <div className="text-xs text-neutral-content truncate">{r.snippet}</div>
+                <div className="text-xs text-base-content/60 truncate">{r.snippet}</div>
               </button>
             ))}
           </div>
@@ -119,13 +119,13 @@ export function MindSidebar({
               <div key={branch} className="mb-3">
                 <button
                   onClick={() => onToggleBranch(branch)}
-                  className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-neutral-content uppercase hover:text-base-content"
+                  className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-base-content/60 uppercase hover:text-base-content"
                 >
                   <span className={`transition-transform ${visibleBranches.has(branch) ? "rotate-90" : ""}`}>
                     &#9654;
                   </span>
                   {branch || "Root"}
-                  <span className="text-neutral-content/50 font-normal ml-auto">
+                  <span className="text-base-content/50 font-normal ml-auto">
                     {branchNodes.length}
                   </span>
                 </button>
@@ -139,7 +139,7 @@ export function MindSidebar({
                         className={`w-full text-left px-4 py-1 rounded text-sm transition-colors ${
                           selectedFilePath === node.id
                             ? "bg-secondary text-base-content"
-                            : "text-neutral-content hover:text-base-content hover:bg-base-300/50"
+                            : "text-base-content/60 hover:text-base-content hover:bg-base-300/50"
                         }`}
                       >
                         {node.title || node.name}

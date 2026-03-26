@@ -13,6 +13,7 @@
   <a href="https://hub.docker.com/r/brandonkorous/axon"><img src="https://img.shields.io/docker/pulls/brandonkorous/axon?color=blue" alt="Docker Pulls" /></a>
   <a href="https://discord.gg/axon"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2" alt="Discord" /></a>
   <a href="https://github.com/brandonkorous/axon/actions"><img src="https://img.shields.io/github/actions/workflow/status/brandonkorous/axon/ci.yml?label=CI" alt="CI Status" /></a>
+  <a href="https://useaxon.dev"><img src="https://img.shields.io/badge/website-useaxon.dev-teal" alt="Website" /></a>
 </p>
 
 ---
@@ -201,6 +202,7 @@ Before opening a large PR, please open an issue or discussion first so we can al
 
 ## Community
 
+- **Website** — [useaxon.dev](https://useaxon.dev) for docs, blog, and getting started guides
 - **Discord** — [Join the server](https://discord.gg/axon) for support, feature discussions, and showcases
 - **GitHub Discussions** — [Ask questions and share ideas](https://github.com/brandonkorous/axon/discussions)
 - **Twitter / X** — Follow [@axon_ai](https://twitter.com/axon_ai) for updates

@@ -1,4 +1,4 @@
-"""Tests for axon.config — path resolution, persona loading, vault discovery."""
+"""Tests for axon.config — path resolution, agent loading, vault discovery."""
 
 from __future__ import annotations
 
@@ -10,38 +10,9 @@ import yaml
 from axon.config import (
     AgentType,
     PersonaConfig,
-    _resolve_vault_for_org,
     _resolve_vault_ref,
     discover_agents_from_vaults,
-    load_persona,
 )
-
-
-# ---------------------------------------------------------------------------
-# _resolve_vault_for_org
-# ---------------------------------------------------------------------------
-
-
-class TestResolveVaultForOrg:
-    def test_vaults_prefix_stripped(self, tmp_path: Path):
-        result = _resolve_vault_for_org("/vaults/marcus", tmp_path)
-        assert result == str(tmp_path / "marcus")
-
-    def test_vaults_prefix_with_backslashes(self, tmp_path: Path):
-        result = _resolve_vault_for_org("\\vaults\\marcus", tmp_path)
-        assert result == str(tmp_path / "marcus")
-
-    def test_vaults_nested_path(self, tmp_path: Path):
-        result = _resolve_vault_for_org("/vaults/marcus/sub", tmp_path)
-        assert result == str(tmp_path / "marcus/sub")
-
-    def test_plain_name_appended(self, tmp_path: Path):
-        result = _resolve_vault_for_org("shared", tmp_path)
-        assert result == str(tmp_path / "shared")
-
-    def test_strips_leading_trailing_slashes(self, tmp_path: Path):
-        result = _resolve_vault_for_org("/shared/", tmp_path)
-        assert result == str(tmp_path / "shared")
 
 
 # ---------------------------------------------------------------------------
@@ -80,59 +51,12 @@ class TestLoadSystemPrompt:
         persona = PersonaConfig(id="t", name="Test")
         assert persona.load_system_prompt(str(tmp_path)) == "file prompt"
 
-    def test_custom_prompt_file(self, tmp_path: Path):
-        (tmp_path / "custom.md").write_text("custom content", encoding="utf-8")
-        persona = PersonaConfig(id="t", name="Test", system_prompt_file="custom.md")
-        assert persona.load_system_prompt(str(tmp_path)) == "custom content"
-
-    def test_fallback_to_legacy_path(self, tmp_path: Path):
-        (tmp_path / "t_instructions.md").write_text("legacy", encoding="utf-8")
-        persona = PersonaConfig(id="t", name="Test")
-        assert persona.load_system_prompt(str(tmp_path)) == "legacy"
-
     def test_fallback_to_generated_prompt(self):
         persona = PersonaConfig(
             id="t", name="Test", title="Tester", tagline="does things"
         )
         result = persona.load_system_prompt("/nonexistent")
         assert "Test" in result and "Tester" in result
-
-
-# ---------------------------------------------------------------------------
-# load_persona
-# ---------------------------------------------------------------------------
-
-
-class TestLoadPersona:
-    def _write_yaml(self, path: Path, data: dict) -> Path:
-        yaml_file = path / "agent.yaml"
-        yaml_file.write_text(yaml.dump(data), encoding="utf-8")
-        return yaml_file
-
-    def test_loads_minimal_persona(self, tmp_path: Path):
-        yaml_file = tmp_path / "test.yaml"
-        yaml_file.write_text(
-            yaml.dump({"id": "marcus", "name": "Marcus", "vault": {"path": "/vaults/marcus"}}),
-            encoding="utf-8",
-        )
-        vaults_base = tmp_path / "vaults"
-        vaults_base.mkdir()
-        persona = load_persona(yaml_file, vaults_base)
-        assert persona.id == "marcus"
-        assert persona.name == "Marcus"
-        assert str(vaults_base / "marcus") == persona.vault.path
-
-    def test_empty_models_inherit_default(self, tmp_path: Path):
-        yaml_file = tmp_path / "test.yaml"
-        yaml_file.write_text(
-            yaml.dump({"id": "x", "name": "X", "vault": {"path": "x"}}),
-            encoding="utf-8",
-        )
-        persona = load_persona(yaml_file, tmp_path)
-        # Both should be populated with the default model
-        assert persona.model.reasoning != ""
-        assert persona.model.navigator != ""
-        assert persona.model.reasoning == persona.model.navigator
 
 
 # ---------------------------------------------------------------------------

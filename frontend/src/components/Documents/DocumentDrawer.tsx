@@ -63,7 +63,7 @@ export function DocumentDrawer({ vaultId, filePath, onClose, onNavigate }: Props
           <div className="px-6 py-4 border-b border-neutral flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-base-content truncate">{title}</h2>
-              <p className="text-xs text-neutral-content truncate">{filePath}</p>
+              <p className="text-xs text-base-content/60 truncate">{filePath}</p>
             </div>
             <button
               onClick={onClose}
@@ -96,7 +96,7 @@ export function DocumentDrawer({ vaultId, filePath, onClose, onNavigate }: Props
                     <div className="card-body p-3 text-sm">
                       {Object.entries(file.frontmatter).map(([key, value]) => (
                         <div key={key} className="flex gap-2">
-                          <span className="text-neutral-content shrink-0">{key}:</span>
+                          <span className="text-base-content/60 shrink-0">{key}:</span>
                           <span className="text-base-content/80 truncate">
                             {String(value)}
                           </span>
@@ -107,7 +107,7 @@ export function DocumentDrawer({ vaultId, filePath, onClose, onNavigate }: Props
                 )}
 
                 {/* Markdown content */}
-                <div className="prose prose-sm prose-invert max-w-none">
+                <div className="prose prose-sm max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {file.content}
                   </ReactMarkdown>
@@ -118,7 +118,7 @@ export function DocumentDrawer({ vaultId, filePath, onClose, onNavigate }: Props
                   <div className="mt-6 grid grid-cols-2 gap-4">
                     {file.links.length > 0 && (
                       <div>
-                        <h3 className="text-xs font-semibold text-neutral-content mb-2 uppercase">
+                        <h3 className="text-xs font-semibold text-base-content/60 mb-2 uppercase">
                           Links ({file.links.length})
                         </h3>
                         <div className="space-y-1">
@@ -136,7 +136,7 @@ export function DocumentDrawer({ vaultId, filePath, onClose, onNavigate }: Props
                     )}
                     {file.backlinks.length > 0 && (
                       <div>
-                        <h3 className="text-xs font-semibold text-neutral-content mb-2 uppercase">
+                        <h3 className="text-xs font-semibold text-base-content/60 mb-2 uppercase">
                           Backlinks ({file.backlinks.length})
                         </h3>
                         <div className="space-y-1">

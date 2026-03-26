@@ -32,7 +32,7 @@ export function MindFileDetail({ file, onSave, onLinkClick, onClose }: Props) {
           <h2 className="text-lg font-bold text-base-content truncate">
             {(file.frontmatter.name as string) || file.path}
           </h2>
-          <p className="text-xs text-neutral-content truncate">{file.path}</p>
+          <p className="text-xs text-base-content/60 truncate">{file.path}</p>
         </div>
         <div className="flex gap-1 shrink-0">
           {editing ? (
@@ -57,7 +57,7 @@ export function MindFileDetail({ file, onSave, onLinkClick, onClose }: Props) {
             <div className="card-body p-3 text-sm">
               {Object.entries(file.frontmatter).map(([key, value]) => (
                 <div key={key} className="flex gap-2">
-                  <span className="text-neutral-content shrink-0">{key}:</span>
+                  <span className="text-base-content/60 shrink-0">{key}:</span>
                   <span className="text-base-content/80 truncate">{String(value)}</span>
                 </div>
               ))}
@@ -74,7 +74,7 @@ export function MindFileDetail({ file, onSave, onLinkClick, onClose }: Props) {
             className="textarea w-full h-64 font-mono resize-y text-sm"
           />
         ) : (
-          <div className="prose prose-sm prose-invert max-w-none">
+          <div className="prose prose-sm max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {file.content}
             </ReactMarkdown>
@@ -86,7 +86,7 @@ export function MindFileDetail({ file, onSave, onLinkClick, onClose }: Props) {
           <div className="mt-6 grid grid-cols-2 gap-4">
             {file.links.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold text-neutral-content mb-2 uppercase">
+                <h3 className="text-xs font-semibold text-base-content/60 mb-2 uppercase">
                   Links ({file.links.length})
                 </h3>
                 <div className="space-y-1">
@@ -104,7 +104,7 @@ export function MindFileDetail({ file, onSave, onLinkClick, onClose }: Props) {
             )}
             {file.backlinks.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold text-neutral-content mb-2 uppercase">
+                <h3 className="text-xs font-semibold text-base-content/60 mb-2 uppercase">
                   Backlinks ({file.backlinks.length})
                 </h3>
                 <div className="space-y-1">

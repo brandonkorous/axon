@@ -247,6 +247,8 @@ class ToolExecutor:
         conversation_manager: "Any | None" = None,
         ws_target: str = "",
         advisor_ids: list[str] | None = None,
+        comms_executor: "CommsToolExecutor | None" = None,
+        web_executor: "WebToolExecutor | None" = None,
     ):
         self.vault = vault
         self.agent_id = agent_id
@@ -261,6 +263,12 @@ class ToolExecutor:
         if reasoning_engine:
             from axon.reasoning.tools import ReasoningToolExecutor
             self._reasoning_executor = ReasoningToolExecutor(reasoning_engine)
+
+        # Comms executor for email/discord/contact tools
+        self._comms_executor: "CommsToolExecutor | None" = comms_executor
+
+        # Web executor for search/fetch tools
+        self._web_executor: "WebToolExecutor | None" = web_executor
 
         # Shared vault executor for task/issue/knowledge tools
         self._shared_executor: "SharedVaultToolExecutor | None" = None
@@ -281,6 +289,18 @@ class ToolExecutor:
         # Route reasoning tools to the reasoning executor
         if self._reasoning_executor and tool_name.startswith("reason_"):
             result = await self._reasoning_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route comms tools to the comms executor
+        if self._comms_executor and tool_name.startswith("comms_"):
+            result = await self._comms_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route web tools to the web executor
+        if self._web_executor and tool_name.startswith("web_"):
+            result = await self._web_executor.execute(tool_name, arguments)
             self._log_audit(tool_name, arguments, result)
             return result
 

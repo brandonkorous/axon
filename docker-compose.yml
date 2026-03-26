@@ -12,6 +12,7 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - AXON_ORGS_DIR=/orgs
       - AXON_LOG_LEVEL=${AXON_LOG_LEVEL:-INFO}
+      - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY:-}
     depends_on:
       ollama:
         condition: service_started
@@ -23,6 +24,17 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080
+    volumes:
+      - searxng_data:/etc/searxng
+    profiles:
+      - web-search
 
   ollama:
     image: ollama/ollama:latest
@@ -63,3 +75,4 @@ services:
 
 volumes:
   ollama_models:
+  searxng_data:

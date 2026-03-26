@@ -103,7 +103,7 @@ export function AuditLogView() {
           <button onClick={() => setPage(page)} className="btn btn-ghost btn-xs text-error">Retry</button>
         </div>
       ) : entries.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-neutral-content">
+        <div className="flex-1 flex items-center justify-center text-base-content/60">
           No audit entries yet. Tool calls will appear here.
         </div>
       ) : (
@@ -128,24 +128,24 @@ export function AuditLogView() {
                   role="button"
                   className="hover cursor-pointer"
                 >
-                  <td className="text-xs text-neutral-content font-mono">
+                  <td className="text-xs text-base-content/60 font-mono">
                     {new Date(entry.timestamp).toLocaleString()}
                   </td>
                   <td>
                     <span className="badge badge-ghost badge-xs">{entry.agent_id}</span>
                   </td>
                   <td>
-                    <span className={`text-xs font-mono ${ACTION_COLORS[entry.action] || "text-neutral-content"}`}>
+                    <span className={`text-xs font-mono ${ACTION_COLORS[entry.action] || "text-base-content/60"}`}>
                       {entry.action}
                     </span>
                   </td>
                   <td>
                     {expanded === entry.path ? (
-                      <pre className="text-xs text-neutral-content whitespace-pre-wrap max-w-xl">
+                      <pre className="text-xs text-base-content/60 whitespace-pre-wrap max-w-xl">
                         {entry.body || "(no details)"}
                       </pre>
                     ) : (
-                      <span className="text-xs text-neutral-content/60 truncate block max-w-xl">
+                      <span className="text-xs text-base-content/50 truncate block max-w-xl">
                         {entry.body ? entry.body.slice(0, 120).replace(/\n/g, " ") : ""}
                       </span>
                     )}
@@ -166,7 +166,7 @@ export function AuditLogView() {
           >
             Previous
           </button>
-          <span className="text-xs text-neutral-content">
+          <span className="text-xs text-base-content/60">
             Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}
           </span>
           <button

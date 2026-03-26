@@ -43,7 +43,7 @@ export function MicCalibration() {
             title={`Trigger threshold: ${threshold.toFixed(3)}`}
           />
         </div>
-        <div className="text-[10px] text-base-content/40 flex justify-between">
+        <div className="text-[10px] text-base-content/50 flex justify-between">
           <span>Quiet</span>
           <span className="text-warning/60">▲ trigger</span>
           <span>Loud</span>
@@ -63,7 +63,7 @@ export function MicCalibration() {
           className="range range-xs range-primary w-full"
           aria-label="Microphone sensitivity"
         />
-        <div className="text-[10px] text-base-content/40 flex justify-between">
+        <div className="text-[10px] text-base-content/50 flex justify-between">
           <span>More sensitive</span>
           <span>Less sensitive</span>
         </div>

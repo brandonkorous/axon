@@ -44,7 +44,7 @@ async def list_pending_approvals(org_id: str):
         try:
             metadata, body = vault.read_file(f"tasks/{md_file.name}")
             if metadata.get("status") == "awaiting_approval":
-                pending.append({
+                item = {
                     "task_path": f"tasks/{md_file.name}",
                     "title": metadata.get("name", ""),
                     "assignee": metadata.get("assignee", ""),
@@ -54,7 +54,13 @@ async def list_pending_approvals(org_id: str):
                     "files_affected": metadata.get("files_affected", []),
                     "created_at": metadata.get("created_at", ""),
                     "updated_at": metadata.get("updated_at", ""),
-                })
+                }
+                # Include comms-specific fields for outbound message approvals
+                if metadata.get("type") == "comms_outbound":
+                    item["type"] = "comms_outbound"
+                    item["channel"] = metadata.get("channel", "")
+                    item["comms_payload"] = metadata.get("comms_payload", "")
+                pending.append(item)
         except Exception:
             continue
 
@@ -81,6 +87,11 @@ async def approve_task(org_id: str, task_path: str):
 
     if metadata.get("status") != "awaiting_approval":
         raise HTTPException(400, f"Task is not awaiting approval (status: {metadata.get('status')})")
+
+    # Comms outbound tasks need the comms handler to actually send the message
+    if metadata.get("type") == "comms_outbound":
+        from axon.comms.approval_handler import handle_comms_approval
+        return await handle_comms_approval(org, task_path, metadata, body)
 
     # Recruitment tasks need the specialized handler that actually creates the agent
     if metadata.get("type") == "recruitment":

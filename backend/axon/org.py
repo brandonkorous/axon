@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -13,8 +12,6 @@ from enum import Enum
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-
-from axon.vault.scaffold import scaffold_vault
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent
@@ -38,9 +35,18 @@ class OrgType(str, Enum):
 class DiscordConfig(BaseModel):
     """Discord integration settings for an organization."""
 
-    bot_token_env: str = ""  # env var name holding the token
     guild_id: str = ""
     channel_mappings: dict[str, str] = {}  # channel_id -> agent_id
+
+
+class OrgCommsConfig(BaseModel):
+    """Organization-level communication settings."""
+
+    require_approval: bool = True  # require user approval for outbound messages
+    email_domain: str = ""  # e.g. "axon.yourcompany.com"
+    email_signature: str = ""  # HTML appended to every outbound email
+    inbound_polling: bool = False  # enable inbound email polling (requires Resend inbound support)
+    discord: DiscordConfig | None = None  # unified discord config
 
 
 class OrgConfig(BaseModel):
@@ -51,7 +57,8 @@ class OrgConfig(BaseModel):
     description: str = ""
     type: OrgType = OrgType.CUSTOM
     settings_overrides: dict[str, Any] = {}
-    discord: DiscordConfig | None = None
+    discord: DiscordConfig | None = None  # legacy — use comms.discord instead
+    comms: OrgCommsConfig = OrgCommsConfig()
 
 
 @dataclass
@@ -95,7 +102,14 @@ def load_org_config(org_dir: str | Path) -> OrgConfig:
     # Ensure id matches directory name
     data.setdefault("id", org_path.name)
     data.setdefault("name", org_path.name.replace("-", " ").title())
-    return OrgConfig(**data)
+
+    config = OrgConfig(**data)
+
+    # Backward compat: merge legacy top-level discord into comms.discord
+    if config.discord and not config.comms.discord:
+        config.comms.discord = config.discord
+
+    return config
 
 
 def discover_orgs(orgs_dir: str | Path) -> list[Path]:
@@ -125,8 +139,6 @@ def scaffold_org(
     Creates:
       org_dir/
         org.yaml
-        personas/
-          prompts/
         vaults/
           shared/
             second-brain.md
@@ -242,6 +254,15 @@ def _write_default_shared_vault(vault_path: Path, org_name: str) -> None:
         encoding="utf-8",
     )
 
+    # Contacts
+    contacts_dir = vault_path / "contacts"
+    contacts_dir.mkdir(exist_ok=True)
+    (contacts_dir / "contacts-index.md").write_text(
+        "---\nname: Contacts Index\ndescription: Directory of contacts for agent communication\ntype: index\n---\n\n"
+        "# Contacts\n\nOrganization contacts for agent communication.\n",
+        encoding="utf-8",
+    )
+
     # Audit (empty — append-only, will be populated by AuditLogger)
     (vault_path / "audit").mkdir(exist_ok=True)
 
@@ -353,194 +374,3 @@ def ensure_huddle(org: "OrgInstance", orgs_dir: str | Path) -> bool:
 
     logger.info("Auto-created huddle for org '%s' with %d advisors", org.config.id, len(advisor_configs))
     return True
-
-
-# ── Migration ───────────────────────────────────────────────────────
-
-
-def migrate_to_multi_org(
-    personas_dir: str | Path,
-    vaults_dir: str | Path,
-    data_dir: str | Path,
-    orgs_dir: str | Path,
-) -> Path:
-    """Migrate a single-org Axon installation to multi-org layout.
-
-    Moves existing personas, vaults, and data into orgs/default/.
-    Returns the path to the default org.
-
-    Only runs if orgs_dir is empty or doesn't exist, AND the old flat
-    layout (personas_dir) has content.
-    """
-    orgs_path = Path(orgs_dir)
-    personas_path = Path(personas_dir)
-    vaults_path = Path(vaults_dir)
-    data_path = Path(data_dir)
-
-    # Don't migrate if orgs already has content
-    if orgs_path.exists() and any(orgs_path.iterdir()):
-        return orgs_path
-
-    # Don't migrate if there's nothing to migrate
-    if not personas_path.exists() or not any(personas_path.glob("*.yaml")):
-        return orgs_path
-
-    print("[AXON] Migrating single-org layout to multi-org...")
-
-    default_org = orgs_path / "default"
-    scaffold_org(default_org, org_name="Default Organization")
-
-    # Move personas
-    dest_personas = default_org / "personas"
-    for item in personas_path.iterdir():
-        dest = dest_personas / item.name
-        if not dest.exists():
-            if item.is_dir():
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
-
-    # Move vaults (symlink or copy)
-    dest_vaults = default_org / "vaults"
-    if vaults_path.exists():
-        for vault_dir in vaults_path.iterdir():
-            if vault_dir.is_dir() and vault_dir.name != "shared":
-                dest = dest_vaults / vault_dir.name
-                if not dest.exists():
-                    shutil.copytree(vault_dir, dest)
-
-    # Move conversation data
-    conversations_src = data_path / "conversations"
-    conversations_dest = default_org / "data" / "conversations"
-    if conversations_src.exists():
-        for item in conversations_src.iterdir():
-            dest = conversations_dest / item.name
-            if not dest.exists():
-                shutil.copy2(item, dest)
-
-    print(f"[AXON] Migration complete → {default_org}")
-    return orgs_path
-
-
-# ── Agent-as-Vault Migration ──────────────────────────────────────
-
-
-# Heuristics for inferring agent type from legacy persona config
-_TYPE_HEURISTICS = {
-    "axon": "orchestrator",
-    "huddle": "huddle",
-}
-
-
-def migrate_personas_to_vaults(org_dir: str | Path) -> list[str]:
-    """Migrate legacy personas/*.yaml into vault-based agent.yaml files.
-
-    For each persona YAML:
-    1. Resolves the vault directory from vault.path
-    2. Writes agent.yaml into the vault directory
-    3. Copies {id}_instructions.md into the vault as instructions.md
-    4. Renames personas/ to personas.bak/
-
-    Returns list of migrated agent IDs.
-    """
-    org_path = Path(org_dir)
-    personas_dir = org_path / "personas"
-    vaults_dir = org_path / "vaults"
-
-    if not personas_dir.exists():
-        logger.warning("No personas/ directory found in %s", org_path)
-        return []
-
-    migrated: list[str] = []
-
-    for yaml_file in sorted(personas_dir.glob("*.yaml")):
-        if yaml_file.name.startswith("_"):
-            continue
-
-        with open(yaml_file, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-
-        if not data or "id" not in data:
-            continue
-
-        agent_id = data["id"]
-        vault_spec = data.get("vault", {}).get("path", f"/vaults/{agent_id}")
-
-        # Resolve vault directory
-        parts = vault_spec.replace("\\", "/").strip("/").split("/")
-        if len(parts) >= 2 and parts[0] == "vaults":
-            vault_name = parts[1]
-        else:
-            vault_name = agent_id
-        vault_dir = vaults_dir / vault_name
-
-        if not vault_dir.exists():
-            vault_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("Created vault directory: %s", vault_dir)
-
-        # Build agent.yaml data (strip vault.path, add type)
-        agent_data = dict(data)
-
-        # Remove vault.path (implicit in agent-as-vault)
-        if "vault" in agent_data:
-            agent_data["vault"].pop("path", None)
-            # Convert writable_paths to relative
-            wp = agent_data["vault"].get("writable_paths", [])
-            agent_data["vault"]["writable_paths"] = [
-                "." if p == vault_spec else p for p in wp
-            ]
-
-        # Infer type from ID or external flag
-        if "type" not in agent_data:
-            if agent_data.get("external", False):
-                agent_data["type"] = "external"
-            elif agent_id in _TYPE_HEURISTICS:
-                agent_data["type"] = _TYPE_HEURISTICS[agent_id]
-            else:
-                agent_data["type"] = "advisor"
-
-        # Remove legacy fields
-        agent_data.pop("system_prompt_file", None)
-
-        # Write agent.yaml
-        agent_yaml_path = vault_dir / "agent.yaml"
-        with open(agent_yaml_path, "w", encoding="utf-8") as f:
-            yaml.dump(agent_data, f, default_flow_style=False, sort_keys=False)
-
-        # Copy instructions file
-        instructions_src = None
-        # Try {id}_instructions.md first
-        candidate = personas_dir / f"{agent_id}_instructions.md"
-        if candidate.exists():
-            instructions_src = candidate
-        else:
-            # Try prompts/{id}_instructions.md
-            candidate = personas_dir / "prompts" / f"{agent_id}_instructions.md"
-            if candidate.exists():
-                instructions_src = candidate
-            else:
-                # Try the system_prompt_file field
-                spf = data.get("system_prompt_file", "")
-                if spf:
-                    candidate = personas_dir / spf
-                    if candidate.exists():
-                        instructions_src = candidate
-
-        if instructions_src:
-            dest = vault_dir / "instructions.md"
-            if not dest.exists():
-                shutil.copy2(instructions_src, dest)
-                logger.info("Copied %s → %s", instructions_src.name, dest)
-
-        migrated.append(agent_id)
-        logger.info("Migrated agent '%s' → %s/agent.yaml", agent_id, vault_dir)
-
-    # Rename personas/ to personas.bak/
-    if migrated:
-        backup = org_path / "personas.bak"
-        if backup.exists():
-            shutil.rmtree(backup)
-        personas_dir.rename(backup)
-        logger.info("Renamed personas/ → personas.bak/")
-
-    return migrated

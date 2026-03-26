@@ -45,7 +45,7 @@ function InboxRow({
         role="button"
         className={`hover cursor-pointer ${item.status === "pending" ? "font-medium" : "opacity-70"}`}
       >
-        <td className="text-sm text-neutral-content">{item.from}</td>
+        <td className="text-sm text-base-content/60">{item.from}</td>
         <td>
           <span className={`badge badge-soft badge-xs ${TYPE_BADGE[item.type] || "badge-ghost"}`}>
             {TYPE_LABEL[item.type] || item.type}
@@ -55,7 +55,7 @@ function InboxRow({
           {item.content.slice(0, 80)}
           {item.content.length > 80 ? "..." : ""}
         </td>
-        <td className="text-sm text-neutral-content">{item.date}</td>
+        <td className="text-sm text-base-content/60">{item.date}</td>
         <td>
           {item.status === "pending" && (
             <button
@@ -67,7 +67,7 @@ function InboxRow({
             </button>
           )}
           {item.status !== "pending" && (
-            <span className="text-xs text-neutral-content">{item.status}</span>
+            <span className="text-xs text-base-content/60">{item.status}</span>
           )}
         </td>
       </tr>
@@ -78,7 +78,7 @@ function InboxRow({
               {item.content}
             </pre>
             {item.task_ref && (
-              <p className="text-xs text-neutral-content mt-2">
+              <p className="text-xs text-base-content/60 mt-2">
                 Ref: {item.task_ref}
               </p>
             )}
@@ -146,7 +146,7 @@ export function InboxView() {
           <span className="loading loading-spinner loading-md text-primary" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-neutral-content">
+        <div className="flex-1 flex items-center justify-center text-base-content/60">
           No inbox items
         </div>
       ) : (

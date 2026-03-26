@@ -91,7 +91,7 @@ export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
                     {TEMPLATE_ICONS[t.icon] || "\u{2B50}"}
                   </div>
                   <div className="text-sm font-semibold text-base-content">{t.name}</div>
-                  <div className="text-[11px] text-neutral-content mt-1 line-clamp-2">
+                  <div className="text-[11px] text-base-content/60 mt-1 line-clamp-2">
                     {t.description}
                   </div>
                 </button>
@@ -107,21 +107,21 @@ export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
               >
                 <div className="text-2xl mb-2">+</div>
                 <div className="text-sm font-semibold text-base-content">Custom</div>
-                <div className="text-[11px] text-neutral-content mt-1">
-                  Start blank, add your own personas
+                <div className="text-[11px] text-base-content/60 mt-1">
+                  Start blank, add your own agents
                 </div>
               </button>
             </div>
           </div>
 
-          {selectedTemplate && selectedTemplate.personas.length > 0 && (
+          {selectedTemplate && selectedTemplate.agents.length > 0 && (
             <div className="card card-border bg-base-300/30">
               <div className="card-body p-4">
-                <div className="text-xs font-medium text-neutral-content mb-3 uppercase tracking-wider">
+                <div className="text-xs font-medium text-base-content/60 mb-3 uppercase tracking-wider">
                   Included Advisors
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {selectedTemplate.personas.map((p) => (
+                  {selectedTemplate.agents.map((p) => (
                     <div
                       key={p.id}
                       className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-base-300/50"
@@ -131,7 +131,7 @@ export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
                         style={{ backgroundColor: p.color }}
                       />
                       <span className="text-sm text-base-content font-medium">{p.name}</span>
-                      <span className="text-[11px] text-neutral-content">{p.title}</span>
+                      <span className="text-[11px] text-base-content/60">{p.title}</span>
                     </div>
                   ))}
                 </div>
@@ -152,8 +152,8 @@ export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
               autoFocus
             />
             {orgId && (
-              <div className="mt-1.5 text-[11px] text-neutral-content">
-                ID: <span className="font-mono text-neutral-content/80">{orgId}</span>
+              <div className="mt-1.5 text-[11px] text-base-content/60">
+                ID: <span className="font-mono text-base-content/60/80">{orgId}</span>
               </div>
             )}
             {error && (

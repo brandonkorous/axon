@@ -144,7 +144,7 @@ export function DashboardView() {
                         <StatusBadge status={agent.lifecycle.status} />
                       )}
                     </div>
-                    <div className="text-xs text-neutral-content">{agent.title}</div>
+                    <div className="text-xs text-base-content/60">{agent.title}</div>
                   </div>
                 </div>
               </div>
@@ -162,7 +162,7 @@ export function DashboardView() {
               </div>
               <div>
                 <div className="font-semibold text-base-content">Huddle</div>
-                <div className="text-xs text-neutral-content">Group Session</div>
+                <div className="text-xs text-base-content/60">Group Session</div>
               </div>
             </div>
           </div>
@@ -182,7 +182,7 @@ export function DashboardView() {
                   {Object.entries(data.tasks.counts).map(([status, count]) => (
                     <div key={status} className="text-center">
                       <div className="text-lg font-bold text-base-content">{count}</div>
-                      <div className="text-[10px] text-neutral-content capitalize">{status.replace("_", " ")}</div>
+                      <div className="text-[10px] text-base-content/60 capitalize">{status.replace("_", " ")}</div>
                     </div>
                   ))}
                 </div>
@@ -194,15 +194,15 @@ export function DashboardView() {
                         <span className="text-sm text-base-content/80 truncate">{t.name}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {t.assignee && <span className="text-[10px] text-neutral-content">{t.assignee}</span>}
-                        <span className={`text-[10px] font-mono ${PRIORITY_BADGE[t.priority] || "text-neutral-content"}`}>{t.priority}</span>
+                        {t.assignee && <span className="text-[10px] text-base-content/60">{t.assignee}</span>}
+                        <span className={`text-[10px] font-mono ${PRIORITY_BADGE[t.priority] || "text-base-content/60"}`}>{t.priority}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </>
             ) : (
-              <p className="text-sm text-neutral-content">No tasks yet.</p>
+              <p className="text-sm text-base-content/60">No tasks yet.</p>
             )}
           </div>
         </div>
@@ -219,7 +219,7 @@ export function DashboardView() {
                   {Object.entries(data.issues.counts).map(([status, count]) => (
                     <div key={status} className="text-center">
                       <div className="text-lg font-bold text-base-content">{count}</div>
-                      <div className="text-[10px] text-neutral-content capitalize">{status.replace("_", " ")}</div>
+                      <div className="text-[10px] text-base-content/60 capitalize">{status.replace("_", " ")}</div>
                     </div>
                   ))}
                 </div>
@@ -227,17 +227,17 @@ export function DashboardView() {
                   {data.issues.recent.map((issue) => (
                     <div key={issue.path} className="flex items-center justify-between py-1.5 border-t border-neutral/30">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] text-neutral-content font-mono">#{issue.id}</span>
+                        <span className="text-[10px] text-base-content/60 font-mono">#{issue.id}</span>
                         <span className={`badge badge-soft badge-xs ${STATUS_BADGE[issue.status] || "badge-ghost"}`}>{issue.status.replace("_", " ")}</span>
                         <span className="text-sm text-base-content/80 truncate">{issue.name}</span>
                       </div>
-                      <span className={`text-[10px] font-mono shrink-0 ${PRIORITY_BADGE[issue.priority] || "text-neutral-content"}`}>{issue.priority}</span>
+                      <span className={`text-[10px] font-mono shrink-0 ${PRIORITY_BADGE[issue.priority] || "text-base-content/60"}`}>{issue.priority}</span>
                     </div>
                   ))}
                 </div>
               </>
             ) : (
-              <p className="text-sm text-neutral-content">No issues yet.</p>
+              <p className="text-sm text-base-content/60">No issues yet.</p>
             )}
           </div>
         </div>
@@ -250,21 +250,21 @@ export function DashboardView() {
             </div>
             {data?.audit && data.audit.total > 0 ? (
               <>
-                <div className="text-xs text-neutral-content mb-3">{data.audit.total.toLocaleString()} total entries</div>
+                <div className="text-xs text-base-content/60 mb-3">{data.audit.total.toLocaleString()} total entries</div>
                 <div className="space-y-1.5">
                   {data.audit.recent.map((entry, i) => (
                     <div key={i} className="flex items-center justify-between py-1 text-xs">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-neutral-content shrink-0">{entry.agent_id}</span>
-                        <span className={`font-medium ${ACTION_COLORS[entry.action] || "text-neutral-content"}`}>{entry.action}</span>
+                        <span className="text-base-content/60 shrink-0">{entry.agent_id}</span>
+                        <span className={`font-medium ${ACTION_COLORS[entry.action] || "text-base-content/60"}`}>{entry.action}</span>
                       </div>
-                      <span className="text-neutral-content/60 shrink-0">{formatTime(entry.timestamp)}</span>
+                      <span className="text-base-content/50 shrink-0">{formatTime(entry.timestamp)}</span>
                     </div>
                   ))}
                 </div>
               </>
             ) : (
-              <p className="text-sm text-neutral-content">No audit entries yet.</p>
+              <p className="text-sm text-base-content/60">No audit entries yet.</p>
             )}
           </div>
         </div>
@@ -285,13 +285,13 @@ export function DashboardView() {
                       {a.agents_involved?.map((agent) => (
                         <span key={agent} className="badge badge-soft badge-info badge-xs">{agent}</span>
                       ))}
-                      <span className="text-[10px] text-neutral-content/60">{a.date}</span>
+                      <span className="text-[10px] text-base-content/50">{a.date}</span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-neutral-content">No achievements yet.</p>
+              <p className="text-sm text-base-content/60">No achievements yet.</p>
             )}
           </div>
         </div>
@@ -306,9 +306,9 @@ export function DashboardView() {
                 <div key={i} className="flex items-center justify-between py-1.5 border-t border-neutral/30 first:border-0">
                   <div>
                     <span className="text-sm font-medium text-base-content">{d.name}</span>
-                    <span className="text-xs text-neutral-content ml-2">({d.vault})</span>
+                    <span className="text-xs text-base-content/60 ml-2">({d.vault})</span>
                   </div>
-                  <span className="text-xs text-neutral-content">{d.date}</span>
+                  <span className="text-xs text-base-content/60">{d.date}</span>
                 </div>
               ))}
             </div>

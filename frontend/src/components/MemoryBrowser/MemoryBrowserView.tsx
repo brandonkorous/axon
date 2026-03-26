@@ -156,7 +156,7 @@ export function MemoryBrowserView() {
             </div>
           ) : searchQuery && searchResults.length > 0 ? (
             <div className="space-y-1">
-              <p className="px-2 text-xs text-neutral-content">{searchResults.length} results</p>
+              <p className="px-2 text-xs text-base-content/60">{searchResults.length} results</p>
               {searchResults.map((r) => (
                 <button
                   key={r.path}
@@ -164,7 +164,7 @@ export function MemoryBrowserView() {
                   className="w-full text-left px-2 py-1.5 rounded text-sm text-base-content/80 hover:bg-base-300"
                 >
                   <div className="font-medium">{r.title}</div>
-                  <div className="text-xs text-neutral-content truncate">{r.snippet}</div>
+                  <div className="text-xs text-base-content/60 truncate">{r.snippet}</div>
                 </button>
               ))}
             </div>
@@ -173,7 +173,7 @@ export function MemoryBrowserView() {
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([branch, branchNodes]) => (
                 <div key={branch} className="mb-3">
-                  <p className="px-2 py-1 text-xs font-semibold text-neutral-content uppercase">
+                  <p className="px-2 py-1 text-xs font-semibold text-base-content/60 uppercase">
                     {branch || "Root"}
                   </p>
                   {branchNodes
@@ -185,12 +185,12 @@ export function MemoryBrowserView() {
                         className={`w-full text-left px-2 py-1 rounded text-sm transition-colors ${
                           selectedFile?.path === node.id
                             ? "bg-secondary text-base-content"
-                            : "text-neutral-content hover:text-base-content hover:bg-base-300/50"
+                            : "text-base-content/60 hover:text-base-content hover:bg-base-300/50"
                         }`}
                       >
                         {node.title || node.name}
                         {(node.linkCount + node.backlinkCount) > 2 && (
-                          <span className="text-xs text-neutral-content/50 ml-1">
+                          <span className="text-xs text-base-content/50 ml-1">
                             ({node.linkCount + node.backlinkCount})
                           </span>
                         )}
@@ -218,7 +218,7 @@ export function MemoryBrowserView() {
                   <h2 className="text-xl font-bold text-base-content">
                     {(selectedFile.frontmatter.name as string) || selectedFile.path}
                   </h2>
-                  <p className="text-sm text-neutral-content">{selectedFile.path}</p>
+                  <p className="text-sm text-base-content/60">{selectedFile.path}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -243,7 +243,7 @@ export function MemoryBrowserView() {
                 <div className="card-body p-3 text-sm">
                   {Object.entries(selectedFile.frontmatter).map(([key, value]) => (
                     <div key={key} className="flex gap-2">
-                      <span className="text-neutral-content">{key}:</span>
+                      <span className="text-base-content/60">{key}:</span>
                       <span className="text-base-content/80">{String(value)}</span>
                     </div>
                   ))}
@@ -259,7 +259,7 @@ export function MemoryBrowserView() {
                 className="textarea w-full h-96 font-mono resize-y"
               />
             ) : (
-              <div className="prose prose-sm prose-invert max-w-none">
+              <div className="prose prose-sm max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {selectedFile.content}
                 </ReactMarkdown>
@@ -270,7 +270,7 @@ export function MemoryBrowserView() {
               <div className="mt-6 grid grid-cols-2 gap-4">
                 {selectedFile.links.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-neutral-content mb-2">
+                    <h3 className="text-sm font-semibold text-base-content/60 mb-2">
                       Links ({selectedFile.links.length})
                     </h3>
                     <div className="space-y-1">
@@ -288,7 +288,7 @@ export function MemoryBrowserView() {
                 )}
                 {selectedFile.backlinks.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-neutral-content mb-2">
+                    <h3 className="text-sm font-semibold text-base-content/60 mb-2">
                       Backlinks ({selectedFile.backlinks.length})
                     </h3>
                     <div className="space-y-1">
@@ -308,7 +308,7 @@ export function MemoryBrowserView() {
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-neutral-content gap-2">
+          <div className="flex flex-col items-center justify-center h-full text-base-content/60 gap-2">
             <button
               onClick={() => setSidebarOpen(true)}
               className="btn btn-ghost btn-sm md:hidden"

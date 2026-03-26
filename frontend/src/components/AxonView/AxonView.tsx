@@ -11,6 +11,7 @@ import { useAgentStore } from "../../stores/agentStore";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
 import { playAudioBase64 } from "../../hooks/useVoice";
+import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 const AGENT_ID = "axon";
 
@@ -219,7 +220,7 @@ export function AxonView() {
                 onDelete={deleteConversation}
               />
             </div>
-            <p className="text-xs text-neutral-content">
+            <p className="text-xs text-base-content/60">
               {connected ? "Connected" : "Connecting..."}
             </p>
           </div>
@@ -257,7 +258,7 @@ export function AxonView() {
                 <span className="w-5 h-5 rounded-full bg-warning flex items-center justify-center text-[10px] font-bold text-warning-content shrink-0">
                   H
                 </span>
-                <span className="prose prose-sm prose-invert">
+                <span className="prose prose-sm">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.content}
                   </ReactMarkdown>
@@ -295,7 +296,7 @@ interface DelegationBannerProps {
 }
 
 function DelegationBanner({ content, targetAgent }: DelegationBannerProps) {
-  const color = targetAgent?.ui.color || "#8B5CF6";
+  const color = targetAgent?.ui.color || DEFAULT_AGENT_COLOR;
 
   return (
     <div

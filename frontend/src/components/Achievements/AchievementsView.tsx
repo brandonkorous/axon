@@ -46,8 +46,8 @@ export function AchievementsView() {
         </div>
       ) : achievements.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-neutral-content mb-2">No achievements yet.</p>
-          <p className="text-xs text-neutral-content/60">
+          <p className="text-base-content/60 mb-2">No achievements yet.</p>
+          <p className="text-xs text-base-content/50">
             Agents will record milestones here as they complete work.
           </p>
         </div>
@@ -60,7 +60,7 @@ export function AchievementsView() {
               <div key={a.path} className="relative pl-14">
                 <div className="absolute left-[19px] top-2 w-3 h-3 rounded-full bg-primary border-2 border-base-100" />
 
-                <div className="text-xs text-neutral-content mb-1">{a.date}</div>
+                <div className="text-xs text-base-content/60 mb-1">{a.date}</div>
 
                 <div className="card card-border bg-base-300/50">
                   <div className="card-body p-4">
@@ -72,7 +72,7 @@ export function AchievementsView() {
                       <p className="text-sm text-success mb-2">{a.impact}</p>
                     )}
 
-                    <p className="text-sm text-neutral-content mb-3 whitespace-pre-wrap">
+                    <p className="text-sm text-base-content/60 mb-3 whitespace-pre-wrap">
                       {a.body
                         ?.replace(/^# .*\n\n?/, "")
                         .replace(/## Impact\n.*$/, "")
@@ -90,7 +90,7 @@ export function AchievementsView() {
                           {task}
                         </span>
                       ))}
-                      <span className="text-[10px] text-neutral-content/60">
+                      <span className="text-[10px] text-base-content/50">
                         by {a.created_by}
                       </span>
                     </div>

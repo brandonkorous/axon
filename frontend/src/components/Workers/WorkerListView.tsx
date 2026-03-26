@@ -38,7 +38,7 @@ export function WorkerListView() {
       <div className="px-6 py-4 border-b border-neutral flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-base-content">Workers</h1>
-          <p className="text-xs text-neutral-content mt-1">
+          <p className="text-xs text-base-content/60 mt-1">
             External agents connected via local runners
           </p>
         </div>
@@ -89,7 +89,7 @@ function WorkerCard({ worker }: { worker: WorkerInfo }) {
               </span>
             )}
           </div>
-          <p className="text-xs text-neutral-content truncate">
+          <p className="text-xs text-base-content/60 truncate">
             {worker.codebase_path || worker.agent_id}
           </p>
         </div>
@@ -114,7 +114,7 @@ function WorkerCard({ worker }: { worker: WorkerInfo }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center h-48 text-center">
-      <p className="text-sm text-neutral-content mb-3">No worker agents configured</p>
+      <p className="text-sm text-base-content/60 mb-3">No worker agents configured</p>
       <NavLink to="/workers/new" className="btn btn-primary btn-sm">
         Add Your First Worker
       </NavLink>

@@ -32,7 +32,7 @@ export function PlaybackSettings() {
           className="range range-xs range-primary w-full"
           aria-label="Playback speed"
         />
-        <div className="text-[10px] text-base-content/40 flex justify-between">
+        <div className="text-[10px] text-base-content/50 flex justify-between">
           <span>0.5x</span>
           <span>2.0x</span>
         </div>
@@ -56,7 +56,7 @@ export function PlaybackSettings() {
           className="range range-xs range-primary w-full"
           aria-label="Silence timeout"
         />
-        <div className="text-[10px] text-base-content/40 flex justify-between">
+        <div className="text-[10px] text-base-content/50 flex justify-between">
           <span>Quick (0.5s)</span>
           <span>Patient (4s)</span>
         </div>

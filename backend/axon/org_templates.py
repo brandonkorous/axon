@@ -1,4 +1,4 @@
-"""Org templates — curated persona sets for different use cases."""
+"""Org templates — curated agent sets for different use cases."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ TEMPLATE_META = {
 
 
 def list_templates() -> list[dict]:
-    """List all available org templates with their personas."""
+    """List all available org templates with their agents."""
     templates = []
     for template_dir in sorted(TEMPLATES_DIR.iterdir()):
         if not template_dir.is_dir() or template_dir.name.startswith("_"):
@@ -70,11 +70,10 @@ def scaffold_from_template(
     """Scaffold a new org from a template.
 
     1. Create org directory structure via scaffold_org()
-    2. Copy base personas (axon + huddle)
-    3. Copy template-specific personas
-    4. Generate huddle config with correct advisor mounts
-    5. Generate huddle instructions with advisor roster
-    6. Write org.yaml with type field
+    2. Copy base vaults (axon)
+    3. Copy template-specific advisor vaults
+    4. Generate huddle vault with correct advisor mounts and roster
+    5. Write org.yaml with type field
     """
     from axon.org import scaffold_org
 
@@ -87,50 +86,27 @@ def scaffold_from_template(
     # Step 1: Scaffold base org structure (shared vault, data dirs, etc.)
     scaffold_org(org_path, org_name=org_name)
 
-    personas_dest = org_path / "personas"
-    prompts_dest = personas_dest / "prompts"
-    prompts_dest.mkdir(parents=True, exist_ok=True)
+    vaults_dest = org_path / "vaults"
 
-    # Step 2: Copy base personas (axon)
+    # Step 2: Copy base vaults (axon — huddle handled separately)
     if BASE_DIR.exists():
-        _copy_persona_files(BASE_DIR / "personas", personas_dest, org_name, exclude=["huddle"])
+        _copy_vault_templates(
+            BASE_DIR / "vaults", vaults_dest, org_name,
+            exclude=["huddle"],
+        )
 
-    # Step 3: Copy template-specific personas
-    template_personas_dir = template_dir / "personas"
+    # Step 3: Copy template-specific advisor vaults
+    template_vaults_dir = template_dir / "vaults"
     advisor_ids: list[str] = []
-    if template_personas_dir.exists():
-        advisor_ids = _copy_persona_files(template_personas_dir, personas_dest, org_name)
-
-    # Step 4: Generate huddle config with advisor vault mounts
-    _generate_huddle_config(personas_dest, advisor_ids)
-
-    # Step 5: Generate huddle instructions with advisor roster
-    _generate_huddle_instructions(personas_dest, template_personas_dir, advisor_ids)
-
-    # Step 6: Create per-advisor vault directories using vault templates
-    vaults_dir = org_path / "vaults"
-    for advisor_id in advisor_ids:
-        vault_path = vaults_dir / advisor_id
-        # Load persona YAML for name/title placeholders
-        persona_yaml = template_personas_dir / f"{advisor_id}.yaml"
-        agent_name = advisor_id.title()
-        agent_title = ""
-        if persona_yaml.exists():
-            with open(persona_yaml, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            agent_name = data.get("name", agent_name)
-            agent_title = data.get("title", "")
-        _scaffold_vault_from_template(
-            vault_path, "advisor", agent_name, agent_title,
-        )
-    # Also create axon and huddle vaults
-    for name, template_type in (("axon", "orchestrator"), ("huddle", "orchestrator")):
-        vault_path = vaults_dir / name
-        _scaffold_vault_from_template(
-            vault_path, template_type, name.title(), "",
+    if template_vaults_dir.exists():
+        advisor_ids = _copy_vault_templates(
+            template_vaults_dir, vaults_dest, org_name,
         )
 
-    # Step 7: Write org.yaml with type
+    # Step 4: Generate huddle vault with advisor mounts and roster
+    _generate_huddle_vault(vaults_dest, template_vaults_dir, advisor_ids)
+
+    # Step 5: Write org.yaml with type
     org_yaml = org_path / "org.yaml"
     org_config = {
         "id": org_id,
@@ -147,27 +123,27 @@ def scaffold_from_template(
 
 
 def _load_template_info(template_dir: Path) -> dict | None:
-    """Load template metadata and persona list from a template directory."""
+    """Load template metadata and agent list from a template directory."""
     template_id = template_dir.name
     meta = TEMPLATE_META.get(template_id, {})
 
-    # Load org.yaml for type info
     org_yaml = template_dir / "org.yaml"
     if not org_yaml.exists():
         return None
 
-    # Discover personas
-    personas = []
-    personas_dir = template_dir / "personas"
-    if personas_dir.exists():
-        for yaml_file in sorted(personas_dir.glob("*.yaml")):
-            if yaml_file.name.startswith("_"):
+    # Discover agents from vaults/*/agent.yaml
+    agents = []
+    vaults_dir = template_dir / "vaults"
+    if vaults_dir.exists():
+        for vault_dir in sorted(vaults_dir.iterdir()):
+            agent_yaml = vault_dir / "agent.yaml"
+            if not vault_dir.is_dir() or not agent_yaml.exists():
                 continue
-            with open(yaml_file, encoding="utf-8") as f:
+            with open(agent_yaml, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-            personas.append({
-                "id": data.get("id", yaml_file.stem),
-                "name": data.get("name", yaml_file.stem.title()),
+            agents.append({
+                "id": data.get("id", vault_dir.name),
+                "name": data.get("name", vault_dir.name.title()),
                 "title": data.get("title", ""),
                 "tagline": data.get("tagline", ""),
                 "color": data.get("ui", {}).get("color", "#6B7280"),
@@ -178,149 +154,108 @@ def _load_template_info(template_dir: Path) -> dict | None:
         "name": meta.get("name", template_id.title()),
         "description": meta.get("description", ""),
         "icon": meta.get("icon", ""),
-        "personas": personas,
+        "agents": agents,
     }
 
 
-def _scaffold_vault_from_template(
-    vault_path: Path,
-    template_type: str,
-    agent_name: str,
-    agent_title: str,
-) -> None:
-    """Scaffold a vault directory using a vault template.
-
-    Uses the vault_templates/{template_type}/second-brain.md with placeholder
-    replacement. Only creates files that don't already exist — safe for
-    existing vaults.
-    """
-    from axon.vault.scaffold import TEMPLATES_DIR as VAULT_TEMPLATES_DIR
-
-    vault_path.mkdir(parents=True, exist_ok=True)
-    root_file = vault_path / "second-brain.md"
-    if root_file.exists():
-        return  # Never overwrite existing vault data
-
-    # Try to use the vault template
-    template_dir = VAULT_TEMPLATES_DIR / template_type
-    template_root = template_dir / "second-brain.md"
-
-    if template_root.exists():
-        content = template_root.read_text(encoding="utf-8")
-        content = content.replace("{{AGENT_NAME}}", agent_name)
-        content = content.replace("{{AGENT_TITLE}}", agent_title)
-        root_file.write_text(content, encoding="utf-8")
-
-        # Copy any other template files (index files, etc.)
-        for item in template_dir.rglob("*"):
-            if item.is_file() and item != template_root:
-                relative = item.relative_to(template_dir)
-                target = vault_path / relative
-                if not target.exists():
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    file_content = item.read_text(encoding="utf-8")
-                    file_content = file_content.replace("{{AGENT_NAME}}", agent_name)
-                    file_content = file_content.replace("{{AGENT_TITLE}}", agent_title)
-                    target.write_text(file_content, encoding="utf-8")
-    else:
-        # Fallback stub if template doesn't exist
-        root_file.write_text(
-            f"# {agent_name} Vault\n\nPersistent memory for {agent_name}.\n",
-            encoding="utf-8",
-        )
-
-
-def _copy_persona_files(
-    src_dir: Path,
-    dest_dir: Path,
+def _copy_vault_templates(
+    src_vaults: Path,
+    dest_vaults: Path,
     org_name: str,
     exclude: list[str] | None = None,
 ) -> list[str]:
-    """Copy persona YAML and instruction files, return list of persona IDs."""
-    persona_ids = []
+    """Copy vault directories from template to org, return list of agent IDs."""
+    agent_ids = []
     exclude = exclude or []
 
-    for item in src_dir.iterdir():
-        stem = item.stem
-        if stem.startswith("_"):
+    if not src_vaults.exists():
+        return agent_ids
+
+    for vault_dir in sorted(src_vaults.iterdir()):
+        if not vault_dir.is_dir() or vault_dir.name in exclude:
             continue
 
-        # Skip excluded personas
-        if any(stem == ex or stem.startswith(f"{ex}_") for ex in exclude):
+        agent_yaml = vault_dir / "agent.yaml"
+        if not agent_yaml.exists():
             continue
 
-        dest = dest_dir / item.name
-        if item.suffix == ".yaml":
-            # Track persona IDs from YAML files
-            with open(item, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            persona_id = data.get("id", stem)
-            # Don't count instruction file stems as persona IDs
-            if persona_id not in exclude:
-                persona_ids.append(persona_id)
+        dest = dest_vaults / vault_dir.name
+        if (dest / "agent.yaml").exists():
+            continue  # Never overwrite fully initialized vaults
 
-        if not dest.exists():
+        # Copy entire vault directory with placeholder replacement
+        dest.mkdir(parents=True, exist_ok=True)
+        for item in vault_dir.rglob("*"):
+            if item.is_dir():
+                continue
+            relative = item.relative_to(vault_dir)
+            target = dest / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
             content = item.read_text(encoding="utf-8")
             content = content.replace("{{ORG_NAME}}", org_name)
-            dest.write_text(content, encoding="utf-8")
+            target.write_text(content, encoding="utf-8")
 
-        # Also copy to prompts/ subdirectory for instruction files
-        if item.suffix == ".md":
-            prompts_dest = dest_dir / "prompts" / item.name
-            if not prompts_dest.exists():
-                content = item.read_text(encoding="utf-8")
-                content = content.replace("{{ORG_NAME}}", org_name)
-                prompts_dest.parent.mkdir(parents=True, exist_ok=True)
-                prompts_dest.write_text(content, encoding="utf-8")
+        # Read agent ID from the copied config
+        with open(agent_yaml, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        agent_ids.append(data.get("id", vault_dir.name))
 
-    return persona_ids
+    return agent_ids
 
 
-def _generate_huddle_config(personas_dest: Path, advisor_ids: list[str]) -> None:
-    """Generate the huddle YAML with read-only mounts for all advisors."""
-    # Build read_only_mounts list
+def _generate_huddle_vault(
+    vaults_dest: Path,
+    template_vaults_dir: Path,
+    advisor_ids: list[str],
+) -> None:
+    """Generate the huddle vault with advisor mounts and roster instructions."""
+    huddle_dest = vaults_dest / "huddle"
+    huddle_dest.mkdir(parents=True, exist_ok=True)
+
+    # Build read_only_mounts for advisor vaults
     mounts = [
         {"path": f"/vaults/{aid}", "root_file": "second-brain.md"}
         for aid in advisor_ids
     ]
 
-    huddle_config = {
-        "id": "huddle",
-        "name": "The Huddle",
-        "title": "Advisory Group Session",
-        "tagline": "Where your team debates, disagrees, and converges",
-        "model": {"max_tokens": 8192, "temperature": 0.8},
-        "voice": {"engine": "disabled", "voice_id": "", "speed": 1.0},
-        "vault": {
-            "path": "/vaults/huddle",
-            "root_file": "second-brain.md",
-            "read_only_mounts": mounts,
-            "writable_paths": ["/vaults/huddle"],
-        },
-        "memory": {"max_context_tokens": 6000},
-        "delegation": {"can_delegate_to": [], "accepts_from": ["axon"]},
-        "behavior": {"auto_save": True, "first_message": True, "proactive_checks": []},
-        "ui": {"color": "#F59E0B", "avatar": "", "sparkle_color": "#FBBF24"},
-        "system_prompt_file": "huddle_instructions.md",
-    }
+    # Load base huddle agent.yaml template and replace mounts placeholder
+    base_huddle_yaml = BASE_DIR / "vaults" / "huddle" / "agent.yaml"
+    if base_huddle_yaml.exists():
+        content = base_huddle_yaml.read_text(encoding="utf-8")
+        # The template has {{ADVISOR_MOUNTS}} as a YAML placeholder —
+        # replace it with the actual mounts list
+        mounts_yaml = yaml.dump(mounts, default_flow_style=False).strip()
+        content = content.replace("'{{ADVISOR_MOUNTS}}'", mounts_yaml)
+        content = content.replace("{{ADVISOR_MOUNTS}}", mounts_yaml)
+        (huddle_dest / "agent.yaml").write_text(content, encoding="utf-8")
+    else:
+        # Generate from scratch
+        huddle_config = {
+            "id": "huddle",
+            "name": "The Huddle",
+            "title": "Advisory Group Session",
+            "tagline": "Where your team debates, disagrees, and converges",
+            "type": "huddle",
+            "model": {"max_tokens": 8192, "temperature": 0.8},
+            "vault": {
+                "root_file": "second-brain.md",
+                "read_only_mounts": mounts,
+                "writable_paths": ["."],
+            },
+            "memory": {"max_context_tokens": 6000},
+            "delegation": {"can_delegate_to": [], "accepts_from": ["axon"]},
+            "behavior": {"auto_save": True, "first_message": True},
+            "ui": {"color": "#F59E0B", "sparkle_color": "#FBBF24"},
+        }
+        with open(huddle_dest / "agent.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(huddle_config, f, default_flow_style=False, sort_keys=False)
 
-    huddle_path = personas_dest / "huddle.yaml"
-    with open(huddle_path, "w", encoding="utf-8") as f:
-        yaml.dump(huddle_config, f, default_flow_style=False, sort_keys=False)
-
-
-def _generate_huddle_instructions(
-    personas_dest: Path,
-    template_personas_dir: Path,
-    advisor_ids: list[str],
-) -> None:
-    """Generate huddle instructions with the advisor roster filled in."""
-    # Build roster section from advisor YAML files
+    # Build advisor roster for instructions
     roster_lines = []
     for aid in advisor_ids:
-        yaml_path = template_personas_dir / f"{aid}.yaml"
-        if yaml_path.exists():
-            with open(yaml_path, encoding="utf-8") as f:
+        agent_yaml = template_vaults_dir / aid / "agent.yaml"
+        if agent_yaml.exists():
+            with open(agent_yaml, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
             name = data.get("name", aid.title())
             title = data.get("title", "")
@@ -331,18 +266,12 @@ def _generate_huddle_instructions(
 
     roster = "\n\n".join(roster_lines)
 
-    # Load base huddle instructions template
-    base_instructions = BASE_DIR / "personas" / "huddle_instructions.md"
+    # Load base huddle instructions template and replace roster placeholder
+    base_instructions = BASE_DIR / "vaults" / "huddle" / "instructions.md"
     if base_instructions.exists():
         content = base_instructions.read_text(encoding="utf-8")
         content = content.replace("{{ADVISOR_ROSTER}}", roster)
     else:
         content = f"# The Huddle\n\n## The Advisors\n\n{roster}\n"
 
-    # Write to both locations
-    for dest in [
-        personas_dest / "huddle_instructions.md",
-        personas_dest / "prompts" / "huddle_instructions.md",
-    ]:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(content, encoding="utf-8")
+    (huddle_dest / "instructions.md").write_text(content, encoding="utf-8")

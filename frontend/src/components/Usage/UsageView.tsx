@@ -141,7 +141,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="card card-border bg-base-300/30">
       <div className="card-body p-4">
-        <div className="text-xs text-neutral-content">{label}</div>
+        <div className="text-xs text-base-content/60">{label}</div>
         <div className="text-xl font-bold text-base-content tracking-tight">
           {value}
         </div>

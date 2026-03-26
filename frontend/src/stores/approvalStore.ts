@@ -1,6 +1,16 @@
 import { create } from "zustand";
 import { orgApiPath } from "./orgStore";
 
+export interface CommsPayload {
+  to?: string;
+  subject?: string;
+  body?: string;
+  cc?: string;
+  target?: string;
+  content?: string;
+  is_dm?: boolean;
+}
+
 export interface Approval {
   task_path: string;
   title: string;
@@ -11,6 +21,10 @@ export interface Approval {
   priority: string;
   created_at: string;
   updated_at: string;
+  // Comms-specific fields (present when type === "comms_outbound")
+  type?: string;
+  channel?: string;
+  comms_payload?: string; // JSON string of CommsPayload
 }
 
 interface ApprovalStore {

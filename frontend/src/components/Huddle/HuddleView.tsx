@@ -183,7 +183,7 @@ export function HuddleView() {
                   onDelete={deleteConversation}
                 />
               </div>
-              <p className="text-xs text-neutral-content">Group advisory session</p>
+              <p className="text-xs text-base-content/60">Group advisory session</p>
             </div>
           </div>
 

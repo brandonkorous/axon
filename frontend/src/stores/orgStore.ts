@@ -1,15 +1,23 @@
 import { create } from "zustand";
 
+export interface OrgComms {
+  require_approval: boolean;
+  email_domain: string;
+  email_signature: string;
+  inbound_polling: boolean;
+}
+
 export interface OrgInfo {
   id: string;
   name: string;
   description: string;
   type: string;
+  comms: OrgComms;
   agent_count: number;
   has_huddle: boolean;
 }
 
-export interface OrgTemplatePersona {
+export interface OrgTemplateAgent {
   id: string;
   name: string;
   title: string;
@@ -22,7 +30,7 @@ export interface OrgTemplate {
   name: string;
   description: string;
   icon: string;
-  personas: OrgTemplatePersona[];
+  agents: OrgTemplateAgent[];
 }
 
 interface OrgStore {
@@ -35,13 +43,19 @@ interface OrgStore {
   fetchTemplates: () => Promise<void>;
   setActiveOrg: (orgId: string) => void;
   createOrg: (id: string, name: string, template?: string) => Promise<OrgInfo | null>;
+  updateOrg: (orgId: string, update: {
+    name?: string;
+    description?: string;
+    type?: string;
+    comms?: Partial<OrgComms>;
+  }) => Promise<boolean>;
 }
 
 const STORAGE_KEY = "axon-active-org";
 
 export const useOrgStore = create<OrgStore>((set, get) => ({
   orgs: [],
-  activeOrgId: localStorage.getItem(STORAGE_KEY) || "default",
+  activeOrgId: localStorage.getItem(STORAGE_KEY) || "",
   loading: true,
   isMultiOrg: false,
   templates: [],
@@ -56,7 +70,7 @@ export const useOrgStore = create<OrgStore>((set, get) => ({
       // If stored org no longer exists, fall back to first org
       const currentId = get().activeOrgId;
       const activeOrgId =
-        orgs.find((o) => o.id === currentId)?.id || orgs[0]?.id || "default";
+        orgs.find((o) => o.id === currentId)?.id || orgs[0]?.id || "";
 
       set({ orgs, isMultiOrg, activeOrgId, loading: false });
       localStorage.setItem(STORAGE_KEY, activeOrgId);
@@ -99,6 +113,21 @@ export const useOrgStore = create<OrgStore>((set, get) => ({
       return null;
     }
   },
+
+  updateOrg: async (orgId, update) => {
+    try {
+      const res = await fetch(`/api/orgs/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      if (!res.ok) return false;
+      await get().fetchOrgs();
+      return true;
+    } catch {
+      return false;
+    }
+  },
 }));
 
 /**
@@ -106,6 +135,9 @@ export const useOrgStore = create<OrgStore>((set, get) => ({
  */
 export function orgApiPath(path: string): string {
   const { activeOrgId } = useOrgStore.getState();
+  if (!activeOrgId) {
+    throw new Error("No active organization — wait for org store to initialize");
+  }
   return `/api/orgs/${activeOrgId}/${path}`;
 }
 

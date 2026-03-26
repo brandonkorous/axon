@@ -1,0 +1,35 @@
+id: researcher
+name: Scout
+title: Research Analyst
+tagline: "The Intel Operator"
+type: advisor
+
+model:
+  max_tokens: 4096
+  temperature: 0.3
+
+vault:
+  root_file: second-brain.md
+  read_only_mounts: []
+  writable_paths:
+    - "."
+
+memory:
+  max_context_tokens: 4000
+
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon, huddle, marcus, raj, diana]
+
+behavior:
+  auto_save: true
+  first_message: true
+  proactive_checks: []
+
+web:
+  enabled: true
+
+ui:
+  color: "#06B6D4"
+  avatar: ""
+  sparkle_color: "#22D3EE"

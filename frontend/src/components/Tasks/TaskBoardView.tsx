@@ -73,7 +73,7 @@ function TaskCard({
           </div>
         )}
 
-        <div className="flex items-center justify-between text-xs text-neutral-content">
+        <div className="flex items-center justify-between text-xs text-base-content/60">
           <span>{task.assignee || "Unassigned"}</span>
           {task.due_date && <span>{task.due_date}</span>}
         </div>
@@ -150,7 +150,7 @@ function KanbanColumn({
         ))}
         {tasks.length === 0 && (
           <p className={`text-xs text-center py-8 rounded-lg ${
-            dragOver ? "text-primary" : "text-neutral-content/50"
+            dragOver ? "text-primary" : "text-base-content/50"
           }`}>
             {dragOver ? "Drop here" : "No tasks"}
           </p>
@@ -281,7 +281,7 @@ export function TaskBoardView() {
         <div>
           <h1 className="text-xl font-bold text-base-content">Tasks</h1>
           {tasks.length > 0 && (
-            <p className="text-xs text-neutral-content mt-0.5">
+            <p className="text-xs text-base-content/60 mt-0.5">
               {tasks.length} task{tasks.length !== 1 ? "s" : ""} — drag cards between columns
             </p>
           )}

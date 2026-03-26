@@ -26,10 +26,10 @@ export function ToolUseBadge({ tool, agentId }: Props) {
   const label = TOOL_LABELS[tool] || tool.replace(/_/g, " ");
 
   return (
-    <div className="flex items-center gap-2 py-1 text-[11px] text-neutral-content">
+    <div className="flex items-center gap-2 py-1 text-[11px] text-base-content/60">
       <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse motion-reduce:animate-none" />
       {agentId && (
-        <span className="text-neutral-content/60">{agentId}</span>
+        <span className="text-base-content/50">{agentId}</span>
       )}
       <span>{label}</span>
     </div>

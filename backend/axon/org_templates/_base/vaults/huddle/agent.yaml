@@ -1,0 +1,32 @@
+id: huddle
+name: The Huddle
+title: Advisory Group Session
+tagline: "Where your team debates, disagrees, and converges"
+type: huddle
+
+model:
+  max_tokens: 8192
+  temperature: 0.8
+
+vault:
+  root_file: second-brain.md
+  read_only_mounts: {{ADVISOR_MOUNTS}}
+  writable_paths:
+    - "."
+
+memory:
+  max_context_tokens: 6000
+
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon]
+
+behavior:
+  auto_save: true
+  first_message: true
+  proactive_checks: []
+
+ui:
+  color: "#F59E0B"
+  avatar: ""
+  sparkle_color: "#FBBF24"

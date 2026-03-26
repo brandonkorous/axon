@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useAgentStore, LifecycleState } from "../../stores/agentStore";
+import { useAgentStore, AgentInfo, LifecycleState } from "../../stores/agentStore";
+import { PersonaEditor } from "./PersonaEditor";
 
 const STATUS_VARIANT: Record<string, string> = {
   active: "badge-success",
@@ -26,23 +27,27 @@ export function StatusBadge({ status }: { status: string }) {
 export function AgentControls({
   agentId,
   lifecycle,
+  agent,
 }: {
   agentId: string;
   lifecycle: LifecycleState;
+  agent?: AgentInfo;
 }) {
   const { lifecycleAction } = useAgentStore();
   const [showStrategy, setShowStrategy] = useState(false);
+  const [showPersona, setShowPersona] = useState(false);
   const [strategyPrompt, setStrategyPrompt] = useState(
     lifecycle.strategy_override || ""
   );
   const [confirmTerminate, setConfirmTerminate] = useState(false);
 
   const isTerminated = lifecycle.status === "terminated";
+  const isAdvisor = agent?.type === "advisor";
 
   return (
     <div className="bg-base-200 border border-neutral rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-neutral-content">
+        <h3 className="text-sm font-semibold text-base-content/60">
           Agent Controls
         </h3>
         <StatusBadge status={lifecycle.status} />
@@ -83,11 +88,25 @@ export function AgentControls({
             </button>
           )}
           <button
-            onClick={() => setShowStrategy(!showStrategy)}
+            onClick={() => {
+              setShowStrategy(!showStrategy);
+              if (!showStrategy) setShowPersona(false);
+            }}
             className="btn btn-soft btn-accent btn-xs"
           >
             {lifecycle.strategy_override ? "Edit Strategy" : "Set Strategy"}
           </button>
+          {isAdvisor && (
+            <button
+              onClick={() => {
+                setShowPersona(!showPersona);
+                if (!showPersona) setShowStrategy(false);
+              }}
+              className="btn btn-soft btn-info btn-xs"
+            >
+              Edit Persona
+            </button>
+          )}
           {!confirmTerminate ? (
             <button
               onClick={() => setConfirmTerminate(true)}
@@ -168,6 +187,10 @@ export function AgentControls({
           Strategy: {lifecycle.strategy_override.slice(0, 100)}
           {lifecycle.strategy_override.length > 100 ? "..." : ""}
         </div>
+      )}
+
+      {showPersona && agent && !isTerminated && (
+        <PersonaEditor agent={agent} onClose={() => setShowPersona(false)} />
       )}
     </div>
   );

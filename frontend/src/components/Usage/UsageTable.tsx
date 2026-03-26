@@ -39,7 +39,7 @@ export function UsageTable({
           <h2 className="text-base font-semibold text-base-content mb-4">
             Request Log
           </h2>
-          <p className="text-sm text-neutral-content">
+          <p className="text-sm text-base-content/60">
             No usage records yet. Interact with agents to start tracking.
           </p>
         </div>
@@ -75,7 +75,7 @@ export function UsageTable({
             <tbody>
               {records.map((r, i) => (
                 <tr key={`${r.ts}-${i}`} className="hover">
-                  <td className="text-xs text-neutral-content font-mono">
+                  <td className="text-xs text-base-content/60 font-mono">
                     {formatTime(r.ts)}
                   </td>
                   <td>
@@ -84,21 +84,21 @@ export function UsageTable({
                     </span>
                   </td>
                   <td
-                    className="text-xs text-neutral-content font-mono truncate max-w-[9rem]"
+                    className="text-xs text-base-content/60 font-mono truncate max-w-[9rem]"
                     title={r.model}
                   >
                     {shortModel(r.model)}
                   </td>
-                  <td className="text-xs text-right text-neutral-content font-mono">
+                  <td className="text-xs text-right text-base-content/60 font-mono">
                     {r.prompt_tokens.toLocaleString()}
                   </td>
-                  <td className="text-xs text-right text-neutral-content font-mono">
+                  <td className="text-xs text-right text-base-content/60 font-mono">
                     {r.completion_tokens.toLocaleString()}
                   </td>
                   <td className="text-xs text-right text-base-content font-mono font-medium">
                     {formatCost(r.cost)}
                   </td>
-                  <td className="text-xs text-neutral-content">
+                  <td className="text-xs text-base-content/60">
                     {r.caller}
                   </td>
                 </tr>
@@ -116,7 +116,7 @@ export function UsageTable({
             >
               Previous
             </button>
-            <span className="text-xs text-neutral-content">
+            <span className="text-xs text-base-content/60">
               Page {page + 1} of {totalPages}
             </span>
             <button

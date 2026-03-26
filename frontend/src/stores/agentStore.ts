@@ -25,6 +25,21 @@ export interface AgentInfo {
   model: string;
   status: string;
   lifecycle?: LifecycleState;
+  system_prompt?: string;
+  email?: string | null;
+  comms_enabled?: boolean;
+  email_alias?: string;
+}
+
+export interface PersonaUpdate {
+  name?: string;
+  title?: string;
+  tagline?: string;
+  system_prompt?: string;
+  color?: string;
+  sparkle_color?: string;
+  comms_enabled?: boolean;
+  email_alias?: string;
 }
 
 interface AgentStore {
@@ -33,6 +48,8 @@ interface AgentStore {
   fetchAgents: () => Promise<void>;
   setAgentStatus: (id: string, status: AgentInfo["status"]) => void;
   lifecycleAction: (agentId: string, action: string, body?: object) => Promise<void>;
+  updatePersona: (agentId: string, update: PersonaUpdate) => Promise<void>;
+  fetchAgentDetail: (agentId: string) => Promise<AgentInfo | null>;
 }
 
 export const useAgentStore = create<AgentStore>((set) => ({
@@ -53,6 +70,28 @@ export const useAgentStore = create<AgentStore>((set) => ({
     set((state) => ({
       agents: state.agents.map((a) => (a.id === id ? { ...a, status } : a)),
     })),
+
+  fetchAgentDetail: async (agentId) => {
+    try {
+      const res = await fetch(orgApiPath(`agents/${agentId}`));
+      if (!res.ok) return null;
+      return (await res.json()) as AgentInfo;
+    } catch {
+      return null;
+    }
+  },
+
+  updatePersona: async (agentId, update) => {
+    const res = await fetch(orgApiPath(`agents/${agentId}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(update),
+    });
+    if (!res.ok) throw new Error("Failed to update persona");
+    // Refresh agent list to reflect changes
+    const { fetchAgents } = useAgentStore.getState();
+    await fetchAgents();
+  },
 
   lifecycleAction: async (agentId, action, body) => {
     const opts: RequestInit = { method: action === "strategy-override-clear" ? "DELETE" : "POST" };

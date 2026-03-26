@@ -33,6 +33,9 @@ voice = [
 discord = [
     "discord.py>=2.4.0",
 ]
+web = [
+    "trafilatura>=1.12.0",
+]
 dev = [
     "ruff>=0.8.0",
     "pytest>=8.0",

@@ -1,4 +1,4 @@
-"""Axon configuration — loaded from environment and persona YAML files."""
+"""Axon configuration — loaded from environment and agent YAML files."""
 
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ import yaml
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
+from axon.comms.config import CommsConfig  # noqa: E402 — no circular import risk
+from axon.integrations.config import IntegrationConfig  # noqa: E402
 from axon.reasoning.config import ReasoningConfig  # noqa: E402 — no circular import risk (lazy __init__)
+from axon.web.config import WebConfig  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -156,82 +159,24 @@ class PersonaConfig(BaseModel):
     behavior: BehaviorConfig = BehaviorConfig()
     learning: LearningConfig = LearningConfig()
     reasoning: ReasoningConfig = ReasoningConfig()
+    comms: CommsConfig = CommsConfig()
+    web: WebConfig = WebConfig()
+    integrations: IntegrationConfig = IntegrationConfig()
     ui: UIConfig = UIConfig()
     external: bool = False  # Legacy — use type: external instead
-    system_prompt_file: str = ""
     system_prompt: str = ""
 
     def load_system_prompt(self, base_dir: str) -> str:
         """Load system prompt from file or return inline prompt.
 
-        base_dir: vault directory (agent-as-vault) or personas dir (legacy).
+        base_dir: vault directory containing agent.yaml and instructions.md.
         """
         if self.system_prompt:
             return self.system_prompt
-        prompt_file = self.system_prompt_file or "instructions.md"
-        prompt_path = Path(base_dir) / prompt_file
+        prompt_path = Path(base_dir) / "instructions.md"
         if prompt_path.exists():
             return prompt_path.read_text(encoding="utf-8")
-        # Legacy fallback: try personas_dir/{id}_instructions.md
-        if self.system_prompt_file:
-            return f"You are {self.name}, {self.title}. {self.tagline}"
-        legacy_path = Path(base_dir) / f"{self.id}_instructions.md"
-        if legacy_path.exists():
-            return legacy_path.read_text(encoding="utf-8")
         return f"You are {self.name}, {self.title}. {self.tagline}"
-
-
-def _resolve_vault_for_org(vault_path_spec: str, vaults_base: Path) -> str:
-    """Resolve a vault path spec (e.g. '/vaults/marcus') to an org-local path."""
-    parts = vault_path_spec.replace("\\", "/").strip("/").split("/")
-    if len(parts) >= 2 and parts[0] == "vaults":
-        # /vaults/marcus → {vaults_base}/marcus
-        return str(vaults_base / "/".join(parts[1:]))
-    return str(vaults_base / vault_path_spec.strip("/"))
-
-
-def load_persona(yaml_path: str | Path, vaults_base: str | Path) -> PersonaConfig:
-    """Load a persona config from a YAML file.
-
-    Empty model fields inherit from DEFAULT_MODEL env var.
-    Vault paths resolve relative to vaults_base.
-    """
-    path = Path(yaml_path)
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    persona = PersonaConfig(**data)
-
-    # Resolve empty models to the global default
-    default = settings.default_model
-    if not persona.model.reasoning:
-        persona.model.reasoning = default
-    if not persona.model.navigator:
-        persona.model.navigator = default
-
-    vb = Path(vaults_base)
-    persona.vault.path = _resolve_vault_for_org(persona.vault.path, vb)
-    for mount in persona.vault.read_only_mounts:
-        mount.path = _resolve_vault_for_org(mount.path, vb)
-    persona.vault.writable_paths = [
-        _resolve_vault_for_org(p, vb) for p in persona.vault.writable_paths
-    ]
-
-    return persona
-
-
-def load_all_personas(
-    personas_dir: str | Path,
-    vaults_base: str | Path,
-) -> dict[str, PersonaConfig]:
-    """Load all persona YAML files from a directory."""
-    personas: dict[str, PersonaConfig] = {}
-    directory = Path(personas_dir)
-    for yaml_file in directory.glob("*.yaml"):
-        if yaml_file.name.startswith("_"):
-            continue  # skip templates
-        persona = load_persona(yaml_file, vaults_base=vaults_base)
-        personas[persona.id] = persona
-    return personas
 
 
 def _resolve_vault_ref(ref: str, vaults_base: Path) -> str:

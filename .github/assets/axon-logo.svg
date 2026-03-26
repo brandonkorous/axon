@@ -2,14 +2,14 @@
   <defs>
     <!-- Background gradient -->
     <linearGradient id="logoBg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0d0d15"/>
-      <stop offset="100%" stop-color="#0a0a0f"/>
+      <stop offset="0%" stop-color="#F3EDE5"/>
+      <stop offset="100%" stop-color="#E8E0D4"/>
     </linearGradient>
 
-    <!-- Violet glow -->
+    <!-- Teal glow -->
     <radialGradient id="logoGlow" cx="50%" cy="45%" r="40%">
-      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#6B9E9E" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#6B9E9E" stop-opacity="0"/>
     </radialGradient>
 
     <!-- Node glow filter -->
@@ -21,81 +21,54 @@
       </feMerge>
     </filter>
 
-    <!-- Letter glow -->
-    <filter id="lGlow" x="-15%" y="-15%" width="130%" height="130%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.35 0" result="dimBlur"/>
-      <feMerge>
-        <feMergeNode in="dimBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <!-- Grid pattern -->
+    <!-- Grid -->
     <pattern id="logoGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#7c3aed" stroke-width="0.3" opacity="0.06"/>
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#37342F" stroke-width="0.3" opacity="0.04"/>
     </pattern>
   </defs>
 
   <!-- Background -->
-  <rect width="200" height="200" rx="16" fill="url(#logoBg)"/>
+  <rect width="200" height="200" rx="24" fill="url(#logoBg)"/>
+  <rect width="200" height="200" rx="24" fill="url(#logoGrid)"/>
+  <rect width="200" height="200" rx="24" fill="url(#logoGlow)"/>
 
-  <!-- Grid -->
-  <rect width="200" height="200" rx="16" fill="url(#logoGrid)"/>
-
-  <!-- Central glow -->
-  <rect width="200" height="200" rx="16" fill="url(#logoGlow)"/>
-
-  <!-- Neural connection lines radiating from the "A" -->
-  <g opacity="0.45">
-    <!-- Upper-left cluster -->
-    <line x1="70" y1="80" x2="40" y2="45" stroke="#7c3aed" stroke-width="0.7" opacity="0.4"/>
-    <line x1="40" y1="45" x2="55" y2="30" stroke="#7c3aed" stroke-width="0.5" opacity="0.25"/>
-
-    <!-- Upper-right cluster -->
-    <line x1="130" y1="80" x2="160" y2="45" stroke="#7c3aed" stroke-width="0.7" opacity="0.4"/>
-    <line x1="160" y1="45" x2="170" y2="35" stroke="#7c3aed" stroke-width="0.5" opacity="0.2"/>
-
+  <!-- Neural connections -->
+  <g opacity="0.35">
+    <!-- Upper-left -->
+    <line x1="70" y1="80" x2="40" y2="45" stroke="#6B9E9E" stroke-width="0.7" opacity="0.5"/>
+    <line x1="40" y1="45" x2="55" y2="30" stroke="#6B9E9E" stroke-width="0.5" opacity="0.3"/>
+    <!-- Upper-right -->
+    <line x1="130" y1="80" x2="160" y2="45" stroke="#6B9E9E" stroke-width="0.7" opacity="0.5"/>
+    <line x1="160" y1="45" x2="170" y2="35" stroke="#6B9E9E" stroke-width="0.5" opacity="0.25"/>
     <!-- Lower-left -->
-    <line x1="75" y1="145" x2="38" y2="165" stroke="#7c3aed" stroke-width="0.6" opacity="0.3"/>
-    <line x1="38" y1="165" x2="30" y2="155" stroke="#7c3aed" stroke-width="0.5" opacity="0.2"/>
-
+    <line x1="75" y1="145" x2="38" y2="165" stroke="#C07050" stroke-width="0.6" opacity="0.35"/>
+    <line x1="38" y1="165" x2="30" y2="155" stroke="#C07050" stroke-width="0.5" opacity="0.25"/>
     <!-- Lower-right -->
-    <line x1="125" y1="145" x2="162" y2="165" stroke="#7c3aed" stroke-width="0.6" opacity="0.3"/>
-    <line x1="162" y1="165" x2="175" y2="170" stroke="#7c3aed" stroke-width="0.5" opacity="0.2"/>
-
+    <line x1="125" y1="145" x2="162" y2="165" stroke="#C07050" stroke-width="0.6" opacity="0.35"/>
+    <line x1="162" y1="165" x2="175" y2="170" stroke="#C07050" stroke-width="0.5" opacity="0.25"/>
     <!-- Cross connections -->
-    <line x1="40" y1="45" x2="38" y2="165" stroke="#7c3aed" stroke-width="0.4" opacity="0.1"/>
-    <line x1="160" y1="45" x2="162" y2="165" stroke="#7c3aed" stroke-width="0.4" opacity="0.1"/>
+    <line x1="40" y1="45" x2="38" y2="165" stroke="#6B9E9E" stroke-width="0.4" opacity="0.1"/>
+    <line x1="160" y1="45" x2="162" y2="165" stroke="#6B9E9E" stroke-width="0.4" opacity="0.1"/>
   </g>
 
   <!-- Neural nodes -->
   <g filter="url(#nGlow)">
-    <circle cx="40" cy="45" r="2.5" fill="#7c3aed" opacity="0.8"/>
-    <circle cx="55" cy="30" r="1.5" fill="#7c3aed" opacity="0.5"/>
-    <circle cx="160" cy="45" r="2.5" fill="#7c3aed" opacity="0.8"/>
-    <circle cx="170" cy="35" r="1.5" fill="#7c3aed" opacity="0.45"/>
-    <circle cx="38" cy="165" r="2" fill="#7c3aed" opacity="0.65"/>
-    <circle cx="30" cy="155" r="1.2" fill="#7c3aed" opacity="0.4"/>
-    <circle cx="162" cy="165" r="2" fill="#7c3aed" opacity="0.65"/>
-    <circle cx="175" cy="170" r="1.2" fill="#7c3aed" opacity="0.4"/>
+    <circle cx="40" cy="45" r="2.5" fill="#6B9E9E" opacity="0.7"/>
+    <circle cx="55" cy="30" r="1.5" fill="#6B9E9E" opacity="0.45"/>
+    <circle cx="160" cy="45" r="2.5" fill="#6B9E9E" opacity="0.7"/>
+    <circle cx="170" cy="35" r="1.5" fill="#6B9E9E" opacity="0.4"/>
+    <circle cx="38" cy="165" r="2" fill="#C07050" opacity="0.6"/>
+    <circle cx="30" cy="155" r="1.2" fill="#C07050" opacity="0.4"/>
+    <circle cx="162" cy="165" r="2" fill="#C07050" opacity="0.6"/>
+    <circle cx="175" cy="170" r="1.2" fill="#C07050" opacity="0.4"/>
   </g>
 
-  <!-- The "A" lettermark -->
-  <g filter="url(#lGlow)">
-    <text x="100" y="135" text-anchor="middle" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="88" font-weight="800" fill="#ffffff">
-      A
-    </text>
-  </g>
+  <!-- The "a" lettermark -->
+  <text x="100" y="133" text-anchor="middle" font-family="'Fraunces', Georgia, 'Times New Roman', serif" font-size="84" font-weight="800" fill="#37342F">a</text>
 
-  <!-- Subtle violet tint on the letter -->
-  <text x="100" y="135" text-anchor="middle" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="88" font-weight="800" fill="#7c3aed" opacity="0.06">
-    A
-  </text>
-
-  <!-- Accent crossbar highlight on the A -->
-  <line x1="72" y1="118" x2="128" y2="118" stroke="#7c3aed" stroke-width="1.5" opacity="0.35"/>
+  <!-- Crossbar accent -->
+  <line x1="72" y1="116" x2="128" y2="116" stroke="#6B9E9E" stroke-width="1.5" opacity="0.3"/>
 
   <!-- Border -->
-  <rect x="0.5" y="0.5" width="199" height="199" rx="16" fill="none" stroke="#7c3aed" stroke-width="1" opacity="0.1"/>
+  <rect x="0.5" y="0.5" width="199" height="199" rx="24" fill="none" stroke="#D1C6AB" stroke-width="1" opacity="0.35"/>
 </svg>

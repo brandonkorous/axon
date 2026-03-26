@@ -1,0 +1,26 @@
+id: atlas
+name: Atlas
+title: Business & Growth Advisor
+tagline: "The business brain behind the creative"
+type: advisor
+model:
+  max_tokens: 4096
+  temperature: 0.7
+vault:
+  root_file: second-brain.md
+  read_only_mounts: []
+  writable_paths:
+    - "."
+memory:
+  max_context_tokens: 4000
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon, huddle]
+behavior:
+  auto_save: true
+  first_message: true
+  proactive_checks: []
+ui:
+  color: "#34D399"
+  avatar: ""
+  sparkle_color: "#6EE7B7"

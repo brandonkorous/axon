@@ -34,7 +34,7 @@ export function ConversationSwitcher({
       <div
         tabIndex={0}
         role="button"
-        className="btn btn-ghost btn-sm gap-1 text-xs font-normal text-neutral-content hover:text-base-content"
+        className="btn btn-ghost btn-sm gap-1 text-xs font-normal text-base-content/60 hover:text-base-content"
       >
         <span className="max-w-[180px] truncate">{title}</span>
         <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 opacity-50">
@@ -70,7 +70,7 @@ export function ConversationSwitcher({
                 }}
               >
                 <span className="block truncate">{conv.title}</span>
-                <span className="text-neutral-content text-[10px]">
+                <span className="text-base-content/60 text-[10px]">
                   {formatTimeAgo(conv.last_message_at)} · {conv.message_count} msgs
                 </span>
               </button>

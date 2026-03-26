@@ -34,7 +34,7 @@ export function WorkerTypeSelector({ selected, onChange }: Props) {
             </svg>
             <div className="min-w-0">
               <div className="text-sm font-medium text-base-content">{t.label}</div>
-              <div className="text-xs text-neutral-content mt-0.5 leading-tight">
+              <div className="text-xs text-base-content/60 mt-0.5 leading-tight">
                 {t.description}
               </div>
             </div>

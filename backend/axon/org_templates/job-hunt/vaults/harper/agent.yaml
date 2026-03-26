@@ -1,0 +1,26 @@
+id: harper
+name: Harper
+title: Resume & Positioning Specialist
+tagline: "Making your experience impossible to ignore"
+type: advisor
+model:
+  max_tokens: 4096
+  temperature: 0.7
+vault:
+  root_file: second-brain.md
+  read_only_mounts: []
+  writable_paths:
+    - "."
+memory:
+  max_context_tokens: 4000
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon, huddle]
+behavior:
+  auto_save: true
+  first_message: true
+  proactive_checks: []
+ui:
+  color: "#8B5CF6"
+  avatar: ""
+  sparkle_color: "#A78BFA"

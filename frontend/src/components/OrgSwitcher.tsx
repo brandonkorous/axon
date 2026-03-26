@@ -1,23 +1,25 @@
 import { useState } from "react";
 import { useOrgStore } from "../stores/orgStore";
 import { OrgCreatorModal } from "./OrgCreator/OrgCreatorModal";
+import { OrgEditModal } from "./OrgEditModal";
 
 export function OrgSwitcher() {
   const { orgs, activeOrgId, isMultiOrg, setActiveOrg } = useOrgStore();
   const [showCreator, setShowCreator] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
 
   const activeOrg = orgs.find((o) => o.id === activeOrgId);
 
   return (
     <>
       <div className="px-3 py-2 border-b border-neutral">
-        <label className="block text-[10px] font-semibold text-neutral-content uppercase tracking-wider mb-1">
+        <label className="block text-[10px] font-semibold text-base-content/60 uppercase tracking-wider mb-1">
           Organization
         </label>
         {orgs.length === 0 ? (
           <button
             onClick={() => setShowCreator(true)}
-            className="btn btn-ghost btn-sm w-full justify-start gap-2 text-neutral-content"
+            className="btn btn-ghost btn-sm w-full justify-start gap-2 text-base-content/60"
           >
             <span>+</span>
             <span>Create an organization</span>
@@ -46,6 +48,16 @@ export function OrgSwitcher() {
                 </span>
               )}
               <button
+                onClick={() => setShowEditor(true)}
+                className="btn btn-ghost btn-sm btn-square"
+                aria-label="Edit organization"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+              <button
                 onClick={() => setShowCreator(true)}
                 className="btn btn-ghost btn-sm btn-square"
                 aria-label="Create new organization"
@@ -54,7 +66,7 @@ export function OrgSwitcher() {
               </button>
             </div>
             {activeOrg?.description && (
-              <p className="text-[10px] text-neutral-content mt-1 truncate">
+              <p className="text-[10px] text-base-content/60 mt-1 truncate">
                 {activeOrg.description}
               </p>
             )}
@@ -66,6 +78,14 @@ export function OrgSwitcher() {
         isOpen={showCreator}
         onClose={() => setShowCreator(false)}
       />
+
+      {activeOrg && (
+        <OrgEditModal
+          isOpen={showEditor}
+          onClose={() => setShowEditor(false)}
+          org={activeOrg}
+        />
+      )}
     </>
   );
 }

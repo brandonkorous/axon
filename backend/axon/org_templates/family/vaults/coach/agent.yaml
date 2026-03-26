@@ -1,0 +1,26 @@
+id: coach
+name: Coach
+type: advisor
+title: Health & Wellness Advisor
+tagline: "Your family's wellness wingman"
+model:
+  max_tokens: 4096
+  temperature: 0.7
+vault:
+  root_file: second-brain.md
+  read_only_mounts: []
+  writable_paths:
+    - "."
+memory:
+  max_context_tokens: 4000
+delegation:
+  can_delegate_to: []
+  accepts_from: [axon, huddle]
+behavior:
+  auto_save: true
+  first_message: true
+  proactive_checks: []
+ui:
+  color: "#22C55E"
+  avatar: ""
+  sparkle_color: "#4ADE80"

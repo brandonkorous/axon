@@ -8,13 +8,14 @@ import {
 } from "framer-motion";
 import { useVoiceChatStore, VoiceState } from "../../stores/voiceChatStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 const ORB_SIZE = 80;
 
 function useOrbColor() {
   const agents = useAgentStore((s) => s.agents);
   const axon = agents.find((a) => a.id === "axon");
-  return axon?.ui?.sparkle_color || axon?.ui?.color || "#8B5CF6";
+  return axon?.ui?.sparkle_color || axon?.ui?.color || DEFAULT_AGENT_COLOR;
 }
 
 const CoreOrb = memo(function CoreOrb({ voiceState, color }: { voiceState: VoiceState; color: string }) {
@@ -241,7 +242,7 @@ export function SparkleOrb() {
       )}
 
       <motion.p
-        className="absolute -bottom-6 text-xs text-neutral-content whitespace-nowrap"
+        className="absolute -bottom-6 text-xs text-base-content/60 whitespace-nowrap"
         key={label}
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}

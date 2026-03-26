@@ -217,7 +217,7 @@ export function MindGraph({ nodes, edges, visibleBranches, highlightedNodeId, on
 
   if (filteredNodes.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-content text-sm">
+      <div className="h-full flex items-center justify-center text-base-content/60 text-sm">
         No vault files to display
       </div>
     );

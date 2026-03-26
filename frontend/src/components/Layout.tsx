@@ -11,6 +11,14 @@ import { useVoiceChatStore } from "../stores/voiceChatStore";
 import { useApprovalStore } from "../stores/approvalStore";
 import { useInboxStore } from "../stores/inboxStore";
 
+function getInitialTheme(): "axon" | "axon-dark" {
+  const stored = localStorage.getItem("axon-theme");
+  if (stored === "axon" || stored === "axon-dark") return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "axon-dark"
+    : "axon";
+}
+
 export function Layout() {
   const { agents, fetchAgents, loading } = useAgentStore();
   const { fetchOrgs } = useOrgStore();
@@ -22,7 +30,13 @@ export function Layout() {
   );
   const fetchInbox = useInboxStore((s) => s.fetchAll);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState(getInitialTheme);
   const location = useLocation();
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("axon-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     fetchOrgs().then(() => fetchAgents());
@@ -58,10 +72,10 @@ export function Layout() {
       <aside className={`fixed z-40 inset-y-0 left-0 w-64 bg-base-200 border-r border-neutral flex flex-col transition-transform duration-200 md:static md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-4 border-b border-neutral flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-base-content tracking-tight">
-              <span className="text-accent">⚡</span> Axon
+            <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold text-base-content tracking-tight">
+              axon
             </h1>
-            <p className="text-xs text-neutral-content mt-1">AI Command Center</p>
+            <p className="text-xs text-base-content/60 mt-1">AI Command Center</p>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -191,6 +205,11 @@ export function Layout() {
                 Voice
               </button>
             </li>
+            <li>
+              <button onClick={() => setTheme(theme === "axon" ? "axon-dark" : "axon")}>
+                {theme === "axon" ? "Dark Mode" : "Light Mode"}
+              </button>
+            </li>
           </ul>
         </nav>
 
@@ -206,7 +225,7 @@ export function Layout() {
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
           </button>
-          <span className="text-sm font-semibold text-base-content"><span className="text-accent">⚡</span> Axon</span>
+          <span className="font-[family-name:var(--font-display)] text-base font-bold text-base-content tracking-tight">axon</span>
         </div>
         <div className="flex-1 overflow-hidden">
           <Outlet />

@@ -14,7 +14,6 @@ from axon.config import (
     AgentType,
     PersonaConfig,
     discover_agents_from_vaults,
-    load_all_personas,
     settings,
 )
 from axon.agents.agent import Agent
@@ -50,6 +49,7 @@ from axon.routes import recruitment as recruitment_routes
 from axon.routes import usage as usage_routes
 from axon.routes import worker_control as worker_control_routes
 from axon.routes import worker_setup as worker_setup_routes
+from axon.routes import credentials as credentials_routes
 
 
 logger = logging.getLogger(__name__)
@@ -92,16 +92,11 @@ def _init_org_agents(
     """Initialize all agents for a single organization."""
     data_dir = str(org_dir / "data")
     vaults_dir = org_dir / "vaults"
-    personas_dir = org_dir / "personas"
 
-    # Agent-as-vault: discover agents from vault folders containing agent.yaml
-    personas = discover_agents_from_vaults(vaults_dir)
+    # Discover agents from vault folders containing agent.yaml
+    agents = discover_agents_from_vaults(vaults_dir)
 
-    # Fallback: legacy personas/ directory
-    if not personas and personas_dir.exists():
-        personas = load_all_personas(str(personas_dir), vaults_base=str(vaults_dir))
-
-    logger.debug(f"[{org_config.id}] Loaded {len(personas)} agents: {list(personas.keys())}")
+    logger.debug(f"[{org_config.id}] Loaded {len(agents)} agents: {list(agents.keys())}")
 
     # Initialize shared vault
     shared_vault_path = vaults_dir / "shared"
@@ -124,9 +119,12 @@ def _init_org_agents(
         usage_tracker=usage_tracker,
     )
 
+    # Org-level comms config (for agents with comms enabled)
+    org_comms = org_config.comms
+
     # Initialize specialist agents (type-based dispatch)
     specialists: dict[str, PersonaConfig] = {}
-    for persona_id, config in personas.items():
+    for persona_id, config in agents.items():
         if config.type in (AgentType.ORCHESTRATOR, AgentType.HUDDLE):
             continue
         is_external = config.type == AgentType.EXTERNAL or config.external
@@ -137,13 +135,14 @@ def _init_org_agents(
             audit_logger=audit_logger,
             usage_tracker=usage_tracker,
             org_id=org_config.id,
+            org_comms_config=org_comms,
         )
         org.agent_registry[persona_id] = agent
         if not is_external:
             specialists[persona_id] = config
 
     # Initialize orchestrators
-    for persona_id, config in personas.items():
+    for persona_id, config in agents.items():
         if config.type != AgentType.ORCHESTRATOR:
             continue
         axon = AxonAgent(
@@ -152,15 +151,16 @@ def _init_org_agents(
             audit_logger=audit_logger,
             usage_tracker=usage_tracker,
             org_id=org_config.id,
+            org_comms_config=org_comms,
         )
         org.agent_registry[persona_id] = axon
 
     # Initialize huddles
-    for persona_id, config in personas.items():
+    for persona_id, config in agents.items():
         if config.type != AgentType.HUDDLE:
             continue
         advisor_configs = {
-            k: v for k, v in personas.items()
+            k: v for k, v in agents.items()
             if v.type == AgentType.ADVISOR
         }
         advisor_agents = {
@@ -250,6 +250,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[AXON] Discord bot failed to start: {e}")
 
+    # Start inbound email poller (for orgs with Resend configured)
+    email_poller = None
+    try:
+        from axon.comms.inbound import InboundEmailPoller
+        email_poller = InboundEmailPoller()
+        await email_poller.start()
+    except Exception as e:
+        print(f"[AXON] Email poller failed to start: {e}")
+
     yield
 
     # Cleanup — stop vault file watchers
@@ -263,6 +272,8 @@ async def lifespan(app: FastAPI):
     await runner_manager.shutdown_all()
 
     await scheduler.stop()
+    if email_poller:
+        await email_poller.stop()
     await shutdown_db()
     if discord_bot:
         await discord_bot.close()
@@ -294,6 +305,7 @@ app.include_router(recruitment_routes.org_router, prefix="/api/orgs/{org_id}/rec
 app.include_router(worker_setup_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(worker_control_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(usage_routes.org_router, prefix="/api/orgs/{org_id}/usage", tags=["usage"])
+app.include_router(credentials_routes.org_router, prefix="/api/orgs/{org_id}/credentials", tags=["credentials"])
 
 # ── Legacy routes (backward compat — route to default org) ─────────
 app.include_router(agents_routes.router, prefix="/api/agents", tags=["agents"])

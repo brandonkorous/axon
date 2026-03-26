@@ -46,7 +46,7 @@ function CodeConfig({ path, onChange }: { path: string; onChange: (v: string) =>
         placeholder="e.g. D:\code\my-project"
         className="input input-sm w-full font-mono"
       />
-      <p className="text-xs text-neutral-content mt-1">
+      <p className="text-xs text-base-content/60 mt-1">
         Local path to the git repository this worker operates on
       </p>
     </div>
@@ -120,7 +120,7 @@ function DocumentsConfig({ workDir, outputDir, onWorkDirChange, onOutputDirChang
           placeholder="e.g. D:\documents\reports"
           className="input input-sm w-full font-mono"
         />
-        <p className="text-xs text-neutral-content mt-1">
+        <p className="text-xs text-base-content/60 mt-1">
           Source directory containing documents to parse
         </p>
       </div>
@@ -132,7 +132,7 @@ function DocumentsConfig({ workDir, outputDir, onWorkDirChange, onOutputDirChang
           placeholder="Defaults to document folder"
           className="input input-sm w-full font-mono"
         />
-        <p className="text-xs text-neutral-content mt-1">
+        <p className="text-xs text-base-content/60 mt-1">
           Where generated documents (PDF/DOCX/HTML) are saved
         </p>
       </div>
@@ -150,7 +150,7 @@ function BrowserConfig({ config, onChange }: { config: Record<string, string>; o
         placeholder="https://example.com"
         className="input input-sm w-full font-mono"
       />
-      <p className="text-xs text-neutral-content mt-1">
+      <p className="text-xs text-base-content/60 mt-1">
         Default URL to navigate to when starting browser tasks
       </p>
     </div>

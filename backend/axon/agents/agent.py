@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from axon.agents.conversation import Conversation, ConversationManager
 
 if TYPE_CHECKING:
+    from axon.org import OrgCommsConfig
     from axon.usage import UsageTracker
 from axon.agents.provider import stream_completion
 from axon.agents.shared_tools import ACHIEVEMENT_TOOLS, ISSUE_TOOLS, KNOWLEDGE_TOOLS, TASK_TOOLS, SharedVaultToolExecutor
@@ -59,6 +60,7 @@ class Agent:
         audit_logger: "AuditLogger | None" = None,
         usage_tracker: "UsageTracker | None" = None,
         org_id: str = "",
+        org_comms_config: "OrgCommsConfig | None" = None,
     ):
         self.config = config
         self.id = config.id
@@ -121,6 +123,25 @@ class Agent:
         # the tool executor can auto-inject conversation_id into tasks.
         self.conversation_manager = ConversationManager(agent_id=self.id, data_dir=data_dir)
 
+        # Comms executor (email, Discord, contacts)
+        self._comms_executor = None
+        if config.comms.enabled and shared_vault and org_comms_config:
+            from axon.comms.executor import CommsToolExecutor
+            self._comms_executor = CommsToolExecutor(
+                shared_vault=shared_vault,
+                agent_id=self.id,
+                org_id=org_id,
+                org_comms_config=org_comms_config,
+                email_alias=config.comms.email_alias,
+                agent_display_name=self.name,
+            )
+
+        # Web executor (search, fetch, synthesis)
+        self._web_executor = None
+        if config.web.enabled:
+            from axon.web.executor import WebToolExecutor
+            self._web_executor = WebToolExecutor(config=config.web)
+
         # Tools
         self.tool_executor = ToolExecutor(
             self.vault, self.id,
@@ -130,6 +151,8 @@ class Agent:
             memory_manager=self.memory_manager,
             reasoning_engine=self.reasoning_engine,
             conversation_manager=self.conversation_manager,
+            comms_executor=self._comms_executor,
+            web_executor=self._web_executor,
         )
         self.tools = self._build_tool_list()
 
@@ -455,6 +478,23 @@ class Agent:
 
         return messages
 
+    def _rebuild_comms(self, org_comms_config) -> None:
+        """Hot-reload comms executor and tools after config change."""
+        if self.config.comms.enabled and self.shared_vault and org_comms_config:
+            from axon.comms.executor import CommsToolExecutor
+            self._comms_executor = CommsToolExecutor(
+                shared_vault=self.shared_vault,
+                agent_id=self.id,
+                org_id=self._org_id,
+                org_comms_config=org_comms_config,
+                email_alias=self.config.comms.email_alias,
+                agent_display_name=self.name,
+            )
+        else:
+            self._comms_executor = None
+        self.tool_executor._comms_executor = self._comms_executor
+        self.tools = self._build_tool_list()
+
     def _build_tool_list(self) -> list[dict[str, Any]]:
         """Build the tool list based on agent capabilities."""
         tools = list(VAULT_TOOLS)
@@ -470,6 +510,16 @@ class Agent:
         if self.reasoning_engine:
             from axon.reasoning.tools import REASONING_TOOLS
             tools.extend(REASONING_TOOLS)
+
+        # Comms tools when enabled
+        if self._comms_executor:
+            from axon.comms.tools import COMMS_TOOLS
+            tools.extend(COMMS_TOOLS)
+
+        # Web tools when enabled
+        if self._web_executor:
+            from axon.web.tools import WEB_TOOLS
+            tools.extend(WEB_TOOLS)
 
         # All agents can request new agents
         tools.extend(RECRUITMENT_TOOLS)

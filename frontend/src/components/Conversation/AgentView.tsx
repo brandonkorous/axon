@@ -243,7 +243,7 @@ export function AgentView() {
 
   if (!agent) {
     return (
-      <div className="flex items-center justify-center h-full text-neutral-content">
+      <div className="flex items-center justify-center h-full text-base-content/60">
         Agent not found
       </div>
     );
@@ -273,13 +273,13 @@ export function AgentView() {
                   onDelete={deleteConversation}
                 />
               </div>
-              <p className="text-xs text-neutral-content">{agent.title} — {agent.tagline}</p>
+              <p className="text-xs text-base-content/60">{agent.title} — {agent.tagline}</p>
             </div>
           </div>
         </div>
         {agent.lifecycle && (
           <div className="mt-3">
-            <AgentControls agentId={agent.id} lifecycle={agent.lifecycle} />
+            <AgentControls agentId={agent.id} lifecycle={agent.lifecycle} agent={agent} />
           </div>
         )}
       </div>
@@ -310,6 +310,7 @@ export function AgentView() {
         onSend={handleSend}
         onCommand={handleCommand}
         onAudio={handleAudio}
+        agents={agents}
         placeholder={`Message ${agent.name}...`}
         disabled={!connected}
       />

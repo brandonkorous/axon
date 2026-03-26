@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useConversationStore } from "../../stores/conversationStore";
+import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 export interface RunningTask {
   path: string;
@@ -46,13 +47,13 @@ function TaskRow({ chatId, task, color }: { chatId: string; task: RunningTask; c
           className="loading loading-ring loading-sm"
           style={{ color }}
         />
-        <span className="text-sm text-neutral-content">
+        <span className="text-sm text-base-content/60">
           Working on:{" "}
           <span className="font-medium text-base-content">
             {task.title}
           </span>
         </span>
-        <span className="text-xs text-neutral-content/50">
+        <span className="text-xs text-base-content/50">
           {formatElapsed(task.startedAt)}
         </span>
         <button
@@ -76,7 +77,7 @@ function TaskRow({ chatId, task, color }: { chatId: string; task: RunningTask; c
   );
 }
 
-export function WorkingIndicator({ chatId, tasks, color = "#8B5CF6" }: Props) {
+export function WorkingIndicator({ chatId, tasks, color = DEFAULT_AGENT_COLOR }: Props) {
   const [, setTick] = useState(0);
 
   // Update elapsed time every 10 seconds

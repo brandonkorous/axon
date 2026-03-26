@@ -312,7 +312,8 @@ class Huddle:
             f"Respond ONLY as yourself. Do NOT write dialogue for other advisors or "
             f"prefix your response with your name. Do NOT simulate a roundtable — "
             f"just give your own perspective. Keep it concise (2-4 sentences). "
-            f"If you need to take action (share knowledge, create tasks, save to vault), "
+            f"If you need to take action (share knowledge, create tasks, save to vault, "
+            f"request new team members via `request_agent`), "
             f"use your tools directly — don't just say you'll do it.",
         ]
 

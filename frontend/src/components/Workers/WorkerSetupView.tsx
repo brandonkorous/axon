@@ -75,7 +75,7 @@ export function WorkerSetupView() {
     <div className="h-full flex flex-col">
       <div className="px-6 py-4 border-b border-neutral">
         <h1 className="text-xl font-bold text-base-content">Add Worker Agent</h1>
-        <p className="text-xs text-neutral-content mt-1">
+        <p className="text-xs text-base-content/60 mt-1">
           Connect a local runner to execute tasks
         </p>
       </div>
@@ -170,7 +170,7 @@ function SetupForm({
             </button>
           ))}
         </div>
-        <p className="text-xs text-neutral-content mt-1">
+        <p className="text-xs text-base-content/60 mt-1">
           Which agents can delegate tasks to this worker
         </p>
       </div>
