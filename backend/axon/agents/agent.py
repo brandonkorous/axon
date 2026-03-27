@@ -14,10 +14,11 @@ from axon.agents.conversation import Conversation, ConversationManager
 if TYPE_CHECKING:
     from axon.org import OrgCommsConfig
     from axon.usage import UsageTracker
-from axon.agents.provider import stream_completion
+from axon.agents.provider import complete, stream_completion
 from axon.agents.shared_tools import ACHIEVEMENT_TOOLS, ISSUE_TOOLS, KNOWLEDGE_TOOLS, TASK_TOOLS, SharedVaultToolExecutor
 from axon.agents.tools import (
     DELEGATION_TOOLS,
+    DISCOVERY_TOOLS,
     LEARNING_TOOLS,
     RECRUITMENT_TOOLS,
     VAULT_TOOLS,
@@ -33,12 +34,38 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class StreamChunk:
-    """A chunk of streaming output from an agent."""
+    """A chunk of streaming output from an agent.
+
+    Types:
+    - "text"             — streamed text content
+    - "tool_use"         — agent is calling a tool
+    - "tool_result"      — tool execution result
+    - "thinking"         — agent thinking indicator
+    - "done"             — processing complete
+    - "route"            — orchestrator routing to another agent
+    - "huddle"           — orchestrator opening a huddle
+    - "agent_activated"  — a sub-agent has been spawned/delegated to
+    - "agent_result"     — a sub-agent has completed its work
+    - "ack"              — quick acknowledgment while agent loads context
+    """
 
     agent_id: str
-    type: str  # "text", "tool_use", "tool_result", "thinking", "done"
+    type: str
     content: str = ""
     metadata: dict[str, Any] | None = None
+
+
+# Prompt for the local model to generate a brief acknowledgment
+ACK_SYSTEM_PROMPT = (
+    "You are a brief, warm AI assistant. Given the user's message, respond with "
+    "a single short sentence (under 15 words) acknowledging what they asked and "
+    "indicating you're looking into it. Be natural, not robotic. "
+    "Do NOT answer the question — just acknowledge it. "
+    "Do NOT use filler like 'Sure!' or 'Of course!' every time — vary your tone. "
+    "Match the energy: casual question gets casual ack, serious question gets focused ack."
+)
+ACK_MAX_TOKENS = 48
+ACK_TIMEOUT = 5  # seconds — if local model can't ack in 5s, skip it
 
 
 class Agent:
@@ -177,11 +204,16 @@ class Agent:
             media_executor=self._media_executor,
             integration_executor=self._integration_executor,
         )
+        self.tool_executor._stream_callback = self._buffer_tool_stream_event
+        self._pending_tool_events: list[StreamChunk] = []
         self.tools = self._build_tool_list()
 
         # Lifecycle (persisted to data/agent-state/)
         state_dir = str(Path(data_dir) / "agent-state")
         self.lifecycle = AgentLifecycle.load(self.id, state_dir)
+
+        # Peer roster (injected after all agents are initialized)
+        self._peer_roster: str = ""
 
         # System prompt (loaded from file or inline)
         self._system_prompt: str | None = None
@@ -217,6 +249,41 @@ class Agent:
             )
             self.tool_executor._integration_executor = self._integration_executor
             self.tools = self._build_tool_list()
+
+    def build_roster(self, all_configs: dict[str, "PersonaConfig"]) -> None:
+        """Build a peer roster from org agent configs.
+
+        Includes: parent, siblings (same parent_id), and direct children.
+        For top-level agents (no parent_id), peers are other top-level agents.
+        """
+        my_parent = self.config.parent_id
+        lines: list[str] = []
+
+        for aid, cfg in all_configs.items():
+            if aid == self.id:
+                continue
+            if cfg.type.value in ("orchestrator", "huddle"):
+                continue
+
+            is_parent = (aid == my_parent)
+            is_sibling = (cfg.parent_id == my_parent) if my_parent else (not cfg.parent_id)
+            is_child = (cfg.parent_id == self.id)
+
+            if not (is_parent or is_sibling or is_child):
+                continue
+
+            relation = "parent" if is_parent else "report" if is_child else "peer"
+            line = f"- **{cfg.name}** (`{aid}`): {cfg.title}"
+            if cfg.tagline:
+                line += f" — {cfg.tagline}"
+            line += f"  [{relation}]"
+            lines.append(line)
+
+        self._peer_roster = "\n".join(lines)
+
+    async def _buffer_tool_stream_event(self, chunk: StreamChunk) -> None:
+        """Buffer a stream event from tool execution for emission during processing."""
+        self._pending_tool_events.append(chunk)
 
     def _on_vault_change(self, relative_path: str, event: str) -> None:
         """Sync a vault file change to agent.db (called by VaultManager)."""
@@ -281,6 +348,54 @@ class Agent:
     def system_prompt(self, value: str) -> None:
         self._system_prompt = value
 
+    async def _retrieve_vault_context(self, user_message: str) -> str:
+        """Retrieve vault context via memory manager or deterministic fallback."""
+        if self.memory_manager:
+            logger.debug("[%s] Using MemoryManager for recall", self.id)
+            return await self.memory_manager.recall(user_message)
+        logger.debug("[%s] Using deterministic navigator for recall", self.id)
+        return await self.navigator.retrieve(
+            query=user_message,
+            token_budget=self.config.memory.max_context_tokens,
+        )
+
+    async def _generate_ack(self, user_message: str) -> str | None:
+        """Generate a quick acknowledgment using the local model.
+
+        Returns None if the local model is unavailable or too slow.
+        """
+        ack_model = (
+            self.config.learning.memory_model
+            if self.config.learning.enabled
+            else self.config.model.navigator
+        )
+        if not ack_model:
+            return None
+
+        try:
+            result = await asyncio.wait_for(
+                complete(
+                    model=ack_model,
+                    messages=[
+                        {"role": "system", "content": ACK_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_message},
+                    ],
+                    max_tokens=ACK_MAX_TOKENS,
+                    temperature=0.8,
+                ),
+                timeout=ACK_TIMEOUT,
+            )
+            ack = (result.get("content") or "").strip()
+            if ack:
+                logger.debug("[%s] Ack generated: %s", self.id, ack)
+            return ack or None
+        except TimeoutError:
+            logger.debug("[%s] Ack generation timed out — skipping", self.id)
+            return None
+        except Exception as e:
+            logger.debug("[%s] Ack generation failed — skipping: %s", self.id, e)
+            return None
+
     async def process(
         self, user_message: str, *, save_history: bool = True,
     ) -> AsyncIterator[StreamChunk]:
@@ -323,16 +438,17 @@ class Agent:
         # Signal thinking
         yield StreamChunk(agent_id=self.id, type="thinking")
 
-        # 1. Retrieve vault context (memory manager or deterministic fallback)
-        if self.memory_manager:
-            logger.debug("[%s] Using MemoryManager for recall", self.id)
-            vault_context = await self.memory_manager.recall(user_message)
-        else:
-            logger.debug("[%s] Using deterministic navigator for recall", self.id)
-            vault_context = await self.navigator.retrieve(
-                query=user_message,
-                token_budget=self.config.memory.max_context_tokens,
-            )
+        # 1. Kick off vault retrieval and ack generation in parallel
+        vault_task = asyncio.create_task(self._retrieve_vault_context(user_message))
+        ack_task = asyncio.create_task(self._generate_ack(user_message))
+
+        # Yield ack as soon as it's ready (don't wait for vault)
+        ack_text = await ack_task
+        if ack_text:
+            yield StreamChunk(agent_id=self.id, type="ack", content=ack_text)
+
+        # Wait for vault context to finish
+        vault_context = await vault_task
         logger.debug("[%s] Vault context: %d chars", self.id, len(vault_context) if vault_context else 0)
 
         # 2. Build messages
@@ -541,7 +657,22 @@ class Agent:
                 org_context += f"You accept delegated work from: {', '.join(accepts)}\n"
             org_context += "\n"
 
-        prompt = identity + org_context + self.system_prompt
+        # Peer roster — immediate teammates (parent, siblings, direct reports)
+        roster_section = ""
+        if self._peer_roster:
+            delegates = self.config.delegation.can_delegate_to
+            delegate_note = ""
+            if delegates:
+                names = "any agent" if delegates == ["*"] else ", ".join(f"`{d}`" for d in delegates)
+                delegate_note = f"\nYou can delegate work to: {names}. Use `find_agents` to discover others.\n"
+            roster_section = (
+                "## Your Team\n"
+                "These agents are your immediate colleagues:\n\n"
+                f"{self._peer_roster}\n"
+                f"{delegate_note}\n"
+            )
+
+        prompt = identity + org_context + roster_section + self.system_prompt
         if self.lifecycle.strategy_override:
             prompt += f"\n\n## Strategy Override (from user)\n{self.lifecycle.strategy_override}"
 
@@ -651,6 +782,9 @@ class Agent:
         if self._integration_executor:
             tools.extend(self._integration_executor.get_tools())
 
+        # All agents can discover other agents in the org
+        tools.extend(DISCOVERY_TOOLS)
+
         # All agents can request new agents
         tools.extend(RECRUITMENT_TOOLS)
 
@@ -718,6 +852,11 @@ class Agent:
             result = await self.tool_executor.execute(
                 tc_data["function"], tc_data["arguments"]
             )
+
+            # Drain any stream events emitted during tool execution
+            for event in self._pending_tool_events:
+                yield event
+            self._pending_tool_events.clear()
 
             yield StreamChunk(
                 agent_id=self.id,

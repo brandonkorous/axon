@@ -5,6 +5,7 @@ import { ChatMessage } from "../Conversation/ChatMessage";
 import { ChatInput } from "../Conversation/ChatInput";
 import { ConversationSwitcher } from "../Conversation/ConversationSwitcher";
 import { ToolUseBadge } from "../Conversation/ToolUseBadge";
+import { AgentActivityBadge } from "../Conversation/AgentActivityBadge";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
@@ -17,7 +18,7 @@ import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 const AGENT_ID = "axon";
 
 export function AxonView() {
-  const { messages, addMessage, appendToLast } = useConversationStore();
+  const { messages, addMessage, appendToLast, replaceLastMessage } = useConversationStore();
   const { agents } = useAgentStore();
   const [activeAgent, setActiveAgent] = useState<string>("axon");
   const runtime = useAgentRuntime(activeAgent);
@@ -41,16 +42,41 @@ export function AxonView() {
           setActiveAgent(agentId);
           break;
 
+        case "ack":
+          rs.setThinking(agentId, false);
+          addMessage(AGENT_ID, {
+            id: `ack-${Date.now()}`,
+            role: "assistant",
+            content,
+            agentId,
+            timestamp: Date.now(),
+            metadata: { type: "ack" },
+          });
+          rs.setThinking(agentId, true, "axon");
+          break;
+
         case "text":
           if (rs.agents[agentId]?.thinking) {
             rs.setThinking(agentId, false);
-            addMessage(AGENT_ID, {
-              id: `msg-${Date.now()}`,
-              role: "assistant",
-              content,
-              agentId,
-              timestamp: Date.now(),
-            });
+            const msgs = useConversationStore.getState().messages[AGENT_ID] || [];
+            const lastMsg = msgs[msgs.length - 1];
+            if (lastMsg?.metadata?.type === "ack") {
+              replaceLastMessage(AGENT_ID, {
+                id: `msg-${Date.now()}`,
+                role: "assistant",
+                content,
+                agentId,
+                timestamp: Date.now(),
+              });
+            } else {
+              addMessage(AGENT_ID, {
+                id: `msg-${Date.now()}`,
+                role: "assistant",
+                content,
+                agentId,
+                timestamp: Date.now(),
+              });
+            }
           } else {
             appendToLast(AGENT_ID, content);
           }
@@ -89,6 +115,38 @@ export function AxonView() {
 
         case "tool_result":
           break;
+
+        case "agent_activated": {
+          const meta = data.metadata as Record<string, unknown> | undefined;
+          addMessage(AGENT_ID, {
+            id: `agent-act-${Date.now()}`,
+            role: "system",
+            content: (meta?.task_description as string) || content,
+            timestamp: Date.now(),
+            metadata: {
+              type: "agent_activated",
+              target_agent: meta?.target_agent as string,
+              mode: meta?.mode as string,
+            },
+          });
+          break;
+        }
+
+        case "agent_result": {
+          const meta = data.metadata as Record<string, unknown> | undefined;
+          addMessage(AGENT_ID, {
+            id: `agent-res-${Date.now()}`,
+            role: "system",
+            content: (meta?.task_summary as string) || content,
+            timestamp: Date.now(),
+            metadata: {
+              type: "agent_result",
+              source_agent: meta?.source_agent as string,
+              status: meta?.status as string,
+            },
+          });
+          break;
+        }
 
         case "huddle": {
           const meta = data.metadata as Record<string, unknown> | undefined;
@@ -140,7 +198,7 @@ export function AxonView() {
           break;
       }
     },
-    [addMessage, appendToLast, agents]
+    [addMessage, appendToLast, replaceLastMessage, agents]
   );
 
   const { connected, send } = useWebSocket({
@@ -259,6 +317,19 @@ export function AxonView() {
                   </ReactMarkdown>
                 </span>
               </div>
+            );
+          }
+
+          if (msg.metadata?.type === "agent_activated" || msg.metadata?.type === "agent_result") {
+            return (
+              <AgentActivityBadge
+                key={msg.id}
+                type={msg.metadata.type as "agent_activated" | "agent_result"}
+                agentId={(msg.metadata.target_agent || msg.metadata.source_agent) as string}
+                taskSummary={msg.content}
+                mode={msg.metadata.mode as string}
+                status={msg.metadata.status as string}
+              />
             );
           }
 

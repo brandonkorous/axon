@@ -1,0 +1,787 @@
+#!/usr/bin/env bash
+# Axon CLI — Self-hosted AI Command Center
+# https://useaxon.dev
+
+set -euo pipefail
+
+AXON_VERSION="0.1.0"
+AXON_REPO="brandonkorous/axon"
+AXON_IMAGE_PREFIX="ghcr.io/${AXON_REPO}"
+AXON_MARKER=".axon"
+
+# ── Colors & Output ────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+DIM='\033[2m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+info()    { printf "${CYAN}  ▸${RESET} %s\n" "$1"; }
+ok()      { printf "${GREEN}  ✓${RESET} %s\n" "$1"; }
+warn()    { printf "${YELLOW}  !${RESET} %s\n" "$1"; }
+fail()    { printf "${RED}  ✗${RESET} %s\n" "$1"; exit 1; }
+step()    { printf "\n${BOLD}  %s${RESET}\n" "$1"; }
+ask()     { printf "${CYAN}  ?${RESET} %s " "$1"; }
+spinner() {
+  local pid=$1 msg=$2
+  local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  while kill -0 "$pid" 2>/dev/null; do
+    for (( i=0; i<${#frames}; i++ )); do
+      printf "\r${CYAN}  %s${RESET} %s" "${frames:$i:1}" "$msg"
+      sleep 0.1
+    done
+  done
+  printf "\r"
+}
+
+# ── Banner ──────────────────────────────────────────────────────────────────
+banner() {
+  printf "\n${BOLD}${CYAN}"
+  printf "    ___   _  ______  _   __\n"
+  printf "   /   | | |/ / __ \\/ | / /\n"
+  printf "  / /| | |   / / / /  |/ / \n"
+  printf " / ___ |/   / /_/ / /|  /  \n"
+  printf "/_/  |_/_/|_\\____/_/ |_/   \n"
+  printf "${RESET}"
+  printf "  ${DIM}v${AXON_VERSION}${RESET}\n\n"
+}
+
+# ── Platform Detection ──────────────────────────────────────────────────────
+detect_platform() {
+  OS="$(uname -s)"
+  case "$OS" in
+    Linux*)  PLATFORM="linux" ;;
+    Darwin*) PLATFORM="macos" ;;
+    MINGW*|MSYS*|CYGWIN*) PLATFORM="windows" ;;
+    *) fail "Unsupported OS: $OS" ;;
+  esac
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Docker Detection & Installation
+# ══════════════════════════════════════════════════════════════════════════════
+
+check_docker() {
+  if command -v docker > /dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+check_docker_running() {
+  docker info > /dev/null 2>&1
+}
+
+check_docker_compose() {
+  # Compose v2 (plugin)
+  if docker compose version > /dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+    return 0
+  fi
+  # Compose v1 (standalone)
+  if command -v docker-compose > /dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+    return 0
+  fi
+  return 1
+}
+
+# ── Docker Install: macOS ───────────────────────────────────────────────────
+install_docker_macos() {
+  printf "\n"
+  printf "  ${BOLD}Docker not found.${RESET} Axon needs Docker to run.\n"
+  printf "  How would you like to install it?\n\n"
+  printf "    ${BOLD}1)${RESET} Docker Desktop ${DIM}(recommended — GUI + CLI)${RESET}\n"
+  printf "    ${BOLD}2)${RESET} Homebrew ${DIM}(brew install --cask docker)${RESET}\n"
+  printf "    ${BOLD}3)${RESET} OrbStack ${DIM}(lightweight alternative)${RESET}\n"
+  printf "    ${BOLD}s)${RESET} Skip — I'll install it myself\n\n"
+  ask "Choose [1/2/3/s]:"
+  read -r choice
+
+  case "$choice" in
+    1)
+      info "Downloading Docker Desktop..."
+      local arch
+      arch="$(uname -m)"
+      if [ "$arch" = "arm64" ]; then
+        local url="https://desktop.docker.com/mac/main/arm64/Docker.dmg"
+      else
+        local url="https://desktop.docker.com/mac/main/amd64/Docker.dmg"
+      fi
+      local tmp="/tmp/Docker.dmg"
+      curl -fSL "$url" -o "$tmp"
+      info "Mounting installer..."
+      hdiutil attach "$tmp" -quiet
+      info "Installing... (you may be prompted for your password)"
+      cp -R "/Volumes/Docker/Docker.app" /Applications/ 2>/dev/null || \
+        sudo cp -R "/Volumes/Docker/Docker.app" /Applications/
+      hdiutil detach "/Volumes/Docker" -quiet
+      rm -f "$tmp"
+      info "Starting Docker Desktop..."
+      open /Applications/Docker.app
+      wait_for_docker
+      ;;
+    2)
+      if ! command -v brew > /dev/null 2>&1; then
+        fail "Homebrew not found. Install it first: https://brew.sh"
+      fi
+      info "Installing Docker Desktop via Homebrew..."
+      brew install --cask docker
+      info "Starting Docker Desktop..."
+      open /Applications/Docker.app
+      wait_for_docker
+      ;;
+    3)
+      if ! command -v brew > /dev/null 2>&1; then
+        fail "Homebrew not found. Install it first: https://brew.sh"
+      fi
+      info "Installing OrbStack via Homebrew..."
+      brew install --cask orbstack
+      info "Starting OrbStack..."
+      open /Applications/OrbStack.app
+      wait_for_docker
+      ;;
+    s|S)
+      printf "\n"
+      info "Install Docker manually: https://docs.docker.com/get-docker/"
+      info "Then re-run this command."
+      exit 0
+      ;;
+    *)
+      fail "Invalid choice"
+      ;;
+  esac
+}
+
+# ── Docker Install: Linux ──────────────────────────────────────────────────
+install_docker_linux() {
+  printf "\n"
+  printf "  ${BOLD}Docker not found.${RESET} Axon needs Docker to run.\n"
+  printf "  How would you like to install it?\n\n"
+  printf "    ${BOLD}1)${RESET} Docker Engine ${DIM}(recommended — official install script)${RESET}\n"
+  printf "    ${BOLD}2)${RESET} Docker Desktop ${DIM}(GUI + CLI, requires systemd)${RESET}\n"
+  printf "    ${BOLD}s)${RESET} Skip — I'll install it myself\n\n"
+  ask "Choose [1/2/s]:"
+  read -r choice
+
+  case "$choice" in
+    1)
+      info "Installing Docker Engine via official script..."
+      info "This may ask for your sudo password."
+      curl -fsSL https://get.docker.com | sudo sh
+      # Add current user to docker group
+      if ! groups | grep -q docker; then
+        sudo usermod -aG docker "$USER"
+        warn "Added $USER to docker group."
+        warn "You may need to log out and back in for group changes to take effect."
+        warn "Or run: newgrp docker"
+      fi
+      # Start Docker if not running
+      if command -v systemctl > /dev/null 2>&1; then
+        sudo systemctl start docker
+        sudo systemctl enable docker
+      fi
+      wait_for_docker
+      ;;
+    2)
+      info "Download Docker Desktop for Linux:"
+      info "  https://docs.docker.com/desktop/install/linux-install/"
+      info "Install the .deb or .rpm package, then re-run this command."
+      exit 0
+      ;;
+    s|S)
+      printf "\n"
+      info "Install Docker manually: https://docs.docker.com/get-docker/"
+      info "Then re-run this command."
+      exit 0
+      ;;
+    *)
+      fail "Invalid choice"
+      ;;
+  esac
+}
+
+# ── Docker Install: Windows (Git Bash / MSYS2) ─────────────────────────────
+install_docker_windows() {
+  printf "\n"
+  printf "  ${BOLD}Docker not found.${RESET} Axon needs Docker to run.\n"
+  printf "  How would you like to install it?\n\n"
+  printf "    ${BOLD}1)${RESET} Docker Desktop ${DIM}(recommended)${RESET}\n"
+  printf "    ${BOLD}2)${RESET} winget ${DIM}(winget install Docker.DockerDesktop)${RESET}\n"
+  printf "    ${BOLD}s)${RESET} Skip — I'll install it myself\n\n"
+  ask "Choose [1/2/s]:"
+  read -r choice
+
+  case "$choice" in
+    1)
+      info "Downloading Docker Desktop installer..."
+      local url="https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
+      local tmp="/tmp/DockerDesktopInstaller.exe"
+      curl -fSL "$url" -o "$tmp"
+      info "Launching installer... Follow the prompts to complete installation."
+      cmd.exe /c "$(cygpath -w "$tmp")" install --quiet 2>/dev/null || \
+        start "$(cygpath -w "$tmp")" 2>/dev/null || \
+        info "Open this file to install: $tmp"
+      info "After installation completes, restart your terminal and re-run this command."
+      exit 0
+      ;;
+    2)
+      info "Installing via winget..."
+      winget.exe install -e --id Docker.DockerDesktop || \
+        fail "winget install failed. Try option 1 or install manually."
+      info "Restart your terminal and re-run this command."
+      exit 0
+      ;;
+    s|S)
+      printf "\n"
+      info "Install Docker Desktop: https://docs.docker.com/desktop/install/windows-install/"
+      info "Then re-run this command."
+      exit 0
+      ;;
+    *)
+      fail "Invalid choice"
+      ;;
+  esac
+}
+
+# ── Wait for Docker daemon ──────────────────────────────────────────────────
+wait_for_docker() {
+  info "Waiting for Docker to be ready..."
+  local attempts=0
+  local max_attempts=60
+  while ! docker info > /dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge "$max_attempts" ]; then
+      fail "Docker did not start within 60 seconds. Start it manually and retry."
+    fi
+    printf "\r${CYAN}  ⏳${RESET} Waiting for Docker... (%ds)" "$attempts"
+    sleep 1
+  done
+  printf "\r"
+  ok "Docker is running"
+}
+
+# ── Start Docker if installed but not running ───────────────────────────────
+start_docker() {
+  info "Docker is installed but not running. Starting..."
+  case "$PLATFORM" in
+    macos)
+      open /Applications/Docker.app 2>/dev/null || \
+        open /Applications/OrbStack.app 2>/dev/null || \
+        fail "Could not start Docker. Launch Docker Desktop manually."
+      ;;
+    linux)
+      if command -v systemctl > /dev/null 2>&1; then
+        sudo systemctl start docker
+      elif command -v service > /dev/null 2>&1; then
+        sudo service docker start
+      else
+        fail "Could not start Docker. Start the daemon manually: sudo dockerd"
+      fi
+      ;;
+    windows)
+      # Try to start Docker Desktop
+      cmd.exe /c "start \"\" \"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe\"" 2>/dev/null || \
+        info "Start Docker Desktop from your Start menu."
+      ;;
+  esac
+  wait_for_docker
+}
+
+# ── Ensure Docker is available ──────────────────────────────────────────────
+ensure_docker() {
+  step "Checking dependencies..."
+
+  if ! check_docker; then
+    case "$PLATFORM" in
+      macos)   install_docker_macos ;;
+      linux)   install_docker_linux ;;
+      windows) install_docker_windows ;;
+    esac
+
+    # Re-check after install
+    if ! check_docker; then
+      fail "Docker installation did not complete. Install manually and retry."
+    fi
+  else
+    ok "Docker installed"
+  fi
+
+  if ! check_docker_running; then
+    start_docker
+  else
+    ok "Docker running"
+  fi
+
+  if ! check_docker_compose; then
+    fail "Docker Compose not found. Install it: https://docs.docker.com/compose/install/"
+  else
+    ok "Docker Compose available"
+  fi
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Workspace Templates
+# ══════════════════════════════════════════════════════════════════════════════
+
+write_compose_file() {
+  local dir="$1"
+  cat > "${dir}/docker-compose.yml" << 'COMPOSE'
+# Axon — Docker Compose (managed by axon CLI)
+# Docs: https://useaxon.dev
+
+services:
+  backend:
+    image: ghcr.io/brandonkorous/axon-backend:latest
+    ports:
+      - "${AXON_PORT_BACKEND:-8000}:8000"
+    volumes:
+      - ${AXON_ORGS_DIR:-./orgs}:/orgs
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-anthropic/claude-sonnet-4-20250514}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - AXON_ORGS_DIR=/orgs
+      - AXON_LOG_LEVEL=${AXON_LOG_LEVEL:-INFO}
+      - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY:-}
+    depends_on:
+      ollama:
+        condition: service_started
+        required: false
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/brandonkorous/axon-frontend:latest
+    ports:
+      - "${AXON_PORT_FRONTEND:-3000}:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "${AXON_PORT_SEARCH:-8080}:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080
+    volumes:
+      - searxng_data:/etc/searxng
+    profiles:
+      - web-search
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${AXON_PORT_OLLAMA:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    profiles:
+      - local-llm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  ollama-init:
+    image: ollama/ollama:latest
+    profiles:
+      - local-llm
+    depends_on:
+      - ollama
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for Ollama..."
+        until curl -s http://ollama:11434/api/tags > /dev/null 2>&1; do sleep 1; done
+        echo "Pulling models..."
+        curl -s http://ollama:11434/api/pull -d '{"name":"llama3"}'
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MODEL:-qwen2.5:14b}\"}"
+        echo "Models ready."
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:14b}
+
+volumes:
+  ollama_models:
+  searxng_data:
+COMPOSE
+}
+
+write_env_file() {
+  local dir="$1"
+  local api_key="${2:-}"
+  cat > "${dir}/.env" << ENV
+# Axon Configuration
+# Docs: https://useaxon.dev
+
+# ── API Keys (at least one required) ─────────────────────────────────────
+ANTHROPIC_API_KEY=${api_key}
+OPENAI_API_KEY=
+
+# ── Model ─────────────────────────────────────────────────────────────────
+# LiteLLM format: provider/model-name
+DEFAULT_MODEL=anthropic/claude-sonnet-4-20250514
+
+# ── Data ──────────────────────────────────────────────────────────────────
+AXON_ORGS_DIR=./orgs
+
+# ── Ports ─────────────────────────────────────────────────────────────────
+AXON_PORT_FRONTEND=3000
+AXON_PORT_BACKEND=8000
+
+# ── Local LLMs (optional) ────────────────────────────────────────────────
+# Enable with: axon start --local
+OLLAMA_MODEL=qwen2.5:14b
+
+# ── Database ──────────────────────────────────────────────────────────────
+# Leave empty for SQLite (default). Postgres: postgresql+asyncpg://user:pass@host/axon
+DATABASE_URL=
+
+# ── Security ──────────────────────────────────────────────────────────────
+# Auto-generated encryption key for OAuth token storage
+DB_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
+ENV
+}
+
+write_gitignore() {
+  local dir="$1"
+  cat > "${dir}/.gitignore" << 'GI'
+.env
+orgs/
+*.db
+GI
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Commands
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── axon init <name> ────────────────────────────────────────────────────────
+cmd_init() {
+  local name="${1:-}"
+  if [ -z "$name" ]; then
+    fail "Usage: axon init <workspace-name>"
+  fi
+
+  banner
+
+  detect_platform
+  ensure_docker
+
+  step "Creating workspace: ${name}/"
+
+  if [ -d "$name" ] && [ -f "${name}/${AXON_MARKER}" ]; then
+    fail "Axon workspace '${name}' already exists"
+  fi
+
+  mkdir -p "$name"
+
+  # Ask for API key
+  printf "\n"
+  printf "  ${BOLD}Axon needs at least one LLM provider.${RESET}\n"
+  printf "  You can always change this later in ${DIM}.env${RESET}\n\n"
+  printf "    ${BOLD}1)${RESET} Anthropic Claude ${DIM}(recommended)${RESET}\n"
+  printf "    ${BOLD}2)${RESET} OpenAI\n"
+  printf "    ${BOLD}3)${RESET} Local only ${DIM}(Ollama — no API key needed)${RESET}\n"
+  printf "    ${BOLD}s)${RESET} Skip — I'll configure later\n\n"
+  ask "Choose [1/2/3/s]:"
+  read -r provider_choice
+
+  local api_key=""
+  local use_local=false
+
+  case "$provider_choice" in
+    1)
+      ask "Anthropic API key:"
+      read -r api_key
+      if [ -z "$api_key" ]; then
+        warn "No key entered. You can add it later in .env"
+      fi
+      ;;
+    2)
+      ask "OpenAI API key:"
+      read -r api_key
+      ;;
+    3)
+      use_local=true
+      info "Will configure for local LLMs via Ollama"
+      ;;
+    s|S)
+      info "Skipping API key setup. Edit .env before starting."
+      ;;
+    *)
+      warn "Invalid choice — skipping. Edit .env before starting."
+      ;;
+  esac
+
+  # Write workspace files
+  write_compose_file "$name"
+  write_env_file "$name" "$api_key"
+  write_gitignore "$name"
+  mkdir -p "${name}/orgs"
+
+  # Write marker file
+  printf '%s\n' "$AXON_VERSION" > "${name}/${AXON_MARKER}"
+
+  # If OpenAI was chosen, swap the key placement
+  if [ "$provider_choice" = "2" ] && [ -n "$api_key" ]; then
+    sed -i.bak "s/^ANTHROPIC_API_KEY=.*/ANTHROPIC_API_KEY=/" "${name}/.env"
+    sed -i.bak "s/^OPENAI_API_KEY=.*/OPENAI_API_KEY=${api_key}/" "${name}/.env"
+    sed -i.bak "s/^DEFAULT_MODEL=.*/DEFAULT_MODEL=openai\/gpt-4o/" "${name}/.env"
+    rm -f "${name}/.env.bak"
+  fi
+
+  # If local-only, set the model to Ollama
+  if [ "$use_local" = true ]; then
+    sed -i.bak "s/^ANTHROPIC_API_KEY=.*/ANTHROPIC_API_KEY=/" "${name}/.env"
+    sed -i.bak "s/^DEFAULT_MODEL=.*/DEFAULT_MODEL=ollama\/llama3/" "${name}/.env"
+    rm -f "${name}/.env.bak"
+  fi
+
+  ok "Workspace created"
+
+  # Summary
+  printf "\n"
+  printf "  ${BOLD}${GREEN}Ready!${RESET}\n\n"
+  printf "    ${CYAN}cd ${name}${RESET}\n"
+  if [ "$use_local" = true ]; then
+    printf "    ${CYAN}axon start --local${RESET}\n"
+  else
+    printf "    ${CYAN}axon start${RESET}\n"
+  fi
+  printf "\n"
+  printf "  ${DIM}Open http://localhost:3000 after startup${RESET}\n\n"
+}
+
+# ── axon start ──────────────────────────────────────────────────────────────
+cmd_start() {
+  assert_workspace
+
+  banner
+  detect_platform
+  ensure_docker
+
+  step "Starting Axon..."
+
+  local profiles=""
+  for arg in "$@"; do
+    case "$arg" in
+      --local|--ollama)
+        profiles="$profiles --profile local-llm"
+        info "Local LLM mode enabled (Ollama)"
+        ;;
+      --search|--web-search)
+        profiles="$profiles --profile web-search"
+        info "Web search enabled (SearXNG)"
+        ;;
+    esac
+  done
+
+  $COMPOSE_CMD up -d $profiles
+
+  printf "\n"
+  ok "Axon is running"
+  printf "\n"
+  printf "  ${BOLD}Dashboard:${RESET}  ${CYAN}http://localhost:${AXON_PORT_FRONTEND:-3000}${RESET}\n"
+  printf "  ${BOLD}API:${RESET}        ${CYAN}http://localhost:${AXON_PORT_BACKEND:-8000}${RESET}\n"
+  printf "\n"
+  printf "  ${DIM}Logs:  axon logs${RESET}\n"
+  printf "  ${DIM}Stop:  axon stop${RESET}\n\n"
+}
+
+# ── axon stop ───────────────────────────────────────────────────────────────
+cmd_stop() {
+  assert_workspace
+
+  step "Stopping Axon..."
+  $COMPOSE_CMD down
+  ok "Axon stopped"
+}
+
+# ── axon restart ────────────────────────────────────────────────────────────
+cmd_restart() {
+  assert_workspace
+  cmd_stop
+  cmd_start "$@"
+}
+
+# ── axon logs ───────────────────────────────────────────────────────────────
+cmd_logs() {
+  assert_workspace
+  $COMPOSE_CMD logs -f "${1:-}"
+}
+
+# ── axon status ─────────────────────────────────────────────────────────────
+cmd_status() {
+  assert_workspace
+  $COMPOSE_CMD ps
+}
+
+# ── axon update ─────────────────────────────────────────────────────────────
+cmd_update() {
+  assert_workspace
+
+  step "Updating Axon..."
+  $COMPOSE_CMD pull
+  ok "Images updated"
+
+  ask "Restart now? [Y/n]:"
+  read -r restart
+  case "$restart" in
+    n|N|no) info "Run 'axon restart' when ready." ;;
+    *) cmd_restart "$@" ;;
+  esac
+}
+
+# ── axon doctor ─────────────────────────────────────────────────────────────
+cmd_doctor() {
+  banner
+  detect_platform
+
+  step "Checking system..."
+
+  # Docker
+  if check_docker; then
+    ok "Docker installed ($(docker --version | head -1))"
+  else
+    fail "Docker not installed"
+  fi
+
+  if check_docker_running; then
+    ok "Docker daemon running"
+  else
+    warn "Docker daemon not running"
+  fi
+
+  if check_docker_compose; then
+    ok "Docker Compose available ($($COMPOSE_CMD version --short 2>/dev/null || echo "unknown"))"
+  else
+    warn "Docker Compose not found"
+  fi
+
+  # Workspace
+  if [ -f "$AXON_MARKER" ]; then
+    ok "Inside Axon workspace (v$(cat "$AXON_MARKER"))"
+  else
+    warn "Not inside an Axon workspace"
+  fi
+
+  # .env
+  if [ -f ".env" ]; then
+    ok ".env file present"
+    if grep -q "ANTHROPIC_API_KEY=." .env 2>/dev/null || \
+       grep -q "OPENAI_API_KEY=." .env 2>/dev/null; then
+      ok "API key configured"
+    else
+      warn "No API key found in .env (needed unless using local LLMs only)"
+    fi
+  else
+    warn "No .env file"
+  fi
+
+  # Port availability
+  for port in 3000 8000; do
+    if ! (echo > /dev/tcp/localhost/$port) 2>/dev/null; then
+      ok "Port $port available"
+    else
+      warn "Port $port in use"
+    fi
+  done
+
+  printf "\n"
+}
+
+# ── axon self-update ────────────────────────────────────────────────────────
+cmd_self_update() {
+  info "Updating Axon CLI..."
+  local cli_url="https://raw.githubusercontent.com/${AXON_REPO}/main/cli/axon"
+  local self_path
+  self_path="$(command -v axon 2>/dev/null || echo "")"
+
+  if [ -z "$self_path" ]; then
+    fail "Cannot find axon in PATH"
+  fi
+
+  curl -fsSL "$cli_url" -o "$self_path.tmp"
+  chmod +x "$self_path.tmp"
+  mv "$self_path.tmp" "$self_path"
+  ok "Updated to latest version"
+}
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
+assert_workspace() {
+  # Load .env if present
+  if [ -f ".env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . ./.env
+    set +a
+  fi
+
+  if [ ! -f "$AXON_MARKER" ]; then
+    fail "Not an Axon workspace. Run 'axon init <name>' first or cd into your workspace."
+  fi
+
+  if ! check_docker_compose; then
+    fail "Docker Compose not found"
+  fi
+}
+
+# ── Usage ───────────────────────────────────────────────────────────────────
+usage() {
+  banner
+  printf "  ${BOLD}Usage:${RESET} axon <command> [options]\n\n"
+  printf "  ${BOLD}Commands:${RESET}\n"
+  printf "    ${CYAN}init${RESET} <name>      Create a new Axon workspace\n"
+  printf "    ${CYAN}start${RESET}            Start Axon services\n"
+  printf "    ${CYAN}stop${RESET}             Stop Axon services\n"
+  printf "    ${CYAN}restart${RESET}          Restart Axon services\n"
+  printf "    ${CYAN}logs${RESET} [service]   Tail logs (optionally for one service)\n"
+  printf "    ${CYAN}status${RESET}           Show running services\n"
+  printf "    ${CYAN}update${RESET}           Pull latest Axon images\n"
+  printf "    ${CYAN}doctor${RESET}           Check system dependencies\n"
+  printf "    ${CYAN}self-update${RESET}      Update the Axon CLI itself\n"
+  printf "    ${CYAN}version${RESET}          Show version\n"
+  printf "\n"
+  printf "  ${BOLD}Start options:${RESET}\n"
+  printf "    ${DIM}--local${RESET}          Enable local LLMs via Ollama\n"
+  printf "    ${DIM}--search${RESET}         Enable web search via SearXNG\n"
+  printf "\n"
+  printf "  ${BOLD}Examples:${RESET}\n"
+  printf "    ${DIM}axon init my-workspace${RESET}\n"
+  printf "    ${DIM}cd my-workspace && axon start${RESET}\n"
+  printf "    ${DIM}axon start --local --search${RESET}\n"
+  printf "\n"
+}
+
+# ── Main ────────────────────────────────────────────────────────────────────
+main() {
+  local cmd="${1:-}"
+  shift 2>/dev/null || true
+
+  case "$cmd" in
+    init)        cmd_init "$@" ;;
+    start)       cmd_start "$@" ;;
+    stop)        cmd_stop "$@" ;;
+    restart)     cmd_restart "$@" ;;
+    logs)        cmd_logs "$@" ;;
+    status)      cmd_status "$@" ;;
+    update)      cmd_update "$@" ;;
+    doctor)      cmd_doctor "$@" ;;
+    self-update) cmd_self_update "$@" ;;
+    version|-v|--version) printf "axon %s\n" "$AXON_VERSION" ;;
+    help|-h|--help|"") usage ;;
+    *)
+      fail "Unknown command: $cmd (run 'axon help' for usage)"
+      ;;
+  esac
+}
+
+main "$@"

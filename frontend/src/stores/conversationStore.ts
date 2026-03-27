@@ -26,6 +26,7 @@ interface ConversationStore {
 
   addMessage: (conversationId: string, message: ChatMessage) => void;
   appendToLast: (conversationId: string, content: string) => void;
+  replaceLastMessage: (conversationId: string, message: ChatMessage) => void;
   appendToSpeaker: (conversationId: string, speaker: string, content: string) => void;
   clearMessages: (conversationId: string) => void;
   replaceMessages: (conversationId: string, messages: ChatMessage[]) => void;
@@ -62,6 +63,21 @@ export const useConversationStore = create<ConversationStore>((set) => ({
           [conversationId]: [
             ...msgs.slice(0, -1),
             { ...last, content: last.content + content },
+          ],
+        },
+      };
+    }),
+
+  replaceLastMessage: (conversationId, message) =>
+    set((state) => {
+      const msgs = state.messages[conversationId] || [];
+      if (msgs.length === 0) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: [
+            ...msgs.slice(0, -1),
+            { ...message, id: message.id || `msg-${++messageCounter}` },
           ],
         },
       };

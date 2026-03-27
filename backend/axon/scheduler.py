@@ -76,6 +76,12 @@ DEFAULT_PROMPT = (
 )
 
 
+def _make_system_message(content: str) -> "Message":
+    """Create a system message for conversation history injection."""
+    from axon.agents.conversation import Message
+    return Message(role="system", content=content)
+
+
 class AgentScheduler:
     """Background loop that fires proactive checks for all agents."""
 
@@ -451,6 +457,31 @@ class AgentScheduler:
                 "status": "done",
             })
 
+            # Emit agent_result so the frontend can show completion inline
+            await ws_registry.push(agent_id, conversation_id, {
+                "type": "agent_result",
+                "agent_id": agent_id,
+                "content": response_text[:500] if response_text else "",
+                "metadata": {
+                    "source_agent": agent_id,
+                    "task_summary": task_title,
+                    "task_path": task_path,
+                    "status": "success",
+                },
+            })
+
+            # Inject result into conversation history so the agent knows
+            # about the completed work on its next turn
+            if response_text:
+                summary = response_text[:1000]
+                agent.conversation.messages.append(
+                    _make_system_message(
+                        f"[TASK COMPLETED] {task_title}\n\n"
+                        f"Agent `{agent_id}` finished the task. Summary:\n{summary}"
+                    )
+                )
+                agent.conversation._save()
+
             logger.info(
                 "[SCHEDULER] Task '%s' complete — %d chars",
                 task_title, len(response_text),
@@ -559,6 +590,38 @@ class AgentScheduler:
                 "task_title": task_title,
                 "status": "done",
             })
+
+            # Emit agent_result so the delegating agent's conversation gets the output
+            await ws_registry.push(ws_target, conversation_id, {
+                "type": "agent_result",
+                "agent_id": agent_id,
+                "content": response_text[:500] if response_text else "",
+                "metadata": {
+                    "source_agent": agent_id,
+                    "task_summary": task_title,
+                    "task_path": task_path,
+                    "status": "success",
+                },
+            })
+
+            # Inject result into the delegating agent's conversation history
+            if response_text and ws_target:
+                import axon.registry as _reg
+                # Find delegator in any org — try each until found
+                delegator = None
+                for _oid, _org in _reg.org_registry.items():
+                    if ws_target in _org.agent_registry:
+                        delegator = _org.agent_registry[ws_target]
+                        break
+                if delegator and hasattr(delegator, "conversation"):
+                    summary = response_text[:1000]
+                    delegator.conversation.messages.append(
+                        _make_system_message(
+                            f"[TASK COMPLETED by `{agent_id}`] {task_title}\n\n"
+                            f"Summary:\n{summary}"
+                        )
+                    )
+                    delegator.conversation._save()
 
             logger.info(
                 "[SCHEDULER] External task '%s' → %s complete — %d chars",

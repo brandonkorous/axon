@@ -1,0 +1,10 @@
+name = "axon-installer"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# The worker gets a free URL: axon-installer.<account>.workers.dev
+# To use get.useaxon.dev, add a CNAME in your DNS provider:
+#   get  →  axon-installer.<account>.workers.dev
+#
+# If your DNS is on Cloudflare, uncomment this for automatic setup:
+# routes = [{ pattern = "get.useaxon.dev", custom_domain = true }]

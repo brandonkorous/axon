@@ -200,6 +200,11 @@ def _init_org_agents(
     if not org.huddle:
         ensure_huddle(org, settings.axon_orgs_dir)
 
+    # Build peer rosters — each agent learns about its immediate teammates
+    for agent_id, agent in org.agent_registry.items():
+        if hasattr(agent, "build_roster") and not isinstance(agent, AxonAgent):
+            agent.build_roster(agents)
+
     return org
 
 

@@ -16,6 +16,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
     const agent = agents.find((a) => a.id === message.agentId);
 
     const isUser = message.role === "user";
+    const isAck = message.metadata?.type === "ack";
     const isCommandResult = message.metadata?.type === "command_result";
     const agentColor = agent?.ui.color || DEFAULT_AGENT_COLOR;
     const agentName = agent?.name || message.speaker || "Axon";
@@ -78,10 +79,12 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
             <div
                 className={`max-w-[80%] rounded-xl px-4 py-3 ${isUser
                     ? "bg-secondary/30 border border-secondary text-secondary"
-                    : "bg-base-300/50 text-base-content border border-base-300"
+                    : isAck
+                        ? "bg-base-300/30 text-base-content/60 border border-base-300/50 italic"
+                        : "bg-base-300/50 text-base-content border border-base-300"
                     }`}
             >
-                {!isUser && (
+                {!isUser && !isAck && (
                     <div className="text-xs font-semibold mb-1" style={{ color: agentColor }}>
                         {agentName}
                         {message.target && (

@@ -151,6 +151,9 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
         # Update orchestrator's specialist roster
         _refresh_orchestrator_roster(org)
 
+        # Rebuild peer rosters so existing agents discover the new teammate
+        _rebuild_peer_rosters(org)
+
         # Auto-create huddle if this is the first advisor
         ensure_huddle(org, settings.axon_orgs_dir)
 
@@ -224,3 +227,21 @@ def _refresh_orchestrator_roster(org) -> None:
             if aid in org.agent_registry
         }
         org.huddle.refresh_advisors(specialists, advisor_agents=advisor_agents)
+
+
+def _rebuild_peer_rosters(org) -> None:
+    """Rebuild peer rosters for all agents after a new agent is added."""
+    from axon.agents.axon_agent import AxonAgent
+
+    # Collect all configs from live agents
+    all_configs = {
+        aid: agent.config
+        for aid, agent in org.agent_registry.items()
+        if hasattr(agent, "config")
+    }
+
+    for agent in org.agent_registry.values():
+        if isinstance(agent, AxonAgent):
+            continue  # Orchestrator has its own roster
+        if hasattr(agent, "build_roster"):
+            agent.build_roster(all_configs)

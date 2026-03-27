@@ -193,6 +193,16 @@ DELEGATION_TOOLS: list[dict[str, Any]] = [
                         "enum": ["research", "audit", "implement", "investigate"],
                         "default": "research",
                     },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["async", "sync"],
+                        "description": (
+                            "async (default): fire-and-forget — task goes to inbox, "
+                            "results arrive later. sync: wait for the agent to complete "
+                            "and return the result inline."
+                        ),
+                        "default": "async",
+                    },
                 },
                 "required": ["to_agent", "task_description", "context", "expected_output"],
             },
@@ -224,6 +234,44 @@ RECRUITMENT_TOOLS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["role", "reason"],
+            },
+        },
+    },
+]
+
+
+DISCOVERY_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "find_agents",
+            "description": (
+                "Search the organization's agent registry. Returns agents matching "
+                "the given filters. Use this to discover agents beyond your immediate "
+                "team — e.g., workers, sub-agents, or specialists deeper in the org."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Free-text search across agent names, titles, and taglines",
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": ["advisor", "external"],
+                        "description": "Filter by agent type",
+                    },
+                    "parent_id": {
+                        "type": "string",
+                        "description": "Filter by parent agent ID (find children of a specific agent)",
+                    },
+                    "delegatable": {
+                        "type": "boolean",
+                        "description": "If true, only return agents you are allowed to delegate work to",
+                    },
+                },
+                "required": [],
             },
         },
     },
@@ -281,6 +329,9 @@ class ToolExecutor:
 
         # Integration executor for external service plugins
         self._integration_executor: "IntegrationToolExecutor | None" = integration_executor
+
+        # Stream callback — allows tools to emit StreamChunks mid-execution
+        self._stream_callback: Any = None  # set by Agent after init
 
         # Research executor for structured research workflows
         from axon.research.executor import ResearchToolExecutor
@@ -364,6 +415,7 @@ class ToolExecutor:
             "vault_link_outcome": self._vault_link_outcome,
             "delegate_task": self._delegate_task,
             "request_agent": self._request_agent,
+            "find_agents": self._find_agents,
         }
 
         handler = handlers.get(tool_name)
@@ -459,16 +511,85 @@ class ToolExecutor:
 
     async def _delegate_task(self, args: dict) -> str:
         import axon.registry as registry
+        from axon.agents.agent import StreamChunk
 
         to_agent = args["to_agent"]
+        mode = args.get("mode", "async")
 
-        # Resolve the target agent's vault
+        # Resolve the target agent
         target = registry.get_agent(self.org_id, to_agent)
         if not target:
             target = registry.agent_registry.get(to_agent)
         if not target:
             return f"Error: Agent '{to_agent}' not found."
 
+        task_desc = args["task_description"]
+
+        # Emit activation event (both modes)
+        await self._emit_stream_event(StreamChunk(
+            agent_id=self.agent_id,
+            type="agent_activated",
+            content=f"Delegating to {to_agent}...",
+            metadata={
+                "target_agent": to_agent,
+                "target_name": getattr(target, "name", to_agent),
+                "task_description": task_desc[:200],
+                "mode": mode,
+            },
+        ))
+
+        # ── Sync mode: execute directly and return result inline ──
+        if mode == "sync":
+            # Fail fast if target is busy
+            if hasattr(target, "_processing_lock") and target._processing_lock.locked():
+                return await self._delegate_task_async(args, target, to_agent)
+
+            prompt = (
+                f"[DELEGATED TASK from {self.agent_id}]\n\n"
+                f"## Task\n{task_desc}\n\n"
+                f"## Context\n{args['context']}\n\n"
+                f"## Expected Output\n{args['expected_output']}"
+            )
+
+            result_text = ""
+            try:
+                async for chunk in target.process(prompt, save_history=False):
+                    if chunk.type == "text":
+                        result_text += chunk.content
+            except Exception as e:
+                logger.error("[delegate_task] Sync delegation to %s failed: %s", to_agent, e)
+                await self._emit_stream_event(StreamChunk(
+                    agent_id=self.agent_id,
+                    type="agent_result",
+                    content="",
+                    metadata={
+                        "source_agent": to_agent,
+                        "task_summary": task_desc[:200],
+                        "status": "failed",
+                        "error": str(e),
+                    },
+                ))
+                return f"Error: Sync delegation to {to_agent} failed: {e}"
+
+            await self._emit_stream_event(StreamChunk(
+                agent_id=self.agent_id,
+                type="agent_result",
+                content=result_text[:500],
+                metadata={
+                    "source_agent": to_agent,
+                    "source_name": getattr(target, "name", to_agent),
+                    "task_summary": task_desc[:200],
+                    "status": "success",
+                },
+            ))
+
+            return f"[Result from {to_agent}]:\n\n{result_text}"
+
+        # ── Async mode (default): write to inbox + shared vault ──
+        return await self._delegate_task_async(args, target, to_agent)
+
+    async def _delegate_task_async(self, args: dict, target: Any, to_agent: str) -> str:
+        """Async delegation — write task to inbox for scheduler pickup."""
         today_str = str(date.today())
         slug = args.get("task_description", "task")[:40].lower().replace(" ", "-")
         task_path = f"inbox/{today_str}-{slug}.md"
@@ -524,7 +645,12 @@ class ToolExecutor:
                 shared_path, shared_meta, shared_content,
             )
 
-        return f"Task delegated to {to_agent}: {task_path}"
+        return f"Task delegated to {to_agent} (async): {task_path}"
+
+    async def _emit_stream_event(self, chunk: Any) -> None:
+        """Emit a stream event via the callback (set by Agent)."""
+        if self._stream_callback:
+            await self._stream_callback(chunk)
 
     async def _request_agent(self, args: dict) -> str:
         # Store in-memory for the current response
@@ -566,3 +692,55 @@ class ToolExecutor:
             f"Agent recruitment request submitted: {args['role']}. "
             f"The user will be asked to approve or deny this request."
         )
+
+    async def _find_agents(self, args: dict) -> str:
+        """Search the org agent registry with optional filters."""
+        import axon.registry as registry
+
+        org = registry.get_org(self.org_id)
+        if not org:
+            return "Error: Organization not found."
+
+        query = args.get("query", "").lower()
+        type_filter = args.get("type", "")
+        parent_filter = args.get("parent_id", "")
+        delegatable = args.get("delegatable", False)
+
+        # Resolve caller's delegation list
+        caller_delegates: list[str] = []
+        if delegatable:
+            caller = org.agent_registry.get(self.agent_id)
+            if caller:
+                caller_delegates = caller.config.delegation.can_delegate_to
+
+        results: list[str] = []
+        for aid, agent in org.agent_registry.items():
+            if aid == self.agent_id:
+                continue
+            cfg = agent.config
+            if cfg.type.value in ("orchestrator", "huddle"):
+                continue
+            if type_filter and cfg.type.value != type_filter:
+                continue
+            if parent_filter and cfg.parent_id != parent_filter:
+                continue
+            if delegatable:
+                if "*" not in caller_delegates and aid not in caller_delegates:
+                    continue
+            if query:
+                searchable = f"{cfg.name} {cfg.title} {cfg.tagline}".lower()
+                if query not in searchable:
+                    continue
+
+            line = (
+                f"- **{cfg.name}** (`{aid}`): {cfg.title}"
+                + (f" — {cfg.tagline}" if cfg.tagline else "")
+                + f"\n  Type: {cfg.type.value}"
+                + (f" | Parent: {cfg.parent_id}" if cfg.parent_id else "")
+                + f" | Delegates to: {', '.join(cfg.delegation.can_delegate_to) or 'none'}"
+            )
+            results.append(line)
+
+        if not results:
+            return "No agents found matching your criteria."
+        return f"Found {len(results)} agent(s):\n\n" + "\n\n".join(results)

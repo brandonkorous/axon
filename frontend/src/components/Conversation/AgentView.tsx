@@ -4,6 +4,7 @@ import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ConversationSwitcher } from "./ConversationSwitcher";
 import { ToolUseBadge } from "./ToolUseBadge";
+import { AgentActivityBadge } from "./AgentActivityBadge";
 import { WorkingIndicator } from "./WorkingIndicator";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
 import { AgentControls } from "../AgentControls/AgentControls";
@@ -19,7 +20,7 @@ import { DocumentDrawer } from "../Documents/DocumentDrawer";
 
 export function AgentView() {
   const { agentId } = useParams<{ agentId: string }>();
-  const { messages, addMessage, appendToLast } = useConversationStore();
+  const { messages, addMessage, appendToLast, replaceLastMessage } = useConversationStore();
   const { agents } = useAgentStore();
   const runtime = useAgentRuntime(agentId || "");
   const [openDocPath, setOpenDocPath] = useState<string | null>(null);
@@ -43,19 +44,46 @@ export function AgentView() {
         case "thinking":
           rs.setThinking(agentId, true, "chat");
           break;
+        case "ack":
+          // Quick acknowledgment from local model — show immediately
+          rs.setThinking(agentId, false);
+          addMessage(agentId, {
+            id: `ack-${Date.now()}`,
+            role: "assistant",
+            content,
+            agentId,
+            timestamp: Date.now(),
+            metadata: { type: "ack" },
+          });
+          // Re-enter thinking state so the indicator shows while vault loads
+          rs.setThinking(agentId, true, "chat");
+          break;
         case "text":
           if (taskPath) {
             rs.appendTaskLog(agentId, taskPath, content);
           }
           if (rs.agents[agentId]?.thinking) {
             rs.setThinking(agentId, false);
-            addMessage(agentId, {
-              id: `msg-${Date.now()}`,
-              role: "assistant",
-              content,
-              agentId,
-              timestamp: Date.now(),
-            });
+            // Replace ack message with real response if present
+            const msgs = useConversationStore.getState().messages[agentId] || [];
+            const lastMsg = msgs[msgs.length - 1];
+            if (lastMsg?.metadata?.type === "ack") {
+              replaceLastMessage(agentId, {
+                id: `msg-${Date.now()}`,
+                role: "assistant",
+                content,
+                agentId,
+                timestamp: Date.now(),
+              });
+            } else {
+              addMessage(agentId, {
+                id: `msg-${Date.now()}`,
+                role: "assistant",
+                content,
+                agentId,
+                timestamp: Date.now(),
+              });
+            }
           } else {
             appendToLast(agentId, content);
           }
@@ -107,6 +135,36 @@ export function AgentView() {
           }
           break;
         }
+        case "agent_activated": {
+          const meta = data.metadata as Record<string, unknown> | undefined;
+          addMessage(agentId, {
+            id: `agent-act-${Date.now()}`,
+            role: "system",
+            content: (meta?.task_description as string) || content,
+            timestamp: Date.now(),
+            metadata: {
+              type: "agent_activated",
+              target_agent: meta?.target_agent as string,
+              mode: meta?.mode as string,
+            },
+          });
+          break;
+        }
+        case "agent_result": {
+          const meta = data.metadata as Record<string, unknown> | undefined;
+          addMessage(agentId, {
+            id: `agent-res-${Date.now()}`,
+            role: "system",
+            content: (meta?.task_summary as string) || content,
+            timestamp: Date.now(),
+            metadata: {
+              type: "agent_result",
+              source_agent: meta?.source_agent as string,
+              status: meta?.status as string,
+            },
+          });
+          break;
+        }
         case "command_result": {
           const success = data.success as boolean;
           const command = data.command as string;
@@ -133,7 +191,7 @@ export function AgentView() {
           break;
       }
     },
-    [agentId, addMessage, appendToLast]
+    [agentId, addMessage, appendToLast, replaceLastMessage]
   );
 
   const { connected, send } = useWebSocket({
@@ -267,17 +325,32 @@ export function AgentView() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {conversationMessages.map((msg) =>
-          msg.metadata?.type === "tool_use" ? (
-            <ToolUseBadge
-              key={msg.id}
-              tool={msg.metadata.tool as string}
-              agentId={agent.id}
-            />
-          ) : (
-            <ChatMessage key={msg.id} message={msg} onDocumentOpen={setOpenDocPath} />
-          )
-        )}
+        {conversationMessages.map((msg) => {
+          if (msg.metadata?.type === "tool_use") {
+            return (
+              <ToolUseBadge
+                key={msg.id}
+                tool={msg.metadata.tool as string}
+                agentId={agent.id}
+              />
+            );
+          }
+
+          if (msg.metadata?.type === "agent_activated" || msg.metadata?.type === "agent_result") {
+            return (
+              <AgentActivityBadge
+                key={msg.id}
+                type={msg.metadata.type as "agent_activated" | "agent_result"}
+                agentId={(msg.metadata.target_agent || msg.metadata.source_agent) as string}
+                taskSummary={msg.content}
+                mode={msg.metadata.mode as string}
+                status={msg.metadata.status as string}
+              />
+            );
+          }
+
+          return <ChatMessage key={msg.id} message={msg} onDocumentOpen={setOpenDocPath} />;
+        })}
         {runtime.thinking && (
           <ThinkingIndicator color={agent.ui.color} agentName={agent.name} />
         )}
