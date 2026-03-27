@@ -166,3 +166,55 @@ superseded by a better entry in this batch.
 - It is fine to return empty arrays if nothing needs action. Be conservative.
 - The merged_confidence should reflect the combined evidence — typically higher \
 than either source alone, but capped at 0.9."""
+
+ORPHAN_ADOPTION_PROMPT = """\
+You are a memory organization engine. The following files in an AI agent's \
+knowledge vault are **orphans** — they exist on disk but are not reachable \
+from the vault's root node via any wikilink chain.
+
+## Vault Structure
+Root file: {root_file}
+Existing branches (with index files):
+{branches}
+
+## Orphan Files
+{orphans}
+
+For each orphan, decide the best action:
+
+1. **adopt** — Link it into an existing branch index. Choose the branch that \
+best matches the file's content.
+2. **link_root** — Link it directly from the root file (for top-level files \
+like instructions or config that don't belong in a branch).
+3. **archive** — The file is stale, empty, or redundant. Mark it archived.
+
+Respond with JSON only:
+```json
+{{
+  "adoptions": [
+    {{
+      "path": "branch/file.md",
+      "action": "adopt",
+      "target_branch": "learnings",
+      "reason": "Contains an insight about X that belongs in learnings"
+    }},
+    {{
+      "path": "instructions.md",
+      "action": "link_root",
+      "reason": "Agent identity doc should be linked from root"
+    }},
+    {{
+      "path": "branch/stale-note.md",
+      "action": "archive",
+      "reason": "Empty file with no meaningful content"
+    }}
+  ]
+}}
+```
+
+Rules:
+- Every orphan must appear in the adoptions array.
+- Prefer "adopt" for files clearly belonging to a branch.
+- Use "link_root" sparingly — only for files that genuinely belong at the top level.
+- Use "archive" only when the file has no useful content.
+- Be conservative — when in doubt, adopt into the closest matching branch."""

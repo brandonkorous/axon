@@ -18,8 +18,13 @@ from axon.vault.memory_consolidation_actions import (
     execute_archives,
     execute_contradictions,
     execute_merges,
+    execute_orphan_adoptions,
 )
-from axon.vault.memory_prompts import CONSOLIDATION_REVIEW_PROMPT, parse_llm_json
+from axon.vault.memory_prompts import (
+    CONSOLIDATION_REVIEW_PROMPT,
+    ORPHAN_ADOPTION_PROMPT,
+    parse_llm_json,
+)
 from axon.vault.vault import VaultManager
 
 if TYPE_CHECKING:
@@ -71,12 +76,22 @@ async def deep_consolidate(
             logger.warning("[%s] %s", agent_id, error_msg)
             report.errors.append(error_msg)
 
+    # Phase 5: Orphan adoption — find detached files and reattach them
+    try:
+        await _adopt_orphans(vault, model, config, usage_tracker, agent_id, org_id, today, report)
+    except Exception as e:
+        report.errors.append(f"Orphan adoption failed: {e}")
+        logger.warning("[%s] Orphan adoption failed: %s", agent_id, e)
+
     logger.info(
         "[%s] Deep consolidation complete — reviewed=%d, auto_archived=%d, "
-        "merged=%d, archived=%d, contradictions=%d, errors=%d",
+        "merged=%d, archived=%d, contradictions=%d, "
+        "orphans_adopted=%d, orphans_linked_root=%d, orphans_archived=%d, errors=%d",
         agent_id, report.entries_reviewed, report.auto_archived,
         report.llm_merged, report.llm_archived,
-        report.contradictions_flagged, len(report.errors),
+        report.contradictions_flagged,
+        report.orphans_adopted, report.orphans_linked_root, report.orphans_archived,
+        len(report.errors),
     )
     return report
 
@@ -197,3 +212,82 @@ async def _review_batch(
                 pass
 
     return parse_llm_json(response.get("content", ""))
+
+
+async def _adopt_orphans(
+    vault: VaultManager,
+    model: str,
+    config: LearningConfig,
+    usage_tracker: "UsageTracker | None",
+    agent_id: str,
+    org_id: str,
+    today: str,
+    report: ConsolidationReport,
+) -> None:
+    """Find orphan files and ask the LLM where to reattach them."""
+    orphans = vault.find_orphans()
+    if not orphans:
+        return
+
+    # Build context about existing branches
+    graph = vault.graph
+    branch_lines: list[str] = []
+    seen_branches: set[str] = set()
+    for node in graph.nodes.values():
+        if node.branch and node.branch not in seen_branches:
+            seen_branches.add(node.branch)
+            branch_lines.append(f"- {node.branch}/")
+    branches_text = "\n".join(sorted(branch_lines)) or "_(no branches yet)_"
+
+    # Build orphan summaries
+    orphan_lines: list[str] = []
+    for o in orphans:
+        try:
+            _, body = vault.read_file(o["path"])
+            excerpt = body.strip()[:150]
+        except Exception:
+            excerpt = "(unreadable)"
+        orphan_lines.append(f"[{o['path']}] {o['title']} — {o['description']}")
+        orphan_lines.append(f"> {excerpt}")
+        orphan_lines.append("")
+
+    prompt = ORPHAN_ADOPTION_PROMPT.format(
+        root_file=vault.root_file,
+        branches=branches_text,
+        orphans="\n".join(orphan_lines),
+    )
+
+    response = await complete(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=config.memory_max_tokens,
+        temperature=0.1,
+    )
+
+    if usage_tracker:
+        usage = response.get("usage")
+        if usage:
+            try:
+                usage_tracker.record(
+                    model=model,
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                    cost=usage.get("cost", 0.0),
+                    agent_id=agent_id, org_id=org_id,
+                    call_type="completion", caller="orphan_adoption",
+                )
+            except Exception:
+                pass
+
+    actions = parse_llm_json(response.get("content", ""))
+    if not actions:
+        return
+
+    execute_orphan_adoptions(vault, actions.get("adoptions", []), today, report)
+
+    logger.info(
+        "[%s] Orphan adoption — found=%d, adopted=%d, linked_root=%d, archived=%d",
+        agent_id, len(orphans), report.orphans_adopted,
+        report.orphans_linked_root, report.orphans_archived,
+    )

@@ -1,0 +1,42 @@
+name: brainstorming
+version: "1.0"
+category: planning
+description: >
+  Structured ideation framework that separates divergent thinking from
+  convergent evaluation. Guides the agent through unconstrained idea
+  generation, lateral thinking techniques, thematic grouping, and
+  feasibility-based prioritization.
+
+triggers:
+  - brainstorm
+  - ideas
+  - ideate
+  - creative
+  - possibilities
+  - options
+  - explore
+
+inputs:
+  - name: topic
+    type: string
+    required: true
+    description: The problem, opportunity, or question to brainstorm around
+  - name: constraints
+    type: string
+    required: false
+    description: Known constraints — budget, timeline, technology, team size
+  - name: idea_count
+    type: integer
+    required: false
+    default: 10
+    description: Minimum number of ideas to generate in the diverge phase
+
+outputs:
+  - name: ideas
+    type: list
+    description: All generated ideas with brief descriptions
+  - name: ranked_shortlist
+    type: list
+    description: Top candidates ranked by feasibility and impact
+
+methodology_file: methodology.md

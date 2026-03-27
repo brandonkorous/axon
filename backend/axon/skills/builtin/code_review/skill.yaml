@@ -1,0 +1,40 @@
+name: code_review
+version: "1.0"
+category: engineering
+description: >
+  Systematic code review framework covering correctness,
+  security, performance, and maintainability. Prioritizes
+  findings by severity and distinguishes blockers from nitpicks.
+
+triggers:
+  - review
+  - code review
+  - PR
+  - pull request
+  - review code
+  - audit code
+
+inputs:
+  - name: code
+    type: string
+    required: true
+    description: The code to review — file contents, diff, or PR reference
+  - name: context
+    type: string
+    required: false
+    description: What the code is supposed to do, relevant architecture decisions
+  - name: focus
+    type: list
+    required: false
+    default: [correctness, security, performance, maintainability]
+    description: Which review dimensions to prioritize
+
+outputs:
+  - name: findings
+    type: list
+    description: Prioritized list of issues with severity, category, and suggested fixes
+  - name: summary
+    type: string
+    description: Overall assessment and recommendation (approve, request changes, block)
+
+methodology_file: methodology.md

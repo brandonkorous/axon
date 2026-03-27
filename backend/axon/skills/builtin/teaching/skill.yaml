@@ -1,0 +1,41 @@
+name: teaching
+version: "1.0"
+category: communication
+description: >
+  Progressive disclosure framework for explaining concepts at the right
+  level of depth. Guides the agent through assessing learner context,
+  building mental models incrementally, using analogies, providing
+  concrete examples, and checking understanding.
+
+triggers:
+  - explain
+  - teach
+  - how does
+  - what is
+  - help me understand
+  - learn
+  - tutorial
+
+inputs:
+  - name: topic
+    type: string
+    required: true
+    description: The concept, system, or skill to teach
+  - name: learner_level
+    type: string
+    required: false
+    description: Learner's current level — beginner, intermediate, advanced
+  - name: context
+    type: string
+    required: false
+    description: What the learner already knows or what they are trying to accomplish
+
+outputs:
+  - name: explanation
+    type: markdown
+    description: The structured explanation with examples and mental models
+  - name: follow_up
+    type: list
+    description: Suggested next topics or exercises to deepen understanding
+
+methodology_file: methodology.md

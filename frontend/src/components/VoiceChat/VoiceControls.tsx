@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useVoiceChatStore } from "../../stores/voiceChatStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 const ICON_TRANSITION = { duration: 0.15, ease: [0.25, 1, 0.5, 1] as const };
 
@@ -30,7 +31,7 @@ export function VoiceControls() {
   const close = useVoiceChatStore((s) => s.close);
   const muted = useVoiceChatStore((s) => s.muted);
   const setMuted = useVoiceChatStore((s) => s.setMuted);
-  const openSettings = useVoiceChatStore((s) => s.openSettings);
+  const openSettings = useSettingsStore((s) => s.open);
 
   return (
     <div className="flex items-center justify-center gap-6 px-4 py-3 flex-shrink-0">
@@ -90,7 +91,7 @@ export function VoiceControls() {
       </motion.button>
 
       <motion.button
-        onClick={openSettings}
+        onClick={() => openSettings("voice")}
         whileHover={{ scale: 1.1, rotate: 30 }}
         whileTap={{ scale: 0.9 }}
         transition={ICON_TRANSITION}

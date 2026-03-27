@@ -6,10 +6,13 @@ import logging
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from axon.config import settings
+from axon.db.engine import get_session
+from axon.db.crud import org_settings as org_settings_crud
 import axon.registry as registry
 from axon.org import OrgCommsConfig, OrgConfig, OrgType, scaffold_org, load_org_config
 from axon.org_templates import list_templates, get_template, scaffold_from_template
@@ -99,50 +102,71 @@ async def get_org(org_id: str):
 
 
 @router.patch("/{org_id}")
-async def update_org(org_id: str, body: UpdateOrgRequest):
-    """Update an organization's name, description, or type."""
+async def update_org(
+    org_id: str,
+    body: UpdateOrgRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update an organization's name, description, or type.
+
+    Persists to both the central DB (primary) and org.yaml (backup).
+    """
     org = registry.get_org(org_id)
     if not org:
         raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
 
-    orgs_dir = settings.axon_orgs_dir
-    if not orgs_dir:
-        raise HTTPException(status_code=400, detail="Multi-org mode not enabled.")
-
-    # Persist to org.yaml
-    yaml_path = Path(orgs_dir) / org_id / "org.yaml"
-    if not yaml_path.exists():
-        raise HTTPException(status_code=500, detail="org.yaml not found")
-
-    with open(yaml_path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-
+    # Build patch dict for DB update
+    patch: dict = {}
     if body.name is not None:
-        data["name"] = body.name
+        patch["name"] = body.name
         org.config.name = body.name
     if body.description is not None:
-        data["description"] = body.description
+        patch["description"] = body.description
         org.config.description = body.description
     if body.type is not None:
-        data["type"] = body.type.value
+        patch["type"] = body.type.value
         org.config.type = body.type
     if body.comms is not None:
-        comms_data = data.setdefault("comms", {})
+        comms_patch: dict = {}
         if body.comms.require_approval is not None:
-            comms_data["require_approval"] = body.comms.require_approval
+            comms_patch["require_approval"] = body.comms.require_approval
             org.config.comms.require_approval = body.comms.require_approval
         if body.comms.email_domain is not None:
-            comms_data["email_domain"] = body.comms.email_domain
+            comms_patch["email_domain"] = body.comms.email_domain
             org.config.comms.email_domain = body.comms.email_domain
         if body.comms.email_signature is not None:
-            comms_data["email_signature"] = body.comms.email_signature
+            comms_patch["email_signature"] = body.comms.email_signature
             org.config.comms.email_signature = body.comms.email_signature
         if body.comms.inbound_polling is not None:
-            comms_data["inbound_polling"] = body.comms.inbound_polling
+            comms_patch["inbound_polling"] = body.comms.inbound_polling
             org.config.comms.inbound_polling = body.comms.inbound_polling
+        if comms_patch:
+            patch["comms"] = comms_patch
 
-    with open(yaml_path, "w", encoding="utf-8") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    # Primary: persist to central DB
+    await org_settings_crud.update_settings(session, org_id, patch)
+
+    # Backup: also persist to org.yaml
+    orgs_dir = settings.axon_orgs_dir
+    if orgs_dir:
+        yaml_path = Path(orgs_dir) / org_id / "org.yaml"
+        if yaml_path.exists():
+            try:
+                with open(yaml_path, encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                if body.name is not None:
+                    data["name"] = body.name
+                if body.description is not None:
+                    data["description"] = body.description
+                if body.type is not None:
+                    data["type"] = body.type.value
+                if body.comms is not None:
+                    comms_data = data.setdefault("comms", {})
+                    comms_data.update(patch.get("comms", {}))
+                with open(yaml_path, "w", encoding="utf-8") as f:
+                    yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            except Exception:
+                logger.warning("Failed to write org.yaml backup for %s", org_id)
 
     logger.info("Organization '%s' updated", org_id)
 

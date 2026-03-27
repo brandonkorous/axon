@@ -67,3 +67,29 @@ class ConnectedAccount(Base, TimestampMixin):
 
     user: Mapped[User] = relationship(back_populates="connected_accounts")
     credential: Mapped[Credential] = relationship(back_populates="connected_accounts")
+
+
+class OrgSettings(Base, TimestampMixin):
+    """Organization settings — mirrors org.yaml but persisted in central DB."""
+
+    __tablename__ = "org_settings"
+
+    org_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    type: Mapped[str] = mapped_column(String(50), default="startup")
+    comms_require_approval: Mapped[bool] = mapped_column(default=True)
+    comms_email_domain: Mapped[str] = mapped_column(String(255), default="")
+    comms_email_signature: Mapped[str] = mapped_column(Text, default="")
+    comms_inbound_polling: Mapped[bool] = mapped_column(default=False)
+
+
+class UserPreference(Base, TimestampMixin):
+    """User preferences — theme, voice, display settings."""
+
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    theme: Mapped[str] = mapped_column(String(20), default="dark")
+    voice_settings_json: Mapped[str] = mapped_column(Text, default="{}")
+    display_prefs_json: Mapped[str] = mapped_column(Text, default="{}")

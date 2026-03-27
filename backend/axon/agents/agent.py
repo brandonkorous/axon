@@ -190,7 +190,20 @@ class Agent:
         self._processing_lock = asyncio.Lock()
 
     async def setup(self) -> None:
-        """Async post-init — load credentials for integrations."""
+        """Async post-init — initialize agent DB, build index, load credentials."""
+        from axon.db.agent_engine import init_agent_db
+        from axon.db.crud.vault_index import rebuild_index
+
+        self._agent_db = await init_agent_db(self.config.vault.path)
+
+        # Populate vault index from markdown files
+        async with self._agent_db() as session:
+            count = await rebuild_index(session, self.config.vault.path)
+        logger.debug("[%s] agent.db initialized, %d files indexed", self.id, count)
+
+        # Sync vault file changes to agent.db
+        self.vault.on_change(self._on_vault_change)
+
         if not self._integration_executor:
             return
         from axon.integrations.credentials import load_integration_credentials
@@ -204,6 +217,52 @@ class Agent:
             )
             self.tool_executor._integration_executor = self._integration_executor
             self.tools = self._build_tool_list()
+
+    def _on_vault_change(self, relative_path: str, event: str) -> None:
+        """Sync a vault file change to agent.db (called by VaultManager)."""
+        import asyncio
+        from axon.db.crud.vault_index import upsert_entry, remove_entry
+        from axon.vault.frontmatter import parse_frontmatter
+
+        if not hasattr(self, "_agent_db") or self._agent_db is None:
+            return
+
+        async def _sync():
+            async with self._agent_db() as session:
+                if event == "remove":
+                    await remove_entry(session, relative_path)
+                    return
+                # Read file and upsert
+                try:
+                    cached = self.vault.cache.get(relative_path)
+                    if cached:
+                        metadata, body = cached.metadata, cached.body
+                    else:
+                        raw = (self.vault.vault_path / relative_path).read_text(encoding="utf-8")
+                        metadata, body = parse_frontmatter(raw)
+                    tags = metadata.get("tags", "")
+                    if isinstance(tags, list):
+                        tags = ", ".join(tags)
+                    await upsert_entry(session, {
+                        "path": relative_path,
+                        "name": str(metadata.get("name", "")),
+                        "description": str(metadata.get("description", "")),
+                        "type": str(metadata.get("type", "")),
+                        "tags": str(tags),
+                        "content_preview": body[:500],
+                        "confidence": float(metadata.get("confidence", 0.5)),
+                        "status": str(metadata.get("status", "active")),
+                        "learning_type": str(metadata.get("learning_type", "")),
+                        "date": str(metadata.get("date", "")),
+                    })
+                except Exception:
+                    logger.debug("[%s] Failed to sync %s to agent.db", self.id, relative_path)
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_sync())
+        except RuntimeError:
+            pass  # No event loop — skip sync
 
     @property
     def conversation(self) -> Conversation:
@@ -485,6 +544,14 @@ class Agent:
         prompt = identity + org_context + self.system_prompt
         if self.lifecycle.strategy_override:
             prompt += f"\n\n## Strategy Override (from user)\n{self.lifecycle.strategy_override}"
+
+        # Inject cognitive skill methodologies if any are active
+        if hasattr(self.config, "skills") and self.config.skills and self.config.skills.enabled:
+            from axon.skills.resolver import resolve_skills_for_message, build_skill_prompt
+            active_skills = resolve_skills_for_message(user_message, self.config.skills.enabled)
+            skill_prompt = build_skill_prompt(active_skills)
+            if skill_prompt:
+                prompt += f"\n\n{skill_prompt}"
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": prompt},

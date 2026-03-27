@@ -23,3 +23,6 @@ Parking lot for ideas not yet acted on.
 ### Learnings
 Auto-extracted insights, patterns, and corrections from conversations.
 - [[learnings/learnings-index]]
+
+## Agent Identity
+- [[instructions]]

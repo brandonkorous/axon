@@ -1,0 +1,42 @@
+name: summarization
+version: "1.0"
+category: communication
+description: >
+  Layered distillation framework for producing clear, purpose-driven
+  summaries. Guides the agent through identifying intent, extracting
+  key points, separating facts from opinions, and delivering summaries
+  at multiple levels of detail.
+
+triggers:
+  - summarize
+  - summary
+  - brief
+  - digest
+  - key points
+  - TLDR
+  - recap
+
+inputs:
+  - name: content
+    type: string
+    required: true
+    description: The text, conversation, document, or topic to summarize
+  - name: purpose
+    type: string
+    required: false
+    description: Why the summary is needed — inform, decide, act, share
+  - name: length
+    type: string
+    required: false
+    default: multi-layer
+    description: Desired length — one-liner, short, detailed, multi-layer
+
+outputs:
+  - name: summary
+    type: markdown
+    description: The layered summary with one-liner, bullets, and detailed sections
+  - name: action_items
+    type: list
+    description: Extracted next steps or action items, if applicable
+
+methodology_file: methodology.md

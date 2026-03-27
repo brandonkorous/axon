@@ -11,3 +11,6 @@ Assigned tasks and their status.
 ### Output
 Completed work and deliverables.
 - [[output/output-index]]
+
+## Agent Identity
+- [[instructions]]

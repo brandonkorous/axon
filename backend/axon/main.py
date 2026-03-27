@@ -50,9 +50,10 @@ from axon.routes import usage as usage_routes
 from axon.routes import worker_control as worker_control_routes
 from axon.routes import worker_setup as worker_setup_routes
 from axon.routes import credentials as credentials_routes
-from axon.routes import integrations as integrations_routes
 from axon.routes import sandbox as sandbox_routes
+from axon.routes import plugins as plugins_routes
 from axon.routes import skills as skills_routes
+from axon.routes import user_prefs as user_prefs_routes
 
 
 logger = logging.getLogger(__name__)
@@ -207,9 +208,12 @@ def init_orgs() -> None:
     _configure_logging()
     _export_api_keys()
 
-    # Discover available integration plugins before loading agents
+    # Discover available integrations, then register all plugins (including integration adapters)
     from axon.integrations.registry import discover_integrations
     discover_integrations()
+
+    from axon.plugins.registry import discover_plugins
+    discover_plugins()
 
     from axon.skills.registry import discover_skills
     discover_skills()
@@ -259,6 +263,26 @@ async def lifespan(app: FastAPI):
     from axon.db import init_db, shutdown_db
     await init_db()
 
+    # Seed org settings into central DB from org.yaml (first-run migration)
+    from axon.db.engine import get_session as _get_session
+    from axon.db.crud import org_settings as org_settings_crud
+
+    async for session in _get_session():
+        for org_id, org in registry.org_registry.items():
+            await org_settings_crud.seed_from_config(
+                session,
+                org_id=org_id,
+                name=org.config.name,
+                description=org.config.description,
+                org_type=org.config.type.value if hasattr(org.config.type, "value") else str(org.config.type),
+                comms={
+                    "require_approval": org.config.comms.require_approval,
+                    "email_domain": org.config.comms.email_domain,
+                    "email_signature": org.config.comms.email_signature,
+                    "inbound_polling": org.config.comms.inbound_polling,
+                },
+            )
+
     # Load integration credentials now that DB is available
     for org in registry.org_registry.values():
         for agent in org.agent_registry.values():
@@ -307,6 +331,8 @@ async def lifespan(app: FastAPI):
     await scheduler.stop()
     if email_poller:
         await email_poller.stop()
+    from axon.db.agent_engine import shutdown_all_agent_dbs
+    await shutdown_all_agent_dbs()
     await shutdown_db()
     if discord_bot:
         await discord_bot.close()
@@ -338,10 +364,13 @@ app.include_router(recruitment_routes.org_router, prefix="/api/orgs/{org_id}/rec
 app.include_router(worker_setup_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(worker_control_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(sandbox_routes.org_router, prefix="/api/orgs/{org_id}/sandbox", tags=["sandbox"])
+app.include_router(plugins_routes.org_router, prefix="/api/orgs/{org_id}/plugins", tags=["plugins"])
 app.include_router(skills_routes.org_router, prefix="/api/orgs/{org_id}/skills", tags=["skills"])
 app.include_router(usage_routes.org_router, prefix="/api/orgs/{org_id}/usage", tags=["usage"])
 app.include_router(credentials_routes.org_router, prefix="/api/orgs/{org_id}/credentials", tags=["credentials"])
-app.include_router(integrations_routes.org_router, prefix="/api/orgs/{org_id}/integrations", tags=["integrations"])
+
+# ── Global routes (not org-scoped) ─────────────────────────────────
+app.include_router(user_prefs_routes.router, prefix="/api/preferences", tags=["preferences"])
 
 # ── Legacy routes (backward compat — route to default org) ─────────
 app.include_router(agents_routes.router, prefix="/api/agents", tags=["agents"])

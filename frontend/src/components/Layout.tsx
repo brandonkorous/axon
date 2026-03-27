@@ -7,24 +7,24 @@ import { StatusBadge } from "./AgentControls/AgentControls";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { VoiceChatFAB } from "./VoiceChat/VoiceChatFAB";
 import { VoiceChatOverlay } from "./VoiceChat/VoiceChatOverlay";
-import { VoiceSettingsModal } from "./VoiceChat/VoiceSettingsModal";
-import { useVoiceChatStore } from "../stores/voiceChatStore";
+import { SettingsModal } from "./Settings/SettingsModal";
+import { useSettingsStore } from "../stores/settingsStore";
 import { useApprovalStore } from "../stores/approvalStore";
 import { useInboxStore } from "../stores/inboxStore";
 
-function getInitialTheme(): "axon" | "axon-dark" {
-  const stored = localStorage.getItem("axon-theme");
-  if (stored === "axon" || stored === "axon-dark") return stored;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "axon-dark"
-    : "axon";
+// Apply stored theme on load (GeneralTab manages it when settings are open)
+const storedTheme = localStorage.getItem("axon-theme");
+if (storedTheme === "axon" || storedTheme === "axon-dark") {
+  document.documentElement.setAttribute("data-theme", storedTheme);
+} else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+  document.documentElement.setAttribute("data-theme", "axon-dark");
 }
 
 export function Layout() {
   const { agents, fetchAgents, loading } = useAgentStore();
   const thinkingAgentIds = useThinkingAgents();
   const { fetchOrgs } = useOrgStore();
-  const openVoiceSettings = useVoiceChatStore((s) => s.openSettings);
+  const openSettings = useSettingsStore((s) => s.open);
   const approvalCount = useApprovalStore((s) => s.approvals.length);
   const fetchPending = useApprovalStore((s) => s.fetchPending);
   const inboxPendingCount = useInboxStore(
@@ -32,13 +32,7 @@ export function Layout() {
   );
   const fetchInbox = useInboxStore((s) => s.fetchAll);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [theme, setTheme] = useState(getInitialTheme);
   const location = useLocation();
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("axon-theme", theme);
-  }, [theme]);
 
   useEffect(() => {
     fetchOrgs().then(() => fetchAgents());
@@ -222,6 +216,11 @@ export function Layout() {
 
             <li className="menu-title mt-4">Extensions</li>
             <li>
+              <NavLink to="/plugins" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Plugins
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/skills" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 Skills
               </NavLink>
@@ -241,20 +240,9 @@ export function Layout() {
 
             <li className="menu-title mt-4">Settings</li>
             <li>
-              <button onClick={openVoiceSettings}>
-                Voice
+              <button onClick={() => openSettings()}>
+                Settings
               </button>
-            </li>
-            <li>
-              <label className="flex items-center justify-between gap-2 cursor-pointer">
-                <span>{theme === "axon" ? "Dark Mode" : "Light Mode"}</span>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm"
-                  checked={theme === "axon-dark"}
-                  onChange={() => setTheme(theme === "axon" ? "axon-dark" : "axon")}
-                />
-              </label>
             </li>
           </ul>
         </nav>
@@ -280,7 +268,7 @@ export function Layout() {
 
       <VoiceChatFAB />
       <VoiceChatOverlay />
-      <VoiceSettingsModal />
+      <SettingsModal />
     </div>
   );
 }

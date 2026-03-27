@@ -1,0 +1,42 @@
+name: decision_analysis
+version: "1.0"
+category: analysis
+description: >
+  Structured decision framework for evaluating options against weighted
+  criteria. Guides the agent through decision clarification, criteria
+  identification, option evaluation, risk assessment, and producing
+  a recommendation with an explicit reasoning chain.
+
+triggers:
+  - decide
+  - decision
+  - choose
+  - compare
+  - trade-off
+  - pros and cons
+  - evaluate options
+  - which should
+
+inputs:
+  - name: decision
+    type: string
+    required: true
+    description: The decision to be made or the question to resolve
+  - name: options
+    type: list
+    required: false
+    description: Known options to evaluate — if omitted, the agent will identify them
+  - name: constraints
+    type: string
+    required: false
+    description: Hard constraints — budget, timeline, must-haves, dealbreakers
+
+outputs:
+  - name: analysis
+    type: markdown
+    description: Full decision analysis with criteria, scoring, and recommendation
+  - name: recommendation
+    type: string
+    description: The recommended option with a one-paragraph justification
+
+methodology_file: methodology.md

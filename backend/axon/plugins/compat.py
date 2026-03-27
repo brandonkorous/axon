@@ -1,20 +1,20 @@
-"""Compatibility layer — wrap existing BaseIntegration as BaseSkill."""
+"""Compatibility layer — wrap existing BaseIntegration as BasePlugin."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from axon.integrations.base import BaseIntegration
-from axon.skills.base import BaseSkill
-from axon.skills.manifest import SkillManifest
+from axon.plugins.base import BasePlugin
+from axon.plugins.manifest import PluginManifest
 
 
-class IntegrationSkillAdapter(BaseSkill):
-    """Wraps an existing BaseIntegration as a BaseSkill.
+class IntegrationPluginAdapter(BasePlugin):
+    """Wraps an existing BaseIntegration as a BasePlugin.
 
     This allows the integration registry to coexist with the
-    skill registry during migration. Existing integrations
-    continue to work unchanged while also appearing as skills.
+    plugin registry. Existing integrations continue to work
+    unchanged while also appearing as plugins.
     """
 
     def __init__(self, integration_cls: type[BaseIntegration]) -> None:
@@ -23,7 +23,7 @@ class IntegrationSkillAdapter(BaseSkill):
 
         # Build manifest from integration class attributes
         proto = integration_cls()
-        self.manifest = SkillManifest(
+        self.manifest = PluginManifest(
             name=proto.name or integration_cls.__name__.lower(),
             description=proto.description,
             tool_prefix=proto.tool_prefix,

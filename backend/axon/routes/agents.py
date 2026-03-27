@@ -31,6 +31,32 @@ class PersonaUpdateRequest(BaseModel):
     email_alias: str | None = None
 
 
+class ModelUpdateRequest(BaseModel):
+    """Patchable model configuration fields."""
+
+    reasoning: str | None = None
+    navigator: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+
+
+class DelegationUpdateRequest(BaseModel):
+    """Patchable delegation configuration."""
+
+    can_delegate_to: list[str] | None = None
+    accepts_from: list[str] | None = None
+
+
+class LearningUpdateRequest(BaseModel):
+    """Patchable learning configuration fields."""
+
+    enabled: bool | None = None
+    memory_model: str | None = None
+    consolidation_interval: int | None = None
+    confidence_decay_days: int | None = None
+    max_recall_tokens: int | None = None
+
+
 def _agent_email(agent, email_domain: str) -> str | None:
     """Build agent email address if comms is enabled and domain is set."""
     if email_domain and getattr(agent.config, "comms", None) and agent.config.comms.enabled:
@@ -198,6 +224,150 @@ async def update_agent_persona(org_id: str, agent_id: str, body: PersonaUpdateRe
     logger.info("Agent '%s' persona updated in org '%s'", agent_id, org_id)
     email_domain = org.config.comms.email_domain if org.config.comms else ""
     return _get_agent_detail(agent, email_domain)
+
+
+def _get_agent_or_404(org_id: str, agent_id: str):
+    """Resolve org + agent, raising 404 on miss."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Org not found: {org_id}")
+    agent = org.agent_registry.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+    return org, agent
+
+
+def _load_agent_yaml(agent) -> tuple[Path, dict]:
+    """Load and return (path, data) for an agent's YAML file."""
+    yaml_path = Path(agent.config.vault.path) / "agent.yaml"
+    if not yaml_path.exists():
+        raise HTTPException(status_code=500, detail="agent.yaml not found")
+    with open(yaml_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return yaml_path, data
+
+
+def _save_agent_yaml(yaml_path: Path, data: dict) -> None:
+    """Persist agent YAML data."""
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+
+# ── Model config endpoints ─────────────────────────────────────────
+
+
+@org_router.get("/{agent_id}/model")
+async def get_agent_model(org_id: str, agent_id: str):
+    """Get an agent's model configuration."""
+    _, agent = _get_agent_or_404(org_id, agent_id)
+    return {
+        "reasoning": agent.config.model.reasoning,
+        "navigator": agent.config.model.navigator,
+        "max_tokens": agent.config.model.max_tokens,
+        "temperature": agent.config.model.temperature,
+    }
+
+
+@org_router.patch("/{agent_id}/model")
+async def update_agent_model(org_id: str, agent_id: str, body: ModelUpdateRequest):
+    """Update an agent's model configuration."""
+    _, agent = _get_agent_or_404(org_id, agent_id)
+    yaml_path, data = _load_agent_yaml(agent)
+    model_data = data.setdefault("model", {})
+
+    if body.reasoning is not None:
+        model_data["reasoning"] = body.reasoning
+        agent.config.model.reasoning = body.reasoning
+    if body.navigator is not None:
+        model_data["navigator"] = body.navigator
+        agent.config.model.navigator = body.navigator
+    if body.max_tokens is not None:
+        model_data["max_tokens"] = body.max_tokens
+        agent.config.model.max_tokens = body.max_tokens
+    if body.temperature is not None:
+        model_data["temperature"] = body.temperature
+        agent.config.model.temperature = body.temperature
+
+    _save_agent_yaml(yaml_path, data)
+    logger.info("Agent '%s' model config updated in org '%s'", agent_id, org_id)
+    return {"ok": True}
+
+
+# ── Delegation config endpoints ────────────────────────────────────
+
+
+@org_router.get("/{agent_id}/delegation")
+async def get_agent_delegation(org_id: str, agent_id: str):
+    """Get an agent's delegation configuration."""
+    _, agent = _get_agent_or_404(org_id, agent_id)
+    return {
+        "can_delegate_to": agent.config.delegation.can_delegate_to,
+        "accepts_from": agent.config.delegation.accepts_from,
+    }
+
+
+@org_router.patch("/{agent_id}/delegation")
+async def update_agent_delegation(org_id: str, agent_id: str, body: DelegationUpdateRequest):
+    """Update an agent's delegation configuration."""
+    _, agent = _get_agent_or_404(org_id, agent_id)
+    yaml_path, data = _load_agent_yaml(agent)
+    deleg_data = data.setdefault("delegation", {})
+
+    if body.can_delegate_to is not None:
+        deleg_data["can_delegate_to"] = body.can_delegate_to
+        agent.config.delegation.can_delegate_to = body.can_delegate_to
+    if body.accepts_from is not None:
+        deleg_data["accepts_from"] = body.accepts_from
+        agent.config.delegation.accepts_from = body.accepts_from
+
+    _save_agent_yaml(yaml_path, data)
+    logger.info("Agent '%s' delegation updated in org '%s'", agent_id, org_id)
+    return {"ok": True}
+
+
+# ── Learning config endpoints ──────────────────────────────────────
+
+
+@org_router.get("/{agent_id}/learning")
+async def get_agent_learning(org_id: str, agent_id: str):
+    """Get an agent's learning configuration."""
+    _, agent = _get_agent_or_404(org_id, agent_id)
+    lc = agent.config.learning
+    return {
+        "enabled": lc.enabled,
+        "memory_model": lc.memory_model,
+        "consolidation_interval": lc.consolidation_interval,
+        "confidence_decay_days": lc.confidence_decay_days,
+        "max_recall_tokens": lc.max_recall_tokens,
+    }
+
+
+@org_router.patch("/{agent_id}/learning")
+async def update_agent_learning(org_id: str, agent_id: str, body: LearningUpdateRequest):
+    """Update an agent's learning configuration."""
+    _, agent = _get_agent_or_404(org_id, agent_id)
+    yaml_path, data = _load_agent_yaml(agent)
+    learn_data = data.setdefault("learning", {})
+
+    if body.enabled is not None:
+        learn_data["enabled"] = body.enabled
+        agent.config.learning.enabled = body.enabled
+    if body.memory_model is not None:
+        learn_data["memory_model"] = body.memory_model
+        agent.config.learning.memory_model = body.memory_model
+    if body.consolidation_interval is not None:
+        learn_data["consolidation_interval"] = body.consolidation_interval
+        agent.config.learning.consolidation_interval = body.consolidation_interval
+    if body.confidence_decay_days is not None:
+        learn_data["confidence_decay_days"] = body.confidence_decay_days
+        agent.config.learning.confidence_decay_days = body.confidence_decay_days
+    if body.max_recall_tokens is not None:
+        learn_data["max_recall_tokens"] = body.max_recall_tokens
+        agent.config.learning.max_recall_tokens = body.max_recall_tokens
+
+    _save_agent_yaml(yaml_path, data)
+    logger.info("Agent '%s' learning config updated in org '%s'", agent_id, org_id)
+    return {"ok": True}
 
 
 def _refresh_orchestrator_roster(org) -> None:

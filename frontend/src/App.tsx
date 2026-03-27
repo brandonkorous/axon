@@ -17,7 +17,10 @@ import { WorkerListView } from "./components/Workers/WorkerListView";
 import { WorkerDetailView } from "./components/Workers/WorkerDetailView";
 import { WorkerSetupView } from "./components/Workers/WorkerSetupView";
 import { DocumentView } from "./components/Documents/DocumentView";
+import { PluginBrowser } from "./components/Plugins/PluginBrowser";
+import { PluginCreateView } from "./components/Plugins/PluginCreateView";
 import { SkillBrowser } from "./components/Skills/SkillBrowser";
+import { SkillCreateView } from "./components/Skills/SkillCreateView";
 import { ArtifactViewer } from "./components/Artifacts/ArtifactViewer";
 
 export default function App() {
@@ -38,7 +41,10 @@ export default function App() {
         <Route path="/usage" element={<UsageView />} />
         <Route path="/mind/:agentId?" element={<MindView />} />
         <Route path="/memory/:agentId?" element={<MindView />} />
+        <Route path="/plugins" element={<PluginBrowser />} />
+        <Route path="/plugins/new" element={<PluginCreateView />} />
         <Route path="/skills" element={<SkillBrowser />} />
+        <Route path="/skills/new" element={<SkillCreateView />} />
         <Route path="/artifacts" element={<ArtifactViewer />} />
         <Route path="/workers" element={<WorkerListView />} />
         <Route path="/workers/new" element={<WorkerSetupView />} />

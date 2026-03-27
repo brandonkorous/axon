@@ -1,82 +1,57 @@
-"""Skill resolver — determine which skills to activate for a given message."""
+"""Cognitive skill resolver — selects and assembles skills for agent prompts."""
 
 from __future__ import annotations
 
-import logging
-from typing import Any
-
-from axon.skills.base import BaseSkill
-from axon.skills.registry import SKILL_REGISTRY
-
-logger = logging.getLogger(__name__)
+from axon.skills.registry import SKILL_REGISTRY, SKILL_METHODOLOGY, get_skill
 
 
-def resolve_skills(
-    message: str,
-    enabled_skills: list[str],
-    always_loaded: list[str] | None = None,
-) -> list[str]:
-    """Determine which skills should be active for this message.
+def resolve_skills_for_message(message: str, enabled_skills: list[str]) -> list[str]:
+    """Return skill names to activate for the given message.
 
-    Returns a list of skill names that should have their tools
-    available to the agent for this turn.
-
-    Priority:
-    1. Skills marked auto_load that are in enabled_skills
-    2. Skills in always_loaded list
-    3. Skills whose triggers match the message content
+    - Skills with auto_inject=True are always included (if enabled).
+    - Others are included if any of their triggers appear in the message.
     """
-    active: set[str] = set()
-
-    # Always-on skills
-    for name in (always_loaded or []):
-        if name in SKILL_REGISTRY:
-            active.add(name)
+    message_lower = message.lower()
+    active: list[str] = []
 
     for name in enabled_skills:
-        cls = SKILL_REGISTRY.get(name)
-        if not cls:
+        defn = get_skill(name)
+        if not defn:
             continue
 
-        instance = cls()
-
-        # Auto-load skills are always active
-        if instance.manifest.auto_load:
-            active.add(name)
+        if defn.auto_inject:
+            active.append(name)
             continue
 
         # Check trigger keywords
-        if instance.matches_trigger(message):
-            active.add(name)
-            logger.debug("Skill '%s' activated by trigger match", name)
+        for trigger in defn.triggers:
+            if trigger.lower() in message_lower:
+                active.append(name)
+                break
 
-    return sorted(active)
+    return active
 
 
-def get_skill_tools(
-    skill_names: list[str],
-    credentials_map: dict[str, dict[str, Any]] | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, BaseSkill]]:
-    """Collect tool schemas and handler map for a set of skills.
+def build_skill_prompt(skill_names: list[str]) -> str:
+    """Build the combined prompt fragment for active skills.
 
-    Returns (tool_schemas, handler_map) where handler_map maps
-    tool_name → skill_instance for routing.
+    Returns empty string if no skills are active.
     """
-    tools: list[dict[str, Any]] = []
-    handlers: dict[str, BaseSkill] = {}
+    if not skill_names:
+        return ""
 
+    sections: list[str] = []
     for name in skill_names:
-        cls = SKILL_REGISTRY.get(name)
-        if not cls:
+        defn = SKILL_REGISTRY.get(name)
+        methodology = SKILL_METHODOLOGY.get(name, "")
+        if not defn or not methodology:
             continue
 
-        instance = cls()
-        instance.configure((credentials_map or {}).get(name))
+        # Convert snake_case name to Title Case for display
+        display_name = defn.name.replace("_", " ").title()
+        sections.append(f"### {display_name}\n\n{methodology}")
 
-        for schema in instance.get_tools():
-            tool_name = schema.get("function", {}).get("name", "")
-            if tool_name:
-                tools.append(schema)
-                handlers[tool_name] = instance
+    if not sections:
+        return ""
 
-    return tools, handlers
+    return "## Active Skills\n\n" + "\n\n".join(sections)

@@ -1,1 +1,1 @@
-"""Skills — progressive skill loading and management for Axon agents."""
+"""Cognitive skills — structured reasoning patterns for Axon agents."""

@@ -184,6 +184,37 @@ class VaultGraph:
             ],
         }
 
+    def find_orphans(self, root_file: str = "second-brain.md") -> list[GraphNode]:
+        """Return nodes unreachable from the root via BFS (both directions).
+
+        An orphan is any markdown file with zero incoming *and* outgoing links
+        to the rest of the connected component containing the root.  The root
+        file itself is never considered an orphan.
+        """
+        if root_file not in self.nodes:
+            return []
+
+        # BFS from root, following links in both directions
+        visited: set[str] = set()
+        queue = [root_file]
+        visited.add(root_file)
+
+        while queue:
+            current = queue.pop(0)
+            for neighbor in self.adjacency.get(current, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+            for backer in self.backlinks.get(current, []):
+                if backer not in visited:
+                    visited.add(backer)
+                    queue.append(backer)
+
+        return [
+            node for path, node in self.nodes.items()
+            if path not in visited
+        ]
+
     def get_stats(self) -> dict:
         """Return graph statistics."""
         branch_counts: dict[str, int] = {}

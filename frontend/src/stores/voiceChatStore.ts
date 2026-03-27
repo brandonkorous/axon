@@ -15,6 +15,22 @@ function storedBool(key: string, fallback: boolean): boolean {
   return v === null ? fallback : v === "true";
 }
 
+/** Fire-and-forget sync of voice settings to the preferences API. */
+function syncVoiceToApi() {
+  const voice_settings = {
+    sensitivity: parseFloat(localStorage.getItem("axon-mic-sensitivity") ?? "0.5"),
+    silenceTimeout: parseFloat(localStorage.getItem("axon-silence-timeout") ?? "1500"),
+    playbackSpeed: parseFloat(localStorage.getItem("axon-playback-speed") ?? "1"),
+    autoInterrupt: localStorage.getItem("axon-auto-interrupt") !== "false",
+    selectedVoice: localStorage.getItem("axon-selected-voice") ?? "",
+  };
+  fetch("/api/preferences", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voice_settings }),
+  }).catch(() => {});
+}
+
 interface VoiceChatStore {
   // UI
   isOpen: boolean;
@@ -89,30 +105,35 @@ export const useVoiceChatStore = create<VoiceChatStore>((set) => ({
   setSensitivity: (sensitivity) => {
     localStorage.setItem("axon-mic-sensitivity", String(sensitivity));
     set({ sensitivity });
+    syncVoiceToApi();
   },
 
   silenceTimeout: stored("axon-silence-timeout", 1500),
   setSilenceTimeout: (silenceTimeout) => {
     localStorage.setItem("axon-silence-timeout", String(silenceTimeout));
     set({ silenceTimeout });
+    syncVoiceToApi();
   },
 
   playbackSpeed: stored("axon-playback-speed", 1.0),
   setPlaybackSpeed: (playbackSpeed) => {
     localStorage.setItem("axon-playback-speed", String(playbackSpeed));
     set({ playbackSpeed });
+    syncVoiceToApi();
   },
 
   autoInterrupt: storedBool("axon-auto-interrupt", true),
   setAutoInterrupt: (autoInterrupt) => {
     localStorage.setItem("axon-auto-interrupt", String(autoInterrupt));
     set({ autoInterrupt });
+    syncVoiceToApi();
   },
 
   selectedVoice: storedStr("axon-selected-voice", ""),
   setSelectedVoice: (selectedVoice) => {
     localStorage.setItem("axon-selected-voice", selectedVoice);
     set({ selectedVoice });
+    syncVoiceToApi();
   },
 
   amplitude: 0,

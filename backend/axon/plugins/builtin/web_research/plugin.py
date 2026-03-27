@@ -1,18 +1,18 @@
-"""Web research skill — search and fetch web content."""
+"""Web research plugin — search and fetch web content."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from axon.skills.base import BaseSkill
-from axon.skills.manifest import SkillManifest
+from axon.plugins.base import BasePlugin
+from axon.plugins.manifest import PluginManifest
 from axon.web.tools import WEB_TOOLS
 
 
-class WebResearchSkill(BaseSkill):
-    """Provides web_search and web_fetch tools as a skill."""
+class WebResearchPlugin(BasePlugin):
+    """Provides web_search and web_fetch tools as a plugin."""
 
-    manifest = SkillManifest(
+    manifest = PluginManifest(
         name="web_research",
         version="1.0.0",
         description="Search the web and fetch page content for research",

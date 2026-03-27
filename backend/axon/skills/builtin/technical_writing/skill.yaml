@@ -1,0 +1,41 @@
+name: technical_writing
+version: "1.0"
+category: communication
+description: >
+  Audience-aware documentation framework for producing clear, precise
+  technical content. Guides the agent through audience identification,
+  format selection, structured outlining, and quality checks for
+  specs, RFCs, guides, runbooks, and other technical documents.
+
+triggers:
+  - write doc
+  - documentation
+  - spec
+  - RFC
+  - technical writing
+  - write up
+
+inputs:
+  - name: topic
+    type: string
+    required: true
+    description: The subject or system to document
+  - name: audience
+    type: string
+    required: false
+    description: Target reader — developer, PM, executive, end-user
+  - name: format
+    type: string
+    required: false
+    default: guide
+    description: Desired document type — spec, RFC, guide, runbook, ADR, tutorial
+
+outputs:
+  - name: document
+    type: markdown
+    description: The finished technical document
+  - name: outline
+    type: list
+    description: Section-level outline used to structure the document
+
+methodology_file: methodology.md

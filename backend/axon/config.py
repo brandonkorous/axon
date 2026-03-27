@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings
 
 from axon.comms.config import CommsConfig  # noqa: E402 — no circular import risk
 from axon.integrations.config import IntegrationConfig  # noqa: E402
+from axon.plugins.config import PluginsConfig  # noqa: E402
 from axon.skills.config import SkillsConfig  # noqa: E402
 from axon.browser.config import BrowserConfig  # noqa: E402
 from axon.media.config import MediaConfig  # noqa: E402
@@ -166,6 +167,7 @@ class PersonaConfig(BaseModel):
     comms: CommsConfig = CommsConfig()
     web: WebConfig = WebConfig()
     integrations: IntegrationConfig = IntegrationConfig()
+    plugins: PluginsConfig = PluginsConfig()
     skills: SkillsConfig = SkillsConfig()
     browser: BrowserConfig = BrowserConfig()
     media: MediaConfig = MediaConfig()

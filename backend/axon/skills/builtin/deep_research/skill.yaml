@@ -1,0 +1,40 @@
+name: deep_research
+version: "1.0"
+category: research
+description: >
+  Multi-step investigation framework for thorough research tasks.
+  Guides the agent through scoping, source gathering, credibility
+  evaluation, cross-referencing, and structured synthesis.
+
+triggers:
+  - research
+  - investigate
+  - find out
+  - deep dive
+  - analyze sources
+  - literature review
+
+inputs:
+  - name: topic
+    type: string
+    required: true
+    description: The subject or question to research
+  - name: scope
+    type: string
+    required: false
+    description: Constraints on breadth/depth (e.g., "last 2 years", "US market only")
+  - name: output_format
+    type: string
+    required: false
+    default: structured_report
+    description: Desired output shape — structured_report, bullet_summary, annotated_bibliography
+
+outputs:
+  - name: report
+    type: markdown
+    description: Structured findings with citations and confidence levels
+  - name: sources
+    type: list
+    description: All sources consulted, with credibility ratings
+
+methodology_file: methodology.md

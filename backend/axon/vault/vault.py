@@ -34,6 +34,23 @@ class VaultManager:
         self._cache: VaultCache | None = None
         self._graph: VaultGraph | None = None
         self._watcher: VaultWatcher | None = None
+        self._on_change_callbacks: list = []
+
+    def on_change(self, callback) -> None:
+        """Register a callback invoked after any file write/create/remove.
+
+        Callback signature: callback(relative_path: str, event: str)
+        where event is "write", "create", or "remove".
+        """
+        self._on_change_callbacks.append(callback)
+
+    def _notify_change(self, relative_path: str, event: str) -> None:
+        """Fire all registered on_change callbacks."""
+        for cb in self._on_change_callbacks:
+            try:
+                cb(relative_path, event)
+            except Exception:
+                pass  # Don't let callback errors break vault operations
 
     @property
     def root_path(self) -> Path:
@@ -111,16 +128,23 @@ class VaultManager:
     def write_file(
         self,
         relative_path: str,
-        metadata: dict[str, Any],
-        body: str,
+        metadata: dict[str, Any] | None = None,
+        body: str = "",
+        *,
         _bypass_audit_check: bool = False,
+        auto_link: bool = True,
     ) -> str:
-        """Write a file with YAML frontmatter. Creates parent directories if needed.
+        """Write (or overwrite) a file in the vault.
 
-        Returns the relative path of the written file.
-        The audit/ branch is protected — only the AuditLogger (via _bypass_audit_check)
-        can write there.
+        If the file does not yet exist and ``auto_link`` is True, it will be
+        automatically linked into the branch index so it's reachable from the
+        root.  Pass ``auto_link=False`` for files that manage their own
+        linking (e.g. index files themselves).
+
+        Returns the *relative_path* for convenience.
         """
+        is_new = not (self.vault_path / relative_path).exists()
+
         if not _bypass_audit_check:
             from axon.audit import is_audit_branch
             if is_audit_branch(relative_path):
@@ -135,7 +159,30 @@ class VaultManager:
         # Update cache + invalidate derived graph
         self.cache.update(relative_path)
         self._invalidate_graph()
+        self._notify_change(relative_path, "write")
+
+        # Auto-link new files into their branch index
+        if is_new and auto_link:
+            self._auto_link_new_file(relative_path, metadata or {})
+
         return relative_path
+
+    def _auto_link_new_file(self, relative_path: str, metadata: dict[str, Any]) -> None:
+        """Link a newly created file into the branch index if it's inside a branch."""
+        parts = relative_path.split("/")
+        if len(parts) < 2:
+            # Root-level file — nothing to auto-link into
+            return
+
+        branch = parts[0]
+        name = Path(relative_path).stem
+
+        # Don't index the index files themselves
+        if name in (f"{branch}-index", f"{branch}-log", branch):
+            return
+
+        description = metadata.get("description", metadata.get("name", name))
+        self._update_branch_index(branch, name, description)
 
     def create_file(
         self,
@@ -150,7 +197,8 @@ class VaultManager:
         Returns the relative path of the created file.
         """
         relative_path = f"{branch}/{name}.md" if not name.endswith(".md") else f"{branch}/{name}"
-        self.write_file(relative_path, metadata, body)
+        # Disable auto_link — create_file manages its own index updates
+        self.write_file(relative_path, metadata, body, auto_link=False)
 
         if update_index:
             self._update_branch_index(
@@ -201,6 +249,27 @@ class VaultManager:
         if cached:
             return cached.links
         return self.graph.get_neighbors(relative_path)
+
+    # ── Graph analysis ─────────────────────────────────────────────
+
+    def find_orphans(self) -> list[dict[str, Any]]:
+        """Return vault files unreachable from the root.
+
+        Each entry is a dict with path, name, branch, title, and description
+        — enough for a consolidation pass to decide where to attach them.
+        """
+        orphans = self.graph.find_orphans(self.root_file)
+        return [
+            {
+                "path": o.path,
+                "name": o.name,
+                "branch": o.branch,
+                "title": o.title,
+                "description": o.description,
+                "tags": o.tags,
+            }
+            for o in orphans
+        ]
 
     # ── Context building (for memory navigator) ──────────────────────
 

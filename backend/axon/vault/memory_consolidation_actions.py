@@ -25,6 +25,9 @@ class ConsolidationReport:
     llm_merged: int = 0
     llm_archived: int = 0
     contradictions_flagged: int = 0
+    orphans_adopted: int = 0
+    orphans_linked_root: int = 0
+    orphans_archived: int = 0
     batches_processed: int = 0
     errors: list[str] = field(default_factory=list)
 
@@ -114,6 +117,97 @@ def execute_contradictions(
             report.contradictions_flagged += 1
         except Exception as e:
             report.errors.append(f"Contradiction failed for {path_a} vs {path_b}: {e}")
+
+
+def execute_orphan_adoptions(
+    vault: VaultManager,
+    adoptions: list[dict[str, Any]],
+    today: str,
+    report: ConsolidationReport,
+) -> None:
+    """Link orphan files into the tree based on LLM recommendations."""
+    for adoption in adoptions:
+        path = adoption.get("path", "")
+        action = adoption.get("action", "")
+        if not path or not action:
+            continue
+        try:
+            if action == "adopt":
+                _adopt_into_branch(vault, adoption, report)
+            elif action == "link_root":
+                _link_to_root(vault, adoption, report)
+            elif action == "archive":
+                _archive_orphan(vault, path, adoption.get("reason", ""), today, report)
+        except Exception as e:
+            report.errors.append(f"Orphan adoption failed for {path}: {e}")
+
+
+def _adopt_into_branch(
+    vault: VaultManager,
+    adoption: dict[str, Any],
+    report: ConsolidationReport,
+) -> None:
+    """Link an orphan file into a branch index."""
+    path = adoption["path"]
+    branch = adoption.get("target_branch", "")
+    if not branch:
+        return
+
+    name = Path(path).stem
+    try:
+        metadata, _ = vault.read_file(path)
+    except FileNotFoundError:
+        return
+    description = metadata.get("description", metadata.get("name", name))
+    vault._update_branch_index(branch, name, description)
+    report.orphans_adopted += 1
+
+
+def _link_to_root(
+    vault: VaultManager,
+    adoption: dict[str, Any],
+    report: ConsolidationReport,
+) -> None:
+    """Link an orphan file directly from the root."""
+    path = adoption["path"]
+    stem = Path(path).stem
+    root = vault.vault_path / vault.root_file
+    if not root.exists():
+        return
+
+    content = root.read_text(encoding="utf-8")
+    if f"[[{stem}]]" in content or f"[[{path.removesuffix('.md')}]]" in content:
+        return  # Already linked
+
+    content = content.rstrip() + f"\n- [[{stem}]]\n"
+    root.write_text(content, encoding="utf-8")
+    vault.cache.update(vault.root_file)
+    vault._invalidate_graph()
+    report.orphans_linked_root += 1
+
+
+def _archive_orphan(
+    vault: VaultManager,
+    path: str,
+    reason: str,
+    today: str,
+    report: ConsolidationReport,
+) -> None:
+    """Mark an orphan as archived."""
+    try:
+        metadata, body = vault.read_file(path)
+    except FileNotFoundError:
+        return
+    metadata["status"] = "archived"
+    history = metadata.get("confidence_history", [])
+    history.append({
+        "date": today,
+        "value": metadata.get("confidence", 0.0),
+        "reason": f"orphan archived — {reason}",
+    })
+    metadata["confidence_history"] = history
+    vault.write_file(path, metadata, body, auto_link=False)
+    report.orphans_archived += 1
 
 
 # ── Internal helpers ─────────────────────────────────────────────

@@ -1,25 +1,25 @@
-"""Skill manifest — metadata and configuration for a skill package."""
+"""Plugin manifest — metadata and configuration for a plugin package."""
 
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
 
-class SkillManifest(BaseModel):
-    """Declarative metadata for a skill package.
+class PluginManifest(BaseModel):
+    """Declarative metadata for a plugin package.
 
-    Loaded from skill.yaml in the skill directory or declared
-    programmatically by built-in skills.
+    Loaded from plugin.yaml in the plugin directory or declared
+    programmatically by built-in plugins.
     """
 
-    name: str = Field(description="Unique skill identifier (snake_case)")
+    name: str = Field(description="Unique plugin identifier (snake_case)")
     version: str = Field(default="1.0.0", description="Semantic version")
     description: str = Field(default="", description="Human-readable description")
-    author: str = Field(default="axon", description="Skill author or package name")
+    author: str = Field(default="axon", description="Plugin author or package name")
 
     # Tool configuration
     tool_prefix: str = Field(default="", description="Prefix for tool names (e.g. 'web_')")
-    tools: list[str] = Field(default_factory=list, description="Tool names provided by this skill")
+    tools: list[str] = Field(default_factory=list, description="Tool names provided by this plugin")
 
     # Dependencies
     python_deps: list[str] = Field(default_factory=list, description="Required Python packages")
@@ -34,13 +34,13 @@ class SkillManifest(BaseModel):
     # Loading behavior
     auto_load: bool = Field(
         default=False,
-        description="Always load for agents with this skill enabled",
+        description="Always load for agents with this plugin enabled",
     )
     triggers: list[str] = Field(
         default_factory=list,
-        description="Keywords/phrases that activate this skill on demand",
+        description="Keywords/phrases that activate this plugin on demand",
     )
 
     # Categorization
-    category: str = Field(default="general", description="Skill category for UI grouping")
+    category: str = Field(default="general", description="Plugin category for UI grouping")
     icon: str = Field(default="", description="Icon name or emoji for UI display")

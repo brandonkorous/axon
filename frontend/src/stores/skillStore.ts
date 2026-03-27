@@ -8,16 +8,27 @@ export interface SkillInfo {
   author: string;
   category: string;
   icon: string;
-  auto_load: boolean;
   triggers: string[];
-  tools: string[];
-  required_credentials: string[];
+  auto_inject: boolean;
+  is_builtin: boolean;
+  methodology_preview: string;
 }
 
 export interface SkillDetail extends SkillInfo {
-  tools: { name: string; description: string }[];
-  python_deps: string[];
+  methodology: string;
   agents_using: string[];
+}
+
+export interface SkillCreatePayload {
+  name: string;
+  description?: string;
+  version?: string;
+  author?: string;
+  category?: string;
+  icon?: string;
+  triggers?: string[];
+  auto_inject?: boolean;
+  methodology?: string;
 }
 
 interface SkillStore {
@@ -29,6 +40,9 @@ interface SkillStore {
   fetchSkillDetail: (name: string) => Promise<void>;
   enableSkill: (skillName: string, agentId: string) => Promise<boolean>;
   disableSkill: (skillName: string, agentId: string) => Promise<boolean>;
+  createSkill: (data: SkillCreatePayload) => Promise<boolean>;
+  updateSkill: (name: string, data: Partial<SkillCreatePayload>) => Promise<boolean>;
+  deleteSkill: (name: string) => Promise<{ deleted: boolean; agents_affected: string[] }>;
 }
 
 export const useSkillStore = create<SkillStore>((set) => ({
@@ -82,6 +96,47 @@ export const useSkillStore = create<SkillStore>((set) => ({
       return res.ok;
     } catch {
       return false;
+    }
+  },
+
+  createSkill: async (data) => {
+    try {
+      const res = await fetch(orgApiPath("skills"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  updateSkill: async (name, data) => {
+    try {
+      const res = await fetch(orgApiPath(`skills/${name}`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteSkill: async (name) => {
+    try {
+      const res = await fetch(orgApiPath(`skills/${name}`), {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { deleted: true, agents_affected: data.agents_affected || [] };
+      }
+      return { deleted: false, agents_affected: [] };
+    } catch {
+      return { deleted: false, agents_affected: [] };
     }
   },
 }));

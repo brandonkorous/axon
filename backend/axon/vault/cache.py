@@ -91,7 +91,11 @@ class VaultCache:
             self._recompute_backlinks()
 
     def search(self, query: str, max_results: int = 20) -> list[dict[str, Any]]:
-        """Full-text search across cached files."""
+        """Full-text search across cached files.
+
+        Uses in-memory scan. For FTS5-powered search, use
+        search_fts() from axon.db.crud.vault_index with the agent's DB session.
+        """
         results: list[dict[str, Any]] = []
         query_lower = query.lower()
 

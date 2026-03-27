@@ -1,0 +1,42 @@
+name: project_planning
+version: "1.0"
+category: planning
+description: >
+  Goal decomposition and project planning framework.
+  Guides the agent through objective clarification, constraint
+  identification, work breakdown, dependency mapping, estimation,
+  risk analysis, and milestone definition.
+
+triggers:
+  - plan
+  - project
+  - roadmap
+  - milestones
+  - timeline
+  - decompose
+  - break down
+
+inputs:
+  - name: objective
+    type: string
+    required: true
+    description: The goal or outcome the project should achieve
+  - name: constraints
+    type: string
+    required: false
+    description: Known constraints — budget, timeline, team size, technical limitations
+  - name: granularity
+    type: string
+    required: false
+    default: workstream
+    description: Level of detail — epic, workstream, task
+
+outputs:
+  - name: plan
+    type: markdown
+    description: Structured project plan with workstreams, milestones, and timeline
+  - name: risks
+    type: list
+    description: Identified risks with likelihood, impact, and mitigations
+
+methodology_file: methodology.md

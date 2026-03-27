@@ -1,0 +1,41 @@
+name: strategic_analysis
+version: "1.0"
+category: analysis
+description: >
+  Structured strategic analysis using established frameworks.
+  Guides the agent through problem framing, data gathering,
+  multi-framework analysis, pattern identification, and
+  actionable recommendations.
+
+triggers:
+  - strategy
+  - SWOT
+  - competitive
+  - market analysis
+  - strategic
+  - landscape
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The entity, market, or decision to analyze
+  - name: context
+    type: string
+    required: false
+    description: Background information, constraints, or specific angles to emphasize
+  - name: frameworks
+    type: list
+    required: false
+    default: [swot, porters_five_forces]
+    description: Which frameworks to apply — swot, porters_five_forces, competitive_map, market_sizing
+
+outputs:
+  - name: analysis
+    type: markdown
+    description: Multi-framework analysis with cross-framework patterns
+  - name: recommendations
+    type: list
+    description: Prioritized actionable recommendations with confidence levels
+
+methodology_file: methodology.md

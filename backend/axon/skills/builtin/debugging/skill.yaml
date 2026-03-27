@@ -1,0 +1,43 @@
+name: debugging
+version: "1.0"
+category: engineering
+description: >
+  Structured root cause analysis for debugging issues.
+  Guides the agent through reproduction, hypothesis generation,
+  systematic testing, verification, and documentation.
+
+triggers:
+  - debug
+  - bug
+  - error
+  - broken
+  - not working
+  - investigate issue
+  - root cause
+
+inputs:
+  - name: symptom
+    type: string
+    required: true
+    description: What is going wrong — error message, unexpected behavior, or failing test
+  - name: context
+    type: string
+    required: false
+    description: When it started, what changed recently, environment details
+  - name: code
+    type: string
+    required: false
+    description: Relevant code, logs, or stack traces
+
+outputs:
+  - name: root_cause
+    type: string
+    description: Identified root cause with supporting evidence
+  - name: fix
+    type: string
+    description: Recommended fix with code changes
+  - name: prevention
+    type: string
+    description: How to prevent this class of bug in the future
+
+methodology_file: methodology.md
