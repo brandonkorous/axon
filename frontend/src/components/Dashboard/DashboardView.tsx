@@ -139,7 +139,7 @@ export function DashboardView() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-base-content">{agent.name}</span>
+                      <span className="font-semibold text-base-content">{agent.name}{agent.title_tag && <span className="font-normal text-base-content/50 ml-1">({agent.title_tag})</span>}</span>
                       {agent.lifecycle && agent.lifecycle.status !== "active" && (
                         <StatusBadge status={agent.lifecycle.status} />
                       )}

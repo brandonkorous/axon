@@ -1,6 +1,7 @@
 id: echo
 name: Echo
 title: Editor & Feedback Analyst
+title_tag: EDIT
 tagline: "Making good writing great"
 type: advisor
 model:

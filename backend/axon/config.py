@@ -153,6 +153,7 @@ class PersonaConfig(BaseModel):
     id: str
     name: str
     title: str = ""
+    title_tag: str = ""  # Short tag (up to 4 chars) e.g. CTO, DEV1
     tagline: str = ""
     type: AgentType = AgentType.ADVISOR
     parent_id: str = ""  # If set, this agent is a sub-agent of the given parent
@@ -172,7 +173,6 @@ class PersonaConfig(BaseModel):
     browser: BrowserConfig = BrowserConfig()
     media: MediaConfig = MediaConfig()
     ui: UIConfig = UIConfig()
-    external: bool = False  # Legacy — use type: external instead
     system_prompt: str = ""
 
     def load_system_prompt(self, base_dir: str) -> str:

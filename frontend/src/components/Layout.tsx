@@ -11,6 +11,7 @@ import { SettingsModal } from "./Settings/SettingsModal";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useApprovalStore } from "../stores/approvalStore";
 import { useInboxStore } from "../stores/inboxStore";
+import { useWorkerStore } from "../stores/workerStore";
 
 // Apply stored theme on load (GeneralTab manages it when settings are open)
 const storedTheme = localStorage.getItem("axon-theme");
@@ -31,12 +32,24 @@ export function Layout() {
     (s) => s.items.filter((i) => i.status === "pending").length
   );
   const fetchInbox = useInboxStore((s) => s.fetchAll);
+  const workers = useWorkerStore((s) => s.workers);
+  const fetchWorkers = useWorkerStore((s) => s.fetchWorkers);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     fetchOrgs().then(() => fetchAgents());
   }, [fetchOrgs, fetchAgents]);
+
+  const orgLoading = useOrgStore((s) => s.loading);
+  const activeOrgId = useOrgStore((s) => s.activeOrgId);
+
+  useEffect(() => {
+    if (orgLoading) return;
+    fetchWorkers();
+    const interval = setInterval(fetchWorkers, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchWorkers, orgLoading, activeOrgId]);
 
   useEffect(() => {
     fetchPending();
@@ -169,7 +182,7 @@ export function Layout() {
                             className={`w-2 h-2 rounded-full${thinkingAgentIds.includes(agent.id) ? " animate-pulse" : ""}`}
                             style={{ backgroundColor: agent.ui.color }}
                           />
-                          {agent.name}
+                          {agent.name}{agent.title_tag && ` - ${agent.title_tag}`}
                           {agent.lifecycle && agent.lifecycle.status !== "active" && (
                             <StatusBadge status={agent.lifecycle.status} />
                           )}
@@ -188,7 +201,7 @@ export function Layout() {
                                     className={`w-1.5 h-1.5 rounded-full${thinkingAgentIds.includes(child.id) ? " animate-pulse" : ""}`}
                                     style={{ backgroundColor: child.ui.color }}
                                   />
-                                  <span className="text-xs">{child.name}</span>
+                                  <span className="text-xs">{child.name}{child.title_tag && ` - ${child.title_tag}`}</span>
                                   {child.lifecycle && child.lifecycle.status !== "active" && (
                                     <StatusBadge status={child.lifecycle.status} />
                                   )}
@@ -202,17 +215,39 @@ export function Layout() {
                   );
                 })}
 
-            <li className="menu-title mt-4">Workers</li>
+            <li className="menu-title mt-4">
+              <span className="flex items-center justify-between w-full">
+                Workers
+                <NavLink
+                  to="/workers/new"
+                  className="btn btn-ghost btn-square"
+                  title="Add Worker"
+                >
+                  +
+                </NavLink>
+              </span>
+            </li>
             <li>
               <NavLink to="/workers" className={({ isActive }) => isActive ? "menu-active" : ""} end>
                 All Workers
               </NavLink>
             </li>
-            <li>
-              <NavLink to="/workers/new" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                + Add Worker
-              </NavLink>
-            </li>
+            {workers.map((worker) => (
+              <li key={worker.agent_id}>
+                <NavLink
+                  to={`/workers/${worker.agent_id}`}
+                  className={({ isActive }) => isActive ? "menu-active" : ""}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full${worker.process_state === "running" ? " animate-pulse" : ""}`}
+                      style={{ backgroundColor: worker.color || "#609894" }}
+                    />
+                    {worker.name}
+                  </span>
+                </NavLink>
+              </li>
+            ))}
 
             <li className="menu-title mt-4">Extensions</li>
             <li>

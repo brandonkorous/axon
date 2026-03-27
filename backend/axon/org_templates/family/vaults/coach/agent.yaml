@@ -2,6 +2,7 @@ id: coach
 name: Coach
 type: advisor
 title: Health & Wellness Advisor
+title_tag: HWA
 tagline: "Your family's wellness wingman"
 model:
   max_tokens: 4096

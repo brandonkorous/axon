@@ -2,6 +2,7 @@ id: penny
 name: Penny
 type: advisor
 title: Budget & Finance Advisor
+title_tag: FIN
 tagline: "Making every dollar work harder"
 model:
   max_tokens: 4096

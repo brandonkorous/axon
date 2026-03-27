@@ -59,8 +59,13 @@ class ExternalAgent(Agent):
         self.tool_executor = None
         self.tools = []
         self._system_prompt = ""
+        self._integration_executor = None
 
         logger.info("[%s] ExternalAgent initialized (host-side runner)", config.id)
+
+    async def setup(self) -> None:
+        """External agents have no DB, index, or credentials to initialize."""
+        pass
 
     async def process(
         self, user_message: str, *, save_history: bool = True,

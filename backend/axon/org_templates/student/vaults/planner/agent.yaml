@@ -1,6 +1,7 @@
 id: planner
 name: Planner
 title: Academic Organization Coach
+title_tag: AOC
 tagline: "Never miss a deadline again"
 type: advisor
 model:

@@ -1,6 +1,7 @@
 id: sage
 name: Sage
 title: Career Strategy Advisor
+title_tag: CSA
 tagline: "See the career landscape others miss"
 type: advisor
 model:

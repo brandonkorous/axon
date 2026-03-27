@@ -80,7 +80,7 @@ function AgentRow({
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: agent.ui?.color }} />
-          <span className="text-sm font-medium truncate">{agent.name}</span>
+          <span className="text-sm font-medium truncate">{agent.name}{agent.title_tag && <span className="font-normal text-base-content/50 ml-1">({agent.title_tag})</span>}</span>
           <span className="text-xs text-base-content/50">{agent.model}</span>
         </div>
         <div className="flex items-center gap-2">

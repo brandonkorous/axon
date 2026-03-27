@@ -23,6 +23,7 @@ class PersonaUpdateRequest(BaseModel):
 
     name: str | None = None
     title: str | None = None
+    title_tag: str | None = None
     tagline: str | None = None
     system_prompt: str | None = None
     color: str | None = None
@@ -73,6 +74,7 @@ def _list_agents_for_registry(agent_reg: dict, email_domain: str = "") -> list[d
             "id": agent.id,
             "name": agent.name,
             "title": agent.config.title,
+            "title_tag": agent.config.title_tag,
             "tagline": agent.config.tagline,
             "ui": {
                 "color": agent.config.ui.color,
@@ -97,6 +99,7 @@ def _get_agent_detail(agent, email_domain: str = "") -> dict:
         "id": agent.id,
         "name": agent.name,
         "title": agent.config.title,
+        "title_tag": agent.config.title_tag,
         "tagline": agent.config.tagline,
         "ui": {
             "color": agent.config.ui.color,
@@ -189,6 +192,9 @@ async def update_agent_persona(org_id: str, agent_id: str, body: PersonaUpdateRe
     if body.title is not None:
         data["title"] = body.title
         agent.config.title = body.title
+    if body.title_tag is not None:
+        data["title_tag"] = body.title_tag[:4]
+        agent.config.title_tag = body.title_tag[:4]
     if body.tagline is not None:
         data["tagline"] = body.tagline
         agent.config.tagline = body.tagline

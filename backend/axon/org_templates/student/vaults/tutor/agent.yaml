@@ -1,6 +1,7 @@
 id: tutor
 name: Tutor
 title: Subject Matter Expert
+title_tag: SME
 tagline: "Making hard subjects click"
 type: advisor
 model:

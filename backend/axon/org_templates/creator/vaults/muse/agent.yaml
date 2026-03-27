@@ -1,6 +1,7 @@
 id: muse
 name: Muse
 title: Content Strategy Advisor
+title_tag: CSA
 tagline: "Turning ideas into audiences"
 type: advisor
 model:

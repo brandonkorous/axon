@@ -1,6 +1,7 @@
 id: archer
 name: Archer
 title: Interview Prep Coach
+title_tag: IPC
 tagline: "Your unfair advantage in every interview"
 type: advisor
 model:

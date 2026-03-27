@@ -2,6 +2,7 @@ id: scout
 name: Scout
 type: advisor
 title: Research Assistant
+title_tag: RES
 tagline: "Curiosity-driven answers to every question"
 model:
   max_tokens: 4096

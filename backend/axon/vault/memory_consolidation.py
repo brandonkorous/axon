@@ -46,7 +46,15 @@ async def deep_consolidate(
     report = ConsolidationReport()
     today = str(date.today())
 
-    # Phase 1: Load active entries
+    # Phase 1: Orphan adoption — reattach detached files before anything else
+    # so the rest of the pipeline sees the full, connected graph.
+    try:
+        await _adopt_orphans(vault, model, config, usage_tracker, agent_id, org_id, today, report)
+    except Exception as e:
+        report.errors.append(f"Orphan adoption failed: {e}")
+        logger.warning("[%s] Orphan adoption failed: %s", agent_id, e)
+
+    # Phase 2: Load active entries
     entries = _load_active_entries(vault)
     report.entries_reviewed = len(entries)
 
@@ -54,13 +62,13 @@ async def deep_consolidate(
         logger.debug("[%s] Deep consolidation skipped — %d entries", agent_id, len(entries))
         return report
 
-    # Phase 2: Auto-archive low-confidence entries (no LLM needed)
+    # Phase 3: Auto-archive low-confidence entries (no LLM needed)
     remaining = _auto_archive(vault, config, entries, today)
     report.auto_archived = len(entries) - len(remaining)
     if len(remaining) < config.deep_consolidation_min_entries:
         return report
 
-    # Phase 3+4: Batch, send to LLM, execute actions
+    # Phase 4+5: Batch, send to LLM, execute actions
     batches = _make_batches(remaining, config.deep_consolidation_batch_size)
     for batch in batches:
         report.batches_processed += 1
@@ -75,13 +83,6 @@ async def deep_consolidate(
             error_msg = f"Batch {report.batches_processed} failed: {e}"
             logger.warning("[%s] %s", agent_id, error_msg)
             report.errors.append(error_msg)
-
-    # Phase 5: Orphan adoption — find detached files and reattach them
-    try:
-        await _adopt_orphans(vault, model, config, usage_tracker, agent_id, org_id, today, report)
-    except Exception as e:
-        report.errors.append(f"Orphan adoption failed: {e}")
-        logger.warning("[%s] Orphan adoption failed: %s", agent_id, e)
 
     logger.info(
         "[%s] Deep consolidation complete — reviewed=%d, auto_archived=%d, "

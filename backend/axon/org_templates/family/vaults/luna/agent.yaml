@@ -2,6 +2,7 @@ id: luna
 name: Luna
 type: advisor
 title: Family Organizer
+title_tag: ORG
 tagline: "Your household command center"
 model:
   max_tokens: 4096

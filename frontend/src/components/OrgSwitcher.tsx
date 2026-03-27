@@ -49,7 +49,7 @@ export function OrgSwitcher() {
               )}
               <button
                 onClick={() => setShowEditor(true)}
-                className="btn btn-ghost btn-sm btn-square"
+                className="btn btn-ghost btn-square"
                 aria-label="Edit organization"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
@@ -59,7 +59,7 @@ export function OrgSwitcher() {
               </button>
               <button
                 onClick={() => setShowCreator(true)}
-                className="btn btn-ghost btn-sm btn-square"
+                className="btn btn-ghost btn-square"
                 aria-label="Create new organization"
               >
                 +

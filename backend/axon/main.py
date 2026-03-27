@@ -148,7 +148,7 @@ def _init_org_agents(
     for persona_id, config in agents.items():
         if config.type in (AgentType.ORCHESTRATOR, AgentType.HUDDLE):
             continue
-        is_external = config.type == AgentType.EXTERNAL or config.external
+        is_external = config.type == AgentType.EXTERNAL
         AgentClass = ExternalAgent if is_external else Agent
         agent = AgentClass(
             config, data_dir=data_dir,

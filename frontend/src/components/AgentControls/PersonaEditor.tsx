@@ -18,6 +18,7 @@ export function PersonaEditor({
 
   const [name, setName] = useState(agent.name);
   const [title, setTitle] = useState(agent.title);
+  const [titleTag, setTitleTag] = useState(agent.title_tag ?? "");
   const [tagline, setTagline] = useState(agent.tagline);
   const [color, setColor] = useState(agent.ui.color);
   const [sparkleColor, setSparkleColor] = useState(agent.ui.sparkle_color);
@@ -46,6 +47,7 @@ export function PersonaEditor({
     const update: PersonaUpdate = {};
     if (name !== agent.name) update.name = name;
     if (title !== agent.title) update.title = title;
+    if (titleTag !== (agent.title_tag ?? "")) update.title_tag = titleTag;
     if (tagline !== agent.tagline) update.tagline = tagline;
     if (color !== agent.ui.color) update.color = color;
     if (sparkleColor !== agent.ui.sparkle_color)
@@ -68,7 +70,7 @@ export function PersonaEditor({
 
   return (
     <div className="space-y-3 border-t border-neutral pt-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[1fr_1fr_5rem] gap-3">
         <label className="form-control">
           <span className="label-text text-xs mb-1">Name</span>
           <input
@@ -86,6 +88,17 @@ export function PersonaEditor({
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Chief Executive Officer"
             className="input input-sm input-bordered w-full"
+          />
+        </label>
+        <label className="form-control">
+          <span className="label-text text-xs mb-1">Tag</span>
+          <input
+            type="text"
+            value={titleTag}
+            onChange={(e) => setTitleTag(e.target.value.toUpperCase().slice(0, 4))}
+            placeholder="CTO"
+            maxLength={4}
+            className="input input-sm input-bordered w-full font-mono tracking-wide"
           />
         </label>
       </div>

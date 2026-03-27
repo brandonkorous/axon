@@ -245,7 +245,7 @@ export function AgentView() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-base-content">{agent.name}</h2>
+                <h2 className="text-lg font-semibold text-base-content">{agent.name}{agent.title_tag && <span className="text-base-content/50 font-normal text-sm ml-2">({agent.title_tag})</span>}</h2>
                 {agent.lifecycle && <StatusBadge status={agent.lifecycle.status} />}
                 <ConversationSwitcher
                   conversations={conversations}

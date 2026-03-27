@@ -127,7 +127,7 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
         from axon.agents.agent import Agent
         from axon.agents.external_agent import ExternalAgent
 
-        is_external = config.type == AgentType.EXTERNAL or config.external
+        is_external = config.type == AgentType.EXTERNAL
         AgentClass = ExternalAgent if is_external else Agent
         agent = AgentClass(
             config,

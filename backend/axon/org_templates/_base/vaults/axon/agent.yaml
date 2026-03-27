@@ -1,6 +1,7 @@
 id: axon
 name: Axon
 title: Personal Assistant
+title_tag: AXON
 tagline: "Your AI chief of staff"
 type: orchestrator
 

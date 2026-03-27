@@ -6,7 +6,7 @@ import { ModelsTab } from "./ModelsTab";
 import { AgentsTab } from "./AgentsTab";
 import { VoiceTab } from "./VoiceTab";
 import { CredentialsTab } from "./CredentialsTab";
-import { SkillsIntegrationsTab } from "./SkillsIntegrationsTab";
+import { ExtensionsTab } from "./ExtensionsTab";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
@@ -15,7 +15,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "agents", label: "Agents" },
   { id: "voice", label: "Voice" },
   { id: "credentials", label: "Credentials" },
-  { id: "skills", label: "Skills & Integrations" },
+  { id: "extensions", label: "Extensions" },
 ];
 
 const TAB_COMPONENTS: Record<SettingsTab, React.FC> = {
@@ -25,7 +25,7 @@ const TAB_COMPONENTS: Record<SettingsTab, React.FC> = {
   agents: AgentsTab,
   voice: VoiceTab,
   credentials: CredentialsTab,
-  skills: SkillsIntegrationsTab,
+  extensions: ExtensionsTab,
 };
 
 export function SettingsModal() {

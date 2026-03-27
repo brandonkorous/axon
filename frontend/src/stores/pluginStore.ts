@@ -13,6 +13,7 @@ export interface PluginInfo {
   tools: string[];
   required_credentials: string[];
   is_builtin: boolean;
+  source: string;
 }
 
 export interface PluginDetail extends Omit<PluginInfo, "tools"> {

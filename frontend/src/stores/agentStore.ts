@@ -15,6 +15,7 @@ export interface AgentInfo {
   id: string;
   name: string;
   title: string;
+  title_tag: string;
   tagline: string;
   ui: {
     color: string;
@@ -35,6 +36,7 @@ export interface AgentInfo {
 export interface PersonaUpdate {
   name?: string;
   title?: string;
+  title_tag?: string;
   tagline?: string;
   system_prompt?: string;
   color?: string;
