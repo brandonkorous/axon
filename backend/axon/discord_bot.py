@@ -11,6 +11,7 @@ import discord
 import axon.registry as registry
 
 if TYPE_CHECKING:
+    from axon.agents.agent import Agent
     from axon.org import OrgInstance
 
 logger = logging.getLogger("axon.discord")
@@ -60,6 +61,14 @@ class AxonDiscordBot(discord.Client):
 
         # channel_id -> (org_id, default_agent_id)
         self.channel_org_map = channel_org_map
+
+    def reload_channel_map(self) -> None:
+        """Reload channel mappings from all orgs (call after config changes)."""
+        new_map = build_channel_map()
+        old_count = len(self.channel_org_map)
+        self.channel_org_map = new_map
+        logger.info("Discord channel map reloaded: %d → %d mappings", old_count, len(new_map))
+        print(f"[AXON] Discord channel map reloaded: {len(new_map)} mapping(s)")
 
     async def on_ready(self) -> None:
         logger.info(f"Discord bot connected as {self.user}")
@@ -122,38 +131,113 @@ class AxonDiscordBot(discord.Client):
         content: str,
     ) -> None:
         """Route a message to an agent and post the response as a thread reply."""
+        if agent_id == "huddle":
+            await self._route_huddle(message, org, content)
+            return
+
         agent = org.agent_registry.get(agent_id)
         if not agent:
             await message.reply(f"Agent `{agent_id}` not found.", mention_author=False)
             return
 
+        # Prefix with source context so the agent knows where the message came from
+        channel_name = getattr(message.channel, "name", "unknown")
+        author_name = message.author.display_name or message.author.name
+        contextualized = (
+            f"[Message from Discord — channel: #{channel_name}, "
+            f"user: {author_name}]\n\n{content}"
+        )
+
         # Show typing indicator while processing
         async with message.channel.typing():
-            # Collect the full response
-            full_response = ""
-            try:
-                async for chunk in agent.process(content):
-                    if chunk.type == "text":
-                        full_response += chunk.content
-            except Exception as e:
-                logger.error(f"Error processing message for {agent_id}: {e}")
-                await message.reply(
-                    f"Error from **{agent.name}**: {e}",
-                    mention_author=False,
-                )
-                return
+            full_response = await self._collect_agent_response(agent, contextualized)
 
         if not full_response.strip():
             full_response = f"*{agent.name} had no response.*"
 
-        # Post response — use thread if in a text channel, reply otherwise
+        await self._send_response(message, full_response, agent.name if agent_id != "axon" else "")
+
+    async def _route_huddle(
+        self,
+        message: discord.Message,
+        org: "OrgInstance",
+        content: str,
+    ) -> None:
+        """Route a message to all advisors in the org (huddle mode)."""
+        if not org.agent_registry:
+            await message.reply("No agents available.", mention_author=False)
+            return
+
+        # Filter to non-axon agents (advisors only)
+        advisors = {
+            aid: agent for aid, agent in org.agent_registry.items()
+            if aid != "axon"
+        }
+        if not advisors:
+            advisors = org.agent_registry
+
+        channel_name = getattr(message.channel, "name", "unknown")
+        author_name = message.author.display_name or message.author.name
+        contextualized = (
+            f"[Message from Discord — channel: #{channel_name}, "
+            f"user: {author_name}]\n\n{content}"
+        )
+
+        async with message.channel.typing():
+            # Run all advisors concurrently
+            tasks = {
+                aid: asyncio.create_task(self._collect_agent_response(agent, contextualized))
+                for aid, agent in advisors.items()
+            }
+            results: list[tuple[str, str, str]] = []  # (aid, name, text)
+            for aid, task in tasks.items():
+                agent = advisors[aid]
+                try:
+                    text = await task
+                    results.append((aid, agent.name, text))
+                except Exception as e:
+                    logger.error(f"Huddle advisor {aid} failed: {e}")
+                    results.append((aid, agent.name, "*unavailable*"))
+
+        if not results:
+            await message.reply("*No advisors responded.*", mention_author=False)
+            return
+
+        # Post each advisor's response as a separate message
+        reply = None
+        for _, name, text in results:
+            if not text.strip():
+                continue
+            response = f"**{name}:**\n{text}"
+            chunks = _split_message(response)
+            if reply is None:
+                reply = await message.reply(chunks[0], mention_author=False)
+            else:
+                await message.channel.send(chunks[0], reference=reply)
+            for chunk in chunks[1:]:
+                await message.channel.send(chunk, reference=reply)
+
+    @staticmethod
+    async def _collect_agent_response(agent: "Agent", content: str) -> str:
+        """Collect the full text response from an agent."""
+        full_response = ""
+        async for chunk in agent.process(content):
+            if chunk.type == "text":
+                full_response += chunk.content
+        return full_response
+
+    async def _send_response(
+        self,
+        message: discord.Message,
+        full_response: str,
+        speaker_name: str = "",
+    ) -> None:
+        """Send a (potentially long) response as a reply with chunking."""
         chunks = _split_message(full_response)
 
-        # First chunk as a reply
-        prefix = f"**{agent.name}:** " if agent_id != "axon" else ""
+        prefix = f"**{speaker_name}:** " if speaker_name else ""
         first_msg = f"{prefix}{chunks[0]}" if prefix else chunks[0]
 
-        # Trim prefix+content if it exceeds limit
         if len(first_msg) > MAX_DISCORD_LENGTH:
             first_chunks = _split_message(first_msg)
             reply = await message.reply(first_chunks[0], mention_author=False)
@@ -162,7 +246,6 @@ class AxonDiscordBot(discord.Client):
         else:
             reply = await message.reply(first_msg, mention_author=False)
 
-        # Remaining chunks as follow-ups
         for chunk in chunks[1:]:
             await message.channel.send(chunk, reference=reply)
 
@@ -172,7 +255,7 @@ def build_channel_map() -> dict[str, tuple[str, str]]:
     channel_map: dict[str, tuple[str, str]] = {}
 
     for org_id, org in registry.org_registry.items():
-        discord_config = org.config.discord
+        discord_config = org.config.comms.discord or org.config.discord
         if not discord_config or not discord_config.channel_mappings:
             continue
 
@@ -186,12 +269,10 @@ async def get_bot_token() -> str | None:
     """Get the Discord bot token from any org's credential DB."""
     from axon.comms.credentials import resolve_credential
 
-    for org_id, org in registry.org_registry.items():
-        discord_config = org.config.comms.discord or org.config.discord
-        if discord_config:
-            token = await resolve_credential(org_id, "discord")
-            if token:
-                return token
+    for org_id in registry.org_registry:
+        token = await resolve_credential(org_id, "discord")
+        if token:
+            return token
     return None
 
 
@@ -203,11 +284,12 @@ async def start_discord_bot() -> AxonDiscordBot | None:
     """
     token = await get_bot_token()
     if not token:
+        print("[AXON] Discord: no bot token found in credentials")
         return None
 
     channel_map = build_channel_map()
     if not channel_map:
-        logger.info("Discord token found but no channel mappings configured")
+        print("[AXON] Discord: token found but no channel mappings configured")
         return None
 
     bot = AxonDiscordBot(channel_map)

@@ -99,6 +99,45 @@ async def send_email(
         return f"Error sending email: {e}"
 
 
+async def send_slack_message(
+    bot_token: str,
+    channel: str,
+    content: str,
+) -> str:
+    """Send a Slack message via the Web API.
+
+    Returns a human-readable result string.
+    """
+    if not bot_token:
+        return "Error: Slack bot token not configured. Add a 'slack_bot_token' credential in org settings."
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://slack.com/api/chat.postMessage",
+                headers={
+                    "Authorization": f"Bearer {bot_token}",
+                    "Content-Type": "application/json; charset=utf-8",
+                },
+                json={"channel": channel, "text": content},
+                timeout=10.0,
+            )
+
+        data = resp.json()
+        if data.get("ok"):
+            logger.info("Slack message sent to channel %s", channel)
+            return f"Slack message sent to channel {channel}."
+        else:
+            error = data.get("error", "unknown_error")
+            logger.error("Slack API error: %s", error)
+            return f"Error sending Slack message: {error}"
+    except httpx.TimeoutException:
+        return "Error: Slack API request timed out."
+    except Exception as e:
+        logger.exception("Slack send failed")
+        return f"Error sending Slack message: {e}"
+
+
 async def send_discord_message(
     bot_token: str,
     target: str,
@@ -148,3 +187,62 @@ async def send_discord_message(
     except Exception as e:
         logger.exception("Discord send failed")
         return f"Error sending Discord message: {e}"
+
+
+async def send_teams_message(
+    app_id: str,
+    app_secret: str,
+    service_url: str,
+    conversation_id: str,
+    content: str,
+) -> str:
+    """Send a Microsoft Teams message via the Bot Framework REST API.
+
+    Returns a human-readable result string.
+    """
+    if not app_id or not app_secret:
+        return "Error: Teams credentials not configured. Add 'teams_app_id' and 'teams_app_secret' credentials."
+
+    try:
+        # Get OAuth token
+        async with httpx.AsyncClient() as client:
+            token_resp = await client.post(
+                "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token",
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": app_id,
+                    "client_secret": app_secret,
+                    "scope": "https://api.botframework.com/.default",
+                },
+                timeout=10.0,
+            )
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token", "")
+        if not access_token:
+            return f"Error: Failed to authenticate with Teams: {token_data.get('error', 'unknown')}"
+
+        # Send message
+        url = f"{service_url}v3/conversations/{conversation_id}/activities"
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                },
+                json={"type": "message", "text": content},
+                timeout=10.0,
+            )
+
+        if resp.status_code in (200, 201):
+            logger.info("Teams message sent to %s", conversation_id)
+            return f"Teams message sent to conversation {conversation_id}."
+        else:
+            error = resp.text[:300]
+            logger.error("Teams API error %d: %s", resp.status_code, error)
+            return f"Error sending Teams message: {resp.status_code} — {error}"
+    except httpx.TimeoutException:
+        return "Error: Teams API request timed out."
+    except Exception as e:
+        logger.exception("Teams send failed")
+        return f"Error sending Teams message: {e}"

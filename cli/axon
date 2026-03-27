@@ -4,7 +4,13 @@
 
 set -euo pipefail
 
-AXON_VERSION="0.1.0"
+# Version: read from VERSION file if available, otherwise hardcoded
+AXON_VERSION_FILE="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/VERSION"
+if [ -f "$AXON_VERSION_FILE" ]; then
+  AXON_VERSION="$(cat "$AXON_VERSION_FILE")"
+else
+  AXON_VERSION="0.1.0"
+fi
 AXON_REPO="brandonkorous/axon"
 AXON_IMAGE_PREFIX="ghcr.io/${AXON_REPO}"
 AXON_MARKER=".axon"
@@ -734,6 +740,26 @@ assert_workspace() {
   fi
 }
 
+# ── axon version ────────────────────────────────────────────────────────────
+cmd_version() {
+  printf "  ${BOLD}CLI:${RESET}    %s\n" "$AXON_VERSION"
+
+  # Try to get server version if running in a workspace
+  if [ -f "$AXON_MARKER" ] && check_docker 2>/dev/null && check_docker_running 2>/dev/null; then
+    local server_version
+    server_version=$(curl -s "http://localhost:${AXON_PORT_BACKEND:-8000}/api/version" 2>/dev/null | \
+      grep -o '"version":"[^"]*"' | cut -d'"' -f4)
+    if [ -n "$server_version" ]; then
+      printf "  ${BOLD}Server:${RESET} %s\n" "$server_version"
+      if [ "$AXON_VERSION" != "$server_version" ]; then
+        warn "Version mismatch — run 'axon update' to sync"
+      fi
+    else
+      printf "  ${BOLD}Server:${RESET} ${DIM}not running${RESET}\n"
+    fi
+  fi
+}
+
 # ── Usage ───────────────────────────────────────────────────────────────────
 usage() {
   banner
@@ -776,7 +802,7 @@ main() {
     update)      cmd_update "$@" ;;
     doctor)      cmd_doctor "$@" ;;
     self-update) cmd_self_update "$@" ;;
-    version|-v|--version) printf "axon %s\n" "$AXON_VERSION" ;;
+    version|-v|--version) cmd_version ;;
     help|-h|--help|"") usage ;;
     *)
       fail "Unknown command: $cmd (run 'axon help' for usage)"

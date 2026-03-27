@@ -66,6 +66,34 @@ async def handle_comms_approval(
             content=payload.get("content", ""),
             is_dm=payload.get("is_dm", False),
         )
+    elif channel == "slack":
+        from axon.comms.senders import send_slack_message
+        bot_token = await resolve_credential(org.id, "slack_bot_token") or ""
+        result = await send_slack_message(
+            bot_token,
+            channel=payload.get("channel", ""),
+            content=payload.get("content", ""),
+        )
+    elif channel == "teams":
+        from axon.comms.senders import send_teams_message
+        app_id = await resolve_credential(org.id, "teams_app_id") or ""
+        app_secret = await resolve_credential(org.id, "teams_app_secret") or ""
+        service_url = "https://smba.trafficmanager.net/amer/"
+        result = await send_teams_message(
+            app_id, app_secret, service_url,
+            conversation_id=payload.get("channel", ""),
+            content=payload.get("content", ""),
+        )
+    elif channel == "zoom":
+        from axon.comms.senders_zoom import send_zoom_chat
+        account_id = await resolve_credential(org.id, "zoom_account_id") or ""
+        client_id = await resolve_credential(org.id, "zoom_client_id") or ""
+        client_secret = await resolve_credential(org.id, "zoom_client_secret") or ""
+        result = await send_zoom_chat(
+            account_id, client_id, client_secret,
+            channel_id=payload.get("channel", ""),
+            content=payload.get("content", ""),
+        )
     else:
         return {"status": "error", "detail": f"Unknown comms channel: {channel}"}
 

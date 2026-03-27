@@ -137,7 +137,8 @@ async def complete(
         }
         try:
             usage["cost"] = litellm.completion_cost(completion_response=response)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Could not calculate cost for model=%s: %s", response.model, exc)
             usage["cost"] = 0.0
         result["usage"] = usage
 
@@ -156,8 +157,9 @@ def _extract_stream_usage(model: str, usage: Any) -> dict[str, Any] | None:
         cost = litellm.completion_cost(
             model=model, prompt_tokens=prompt, completion_tokens=completion,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Could not calculate cost for model=%s: %s", model, exc)
+        cost = 0.0
     return {
         "prompt_tokens": prompt,
         "completion_tokens": completion,

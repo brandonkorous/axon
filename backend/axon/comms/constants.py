@@ -10,6 +10,9 @@ class CommsChannel(str, Enum):
 
     EMAIL = "email"
     DISCORD = "discord"
+    SLACK = "slack"
+    TEAMS = "teams"
+    ZOOM = "zoom"
 
 
 # Prefix for all comms tool names (used for routing in ToolExecutor)

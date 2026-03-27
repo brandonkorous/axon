@@ -47,6 +47,7 @@ Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define �
 | **Models**    | Multi-LLM Support         | Anthropic Claude, OpenAI, or local models via Ollama                              |
 | **Orgs**      | Multi-Organization        | Isolated vaults and agent configurations per organization                         |
 | **Shield**    | Full Audit Logging        | Complete transparency into every agent action and decision                        |
+| **Connect**   | Platform Integrations     | Slack, Microsoft Teams, Zoom, and Discord — advisors meet your team where they work |
 | **Dashboard** | Command & Control         | Active agents, decisions, action items, inbox, vault health — one view            |
 
 ---
@@ -183,6 +184,7 @@ Supported local models include `llama3`, `qwen2.5`, `mistral`, `codellama`, and 
 - [x] Docker Compose deployment
 - [x] Multi-LLM support (Claude, OpenAI, Ollama)
 - [x] Achievement system and audit logging
+- [ ] Slack, Teams, Zoom, and Discord integrations
 - [ ] Plugin system for third-party integrations
 - [ ] Mobile companion app
 - [ ] Agent-to-agent delegation chains

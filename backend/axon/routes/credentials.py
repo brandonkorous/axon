@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 
 org_router = APIRouter()
 
-VALID_PROVIDERS = {"resend", "discord"}
+VALID_PROVIDERS = {
+    "resend", "discord",
+    "slack_bot_token", "slack_app_token",
+    "teams_app_id", "teams_app_secret", "teams_organizer_id",
+    "zoom_account_id", "zoom_client_id", "zoom_client_secret",
+}
 
 
 class CreateCredentialRequest(BaseModel):
@@ -93,6 +98,10 @@ async def add_credential(
             label=body.label or body.provider.title(),
         )
         logger.info("Created %s credential for org %s", body.provider, org_id)
+
+    # Hot-start bots if this credential enables an integration
+    from axon.bot_manager import on_credential_changed
+    await on_credential_changed(body.provider)
 
     return {
         "id": cred.id,

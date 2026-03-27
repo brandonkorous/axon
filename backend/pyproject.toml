@@ -1,6 +1,6 @@
 [project]
 name = "axon"
-version = "0.1.0"
+version = "0.0.0"  # Runtime version read from /app/VERSION
 description = "Self-hosted AI command center — your personal chief of staff"
 requires-python = ">=3.11"
 dependencies = [
@@ -19,6 +19,9 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "alembic>=1.13.0",
     "cryptography>=43.0.0",
+    "discord.py>=2.4.0",
+    "slack-bolt>=1.20.0",
+    "slack-sdk>=3.33.0",
 ]
 
 [project.optional-dependencies]
@@ -29,9 +32,6 @@ voice = [
     "faster-whisper>=1.1.0",
     "silero-vad>=5.1",
     "piper-tts>=1.2.0",
-]
-discord = [
-    "discord.py>=2.4.0",
 ]
 web = [
     "trafilatura>=1.12.0",

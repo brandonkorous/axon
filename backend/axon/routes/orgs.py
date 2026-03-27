@@ -14,7 +14,7 @@ from axon.config import settings
 from axon.db.engine import get_session
 from axon.db.crud import org_settings as org_settings_crud
 import axon.registry as registry
-from axon.org import OrgCommsConfig, OrgConfig, OrgType, scaffold_org, load_org_config
+from axon.org import DiscordConfig, SlackConfig, TeamsConfig, ZoomConfig, OrgCommsConfig, OrgConfig, OrgType, scaffold_org, load_org_config
 from axon.org_templates import list_templates, get_template, scaffold_from_template
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,32 @@ class CreateOrgRequest(BaseModel):
     template: str = ""  # org template ID (family, startup, etc.)
 
 
+class UpdateDiscordRequest(BaseModel):
+    """Updatable Discord fields."""
+
+    guild_id: str | None = None
+    channel_mappings: dict[str, str] | None = None
+
+
+class UpdateSlackRequest(BaseModel):
+    """Updatable Slack fields."""
+
+    channel_mappings: dict[str, str] | None = None
+
+
+class UpdateTeamsRequest(BaseModel):
+    """Updatable Teams fields."""
+
+    tenant_id: str | None = None
+    channel_mappings: dict[str, str] | None = None
+
+
+class UpdateZoomRequest(BaseModel):
+    """Updatable Zoom fields."""
+
+    channel_mappings: dict[str, str] | None = None
+
+
 class UpdateCommsRequest(BaseModel):
     """Updatable comms fields."""
 
@@ -38,6 +64,10 @@ class UpdateCommsRequest(BaseModel):
     email_domain: str | None = None
     email_signature: str | None = None
     inbound_polling: bool | None = None
+    discord: UpdateDiscordRequest | None = None
+    slack: UpdateSlackRequest | None = None
+    teams: UpdateTeamsRequest | None = None
+    zoom: UpdateZoomRequest | None = None
 
 
 class UpdateOrgRequest(BaseModel):
@@ -87,6 +117,20 @@ async def get_org(org_id: str):
             "email_domain": org.config.comms.email_domain,
             "email_signature": org.config.comms.email_signature,
             "inbound_polling": org.config.comms.inbound_polling,
+            "discord": {
+                "guild_id": (org.config.comms.discord or DiscordConfig()).guild_id,
+                "channel_mappings": (org.config.comms.discord or DiscordConfig()).channel_mappings,
+            },
+            "slack": {
+                "channel_mappings": (org.config.comms.slack or SlackConfig()).channel_mappings,
+            },
+            "teams": {
+                "tenant_id": (org.config.comms.teams or TeamsConfig()).tenant_id,
+                "channel_mappings": (org.config.comms.teams or TeamsConfig()).channel_mappings,
+            },
+            "zoom": {
+                "channel_mappings": (org.config.comms.zoom or ZoomConfig()).channel_mappings,
+            },
         },
         "agents": [
             {
@@ -140,6 +184,48 @@ async def update_org(
         if body.comms.inbound_polling is not None:
             comms_patch["inbound_polling"] = body.comms.inbound_polling
             org.config.comms.inbound_polling = body.comms.inbound_polling
+        if body.comms.discord is not None:
+            discord_cfg = org.config.comms.discord or DiscordConfig()
+            discord_patch: dict = {}
+            if body.comms.discord.guild_id is not None:
+                discord_patch["guild_id"] = body.comms.discord.guild_id
+                discord_cfg.guild_id = body.comms.discord.guild_id
+            if body.comms.discord.channel_mappings is not None:
+                discord_patch["channel_mappings"] = body.comms.discord.channel_mappings
+                discord_cfg.channel_mappings = body.comms.discord.channel_mappings
+            if discord_patch:
+                comms_patch["discord"] = discord_patch
+                org.config.comms.discord = discord_cfg
+        if body.comms.slack is not None:
+            slack_cfg = org.config.comms.slack or SlackConfig()
+            slack_patch: dict = {}
+            if body.comms.slack.channel_mappings is not None:
+                slack_patch["channel_mappings"] = body.comms.slack.channel_mappings
+                slack_cfg.channel_mappings = body.comms.slack.channel_mappings
+            if slack_patch:
+                comms_patch["slack"] = slack_patch
+                org.config.comms.slack = slack_cfg
+        if body.comms.teams is not None:
+            teams_cfg = org.config.comms.teams or TeamsConfig()
+            teams_patch: dict = {}
+            if body.comms.teams.tenant_id is not None:
+                teams_patch["tenant_id"] = body.comms.teams.tenant_id
+                teams_cfg.tenant_id = body.comms.teams.tenant_id
+            if body.comms.teams.channel_mappings is not None:
+                teams_patch["channel_mappings"] = body.comms.teams.channel_mappings
+                teams_cfg.channel_mappings = body.comms.teams.channel_mappings
+            if teams_patch:
+                comms_patch["teams"] = teams_patch
+                org.config.comms.teams = teams_cfg
+        if body.comms.zoom is not None:
+            zoom_cfg = org.config.comms.zoom or ZoomConfig()
+            zoom_patch: dict = {}
+            if body.comms.zoom.channel_mappings is not None:
+                zoom_patch["channel_mappings"] = body.comms.zoom.channel_mappings
+                zoom_cfg.channel_mappings = body.comms.zoom.channel_mappings
+            if zoom_patch:
+                comms_patch["zoom"] = zoom_patch
+                org.config.comms.zoom = zoom_cfg
         if comms_patch:
             patch["comms"] = comms_patch
 
@@ -170,6 +256,11 @@ async def update_org(
 
     logger.info("Organization '%s' updated", org_id)
 
+    # Reload bot channel maps if integration config changed
+    if body.comms is not None:
+        from axon.bot_manager import on_config_changed
+        await on_config_changed(body.comms)
+
     return {
         "id": org.config.id,
         "name": org.config.name,
@@ -180,6 +271,20 @@ async def update_org(
             "email_domain": org.config.comms.email_domain,
             "email_signature": org.config.comms.email_signature,
             "inbound_polling": org.config.comms.inbound_polling,
+            "discord": {
+                "guild_id": (org.config.comms.discord or DiscordConfig()).guild_id,
+                "channel_mappings": (org.config.comms.discord or DiscordConfig()).channel_mappings,
+            },
+            "slack": {
+                "channel_mappings": (org.config.comms.slack or SlackConfig()).channel_mappings,
+            },
+            "teams": {
+                "tenant_id": (org.config.comms.teams or TeamsConfig()).tenant_id,
+                "channel_mappings": (org.config.comms.teams or TeamsConfig()).channel_mappings,
+            },
+            "zoom": {
+                "channel_mappings": (org.config.comms.zoom or ZoomConfig()).channel_mappings,
+            },
         },
     }
 

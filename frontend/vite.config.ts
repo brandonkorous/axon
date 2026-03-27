@@ -1,9 +1,15 @@
+import { readFileSync } from "fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+const version = readFileSync("../VERSION", "utf-8").trim();
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   server: {
     port: 3000,
     proxy: {

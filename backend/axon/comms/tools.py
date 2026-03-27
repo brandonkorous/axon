@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from axon.comms.tools_meetings import MEETING_TOOLS
 
-COMMS_TOOLS: list[dict[str, Any]] = [
+_MESSAGING_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
@@ -53,14 +54,16 @@ COMMS_TOOLS: list[dict[str, Any]] = [
             "name": "comms_send_discord",
             "description": (
                 "Send a Discord message on behalf of this agent. The message will be "
-                "queued for user approval before sending (unless approval is disabled)."
+                "queued for user approval before sending (unless approval is disabled). "
+                "IMPORTANT: 'target' must be a numeric Discord snowflake ID, not a channel name. "
+                "Ask the user for the channel ID if you don't have it."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "target": {
                         "type": "string",
-                        "description": "Discord user ID or channel ID to send to",
+                        "description": "Discord channel ID (numeric snowflake, e.g. '1487175080776696089') or user ID for DMs",
                     },
                     "content": {
                         "type": "string",
@@ -72,6 +75,79 @@ COMMS_TOOLS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["target", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "comms_send_slack",
+            "description": (
+                "Send a Slack message on behalf of this agent. The message will be "
+                "queued for user approval before sending (unless approval is disabled). "
+                "Supports Slack mrkdwn formatting (*bold*, _italic_, `code`)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "channel": {
+                        "type": "string",
+                        "description": "Slack channel ID to send to",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Message content (supports Slack mrkdwn)",
+                    },
+                },
+                "required": ["channel", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "comms_send_teams",
+            "description": (
+                "Send a Microsoft Teams message on behalf of this agent. The message "
+                "will be queued for user approval before sending (unless approval is disabled)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "channel": {
+                        "type": "string",
+                        "description": "Teams channel ID or conversation ID to send to",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Message content",
+                    },
+                },
+                "required": ["channel", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "comms_send_zoom",
+            "description": (
+                "Send a Zoom Team Chat message on behalf of this agent. The message "
+                "will be queued for user approval before sending (unless approval is disabled)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "channel": {
+                        "type": "string",
+                        "description": "Zoom Team Chat channel ID to send to",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Message content",
+                    },
+                },
+                "required": ["channel", "content"],
             },
         },
     },
@@ -96,3 +172,5 @@ COMMS_TOOLS: list[dict[str, Any]] = [
         },
     },
 ]
+
+COMMS_TOOLS: list[dict[str, Any]] = _MESSAGING_TOOLS + MEETING_TOOLS

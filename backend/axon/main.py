@@ -54,6 +54,8 @@ from axon.routes import sandbox as sandbox_routes
 from axon.routes import plugins as plugins_routes
 from axon.routes import skills as skills_routes
 from axon.routes import user_prefs as user_prefs_routes
+from axon.routes import teams_webhook as teams_webhook_routes
+from axon.routes import zoom_webhook as zoom_webhook_routes
 
 
 logger = logging.getLogger(__name__)
@@ -302,15 +304,84 @@ async def lifespan(app: FastAPI):
     from axon.scheduler import scheduler
     scheduler.start()
 
-    # Start Discord bot if configured
-    discord_bot = None
+    # Start Discord and Slack bots if configured (also supports hot-start later)
+    from axon.bot_manager import set_discord_bot, set_slack_bot
+
     try:
         from axon.discord_bot import start_discord_bot
         discord_bot = await start_discord_bot()
+        if discord_bot:
+            set_discord_bot(discord_bot)
+            print("[AXON] Discord bot started")
+        else:
+            print("[AXON] Discord bot skipped (no token or no channel mappings)")
     except ImportError:
-        pass  # discord.py not installed
+        print("[AXON] Discord bot skipped (discord.py not installed)")
     except Exception as e:
         print(f"[AXON] Discord bot failed to start: {e}")
+
+    try:
+        from axon.slack_bot import start_slack_bot
+        slack_bot = await start_slack_bot()
+        if slack_bot:
+            set_slack_bot(slack_bot)
+            print("[AXON] Slack bot started")
+        else:
+            print("[AXON] Slack bot skipped (no token or no channel mappings)")
+    except ImportError:
+        print("[AXON] Slack bot skipped (slack_bolt not installed)")
+    except Exception as e:
+        print(f"[AXON] Slack bot failed to start: {e}")
+
+    # Initialize Teams bot if configured (webhook-based, no background task)
+    try:
+        from axon.teams_bot import create_teams_bot
+        from axon.routes.teams_webhook import set_teams_bot
+        from axon.comms.credentials import resolve_credential
+        teams_bot = create_teams_bot()
+        if teams_bot:
+            teams_creds: dict[str, tuple[str, str]] = {}
+            for org_id, org in registry.org_registry.items():
+                if org.config.comms.teams:
+                    app_id = await resolve_credential(org_id, "teams_app_id") or ""
+                    app_secret = await resolve_credential(org_id, "teams_app_secret") or ""
+                    if app_id:
+                        teams_creds[org_id] = (app_id, app_secret)
+            set_teams_bot(teams_bot, teams_creds)
+            print(f"[AXON] Teams bot initialized ({len(teams_creds)} org(s))")
+        else:
+            print("[AXON] Teams bot skipped (no config)")
+    except ImportError:
+        print("[AXON] Teams bot skipped (dependencies not installed)")
+    except Exception as e:
+        print(f"[AXON] Teams bot failed to initialize: {e}")
+
+    # Initialize Zoom bot if configured (webhook-based)
+    try:
+        from axon.zoom_bot import create_zoom_bot
+        from axon.routes.zoom_webhook import set_zoom_bot
+        from axon.comms.credentials import resolve_credential as _resolve_cred
+        zoom_bot = create_zoom_bot()
+        if zoom_bot:
+            zoom_creds: dict[str, tuple[str, str, str]] = {}
+            for org_id, org in registry.org_registry.items():
+                if org.config.comms.zoom:
+                    acct = await _resolve_cred(org_id, "zoom_account_id") or ""
+                    cid = await _resolve_cred(org_id, "zoom_client_id") or ""
+                    csec = await _resolve_cred(org_id, "zoom_client_secret") or ""
+                    if acct:
+                        zoom_creds[org_id] = (acct, cid, csec)
+            verification = await _resolve_cred(
+                next(iter(zoom_creds), ""), "zoom_verification_token",
+            ) or ""
+            set_zoom_bot(zoom_bot, zoom_creds, verification)
+            print(f"[AXON] Zoom bot initialized ({len(zoom_creds)} org(s))")
+        else:
+            print("[AXON] Zoom bot skipped (no config)")
+    except ImportError:
+        print("[AXON] Zoom bot skipped (dependencies not installed)")
+    except Exception as e:
+        print(f"[AXON] Zoom bot failed to initialize: {e}")
 
     # Start inbound email poller (for orgs with Resend configured)
     email_poller = None
@@ -339,14 +410,24 @@ async def lifespan(app: FastAPI):
     from axon.db.agent_engine import shutdown_all_agent_dbs
     await shutdown_all_agent_dbs()
     await shutdown_db()
-    if discord_bot:
-        await discord_bot.close()
+    from axon.bot_manager import shutdown as shutdown_bots
+    await shutdown_bots()
 
+
+def _read_version() -> str:
+    """Read version from VERSION file at project root."""
+    for candidate in [Path("/app/VERSION"), Path(__file__).resolve().parents[2] / "VERSION"]:
+        if candidate.is_file():
+            return candidate.read_text().strip()
+    return "0.0.0-dev"
+
+
+AXON_VERSION = _read_version()
 
 app = FastAPI(
     title="Axon",
     description="Self-hosted AI command center",
-    version="0.2.0",
+    version=AXON_VERSION,
     lifespan=lifespan,
 )
 
@@ -376,6 +457,8 @@ app.include_router(credentials_routes.org_router, prefix="/api/orgs/{org_id}/cre
 
 # ── Global routes (not org-scoped) ─────────────────────────────────
 app.include_router(user_prefs_routes.router, prefix="/api/preferences", tags=["preferences"])
+app.include_router(teams_webhook_routes.router, prefix="/api/teams", tags=["teams"])
+app.include_router(zoom_webhook_routes.router, prefix="/api/zoom", tags=["zoom"])
 
 # ── Legacy routes (backward compat — route to default org) ─────────
 app.include_router(agents_routes.router, prefix="/api/agents", tags=["agents"])
@@ -393,6 +476,11 @@ app.include_router(voices_routes.router, prefix="/api/voices", tags=["voices"])
 app.include_router(usage_routes.router, prefix="/api/usage", tags=["usage"])
 
 
+@app.get("/api/version")
+async def version():
+    return {"version": AXON_VERSION}
+
+
 @app.get("/api/health")
 async def health():
     try:
@@ -403,6 +491,7 @@ async def health():
 
     return {
         "status": "ok",
+        "version": AXON_VERSION,
         "orgs": list(registry.org_registry.keys()),
         "agents": list(registry.agent_registry.keys()),
         "huddle": registry.huddle_instance is not None,

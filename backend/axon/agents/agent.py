@@ -370,8 +370,10 @@ class Agent:
             else self.config.model.navigator
         )
         if not ack_model:
+            logger.debug("[%s] Ack skipped — no local model configured", self.id)
             return None
 
+        logger.debug("[%s] Generating ack with model=%s", self.id, ack_model)
         try:
             result = await asyncio.wait_for(
                 complete(
@@ -390,10 +392,10 @@ class Agent:
                 logger.debug("[%s] Ack generated: %s", self.id, ack)
             return ack or None
         except TimeoutError:
-            logger.debug("[%s] Ack generation timed out — skipping", self.id)
+            logger.warning("[%s] Ack generation timed out (>%ds) — skipping", self.id, ACK_TIMEOUT)
             return None
         except Exception as e:
-            logger.debug("[%s] Ack generation failed — skipping: %s", self.id, e)
+            logger.warning("[%s] Ack generation failed — skipping: %s", self.id, e)
             return None
 
     async def process(
@@ -657,6 +659,42 @@ class Agent:
                 org_context += f"You accept delegated work from: {', '.join(accepts)}\n"
             org_context += "\n"
 
+        # Comms instructions — when agent has comms tools
+        comms_section = ""
+        if self._comms_executor:
+            comms_section = (
+                "## Communications\n"
+                "You have direct access to communication tools (`comms_send_email`, "
+                "`comms_send_discord`, `comms_send_slack`, `comms_send_teams`, "
+                "`comms_send_zoom`, `comms_create_zoom_meeting`, "
+                "`comms_create_teams_meeting`, `comms_create_discord_event`).\n\n"
+                "### Rules\n"
+                "- **Always use your comms tools directly.** Never delegate sending messages "
+                "or creating meetings to workers or other agents.\n"
+                "- **Discord, Slack, Teams, and Zoom channel IDs are numeric.** "
+                "Never use channel names — use the numeric ID. If you don't know the ID, "
+                "ask the user.\n"
+                "- **Use `comms_lookup_contact`** to find email addresses before sending email.\n"
+                "- Messages may require user approval before sending (depending on org settings).\n"
+            )
+            # Inject configured channel mappings so agents know what's available
+            config = self._comms_executor.config
+            known_channels: list[str] = []
+            if config.discord and config.discord.channel_mappings:
+                for cid in config.discord.channel_mappings:
+                    known_channels.append(f"Discord channel `{cid}`")
+            if config.slack and config.slack.channel_mappings:
+                for cid in config.slack.channel_mappings:
+                    known_channels.append(f"Slack channel `{cid}`")
+            if config.teams and config.teams.channel_mappings:
+                for cid in config.teams.channel_mappings:
+                    known_channels.append(f"Teams channel `{cid}`")
+            if config.zoom and config.zoom.channel_mappings:
+                for cid in config.zoom.channel_mappings:
+                    known_channels.append(f"Zoom channel `{cid}`")
+            if known_channels:
+                comms_section += "### Known channels\n" + "\n".join(f"- {c}" for c in known_channels) + "\n\n"
+
         # Peer roster — immediate teammates (parent, siblings, direct reports)
         roster_section = ""
         if self._peer_roster:
@@ -672,7 +710,7 @@ class Agent:
                 f"{delegate_note}\n"
             )
 
-        prompt = identity + org_context + roster_section + self.system_prompt
+        prompt = identity + org_context + comms_section + roster_section + self.system_prompt
         if self.lifecycle.strategy_override:
             prompt += f"\n\n## Strategy Override (from user)\n{self.lifecycle.strategy_override}"
 

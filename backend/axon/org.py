@@ -39,6 +39,25 @@ class DiscordConfig(BaseModel):
     channel_mappings: dict[str, str] = {}  # channel_id -> agent_id
 
 
+class SlackConfig(BaseModel):
+    """Slack integration settings for an organization."""
+
+    channel_mappings: dict[str, str] = {}  # channel_id -> agent_id
+
+
+class TeamsConfig(BaseModel):
+    """Microsoft Teams integration settings for an organization."""
+
+    tenant_id: str = ""  # Azure AD tenant ID
+    channel_mappings: dict[str, str] = {}  # channel_id -> agent_id
+
+
+class ZoomConfig(BaseModel):
+    """Zoom integration settings for an organization."""
+
+    channel_mappings: dict[str, str] = {}  # Zoom Team Chat channel_id -> agent_id
+
+
 class OrgCommsConfig(BaseModel):
     """Organization-level communication settings."""
 
@@ -47,6 +66,9 @@ class OrgCommsConfig(BaseModel):
     email_signature: str = ""  # HTML appended to every outbound email
     inbound_polling: bool = False  # enable inbound email polling (requires Resend inbound support)
     discord: DiscordConfig | None = None  # unified discord config
+    slack: SlackConfig | None = None  # Slack integration config
+    teams: TeamsConfig | None = None  # Microsoft Teams integration config
+    zoom: ZoomConfig | None = None  # Zoom integration config
 
 
 class OrgConfig(BaseModel):

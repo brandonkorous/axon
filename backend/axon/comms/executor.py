@@ -5,10 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import yaml
 
 from axon.comms.constants import APPROVAL_TYPE_COMMS, CommsChannel
 
@@ -52,6 +49,12 @@ class CommsToolExecutor:
         handlers = {
             "comms_send_email": self._send_email,
             "comms_send_discord": self._send_discord,
+            "comms_send_slack": self._send_slack,
+            "comms_send_teams": self._send_teams,
+            "comms_send_zoom": self._send_zoom,
+            "comms_create_zoom_meeting": self._create_zoom_meeting,
+            "comms_create_teams_meeting": self._create_teams_meeting,
+            "comms_create_discord_event": self._create_discord_event,
             "comms_lookup_contact": self._lookup_contact,
         }
 
@@ -99,6 +102,16 @@ class CommsToolExecutor:
         if not target or not content:
             return "Error: 'target' and 'content' are required."
 
+        if not target.isdigit():
+            # Try to resolve from channel mappings
+            mappings = self.config.discord.channel_mappings if self.config.discord else {}
+            available = ", ".join(f"{cid}" for cid in mappings) if mappings else "none configured"
+            return (
+                f"Error: '{target}' is not a valid Discord ID. "
+                f"Discord requires a numeric snowflake ID (e.g. '1487175080776696089'). "
+                f"Configured channels: {available}"
+            )
+
         if self.config.require_approval:
             return await self._create_approval_task(
                 channel=CommsChannel.DISCORD,
@@ -110,6 +123,82 @@ class CommsToolExecutor:
         from axon.comms.senders import send_discord_message
         bot_token = await resolve_credential(self.org_id, "discord") or ""
         return await send_discord_message(bot_token, target, content, is_dm)
+
+    async def _send_slack(self, args: dict) -> str:
+        """Queue or send a Slack message."""
+        channel = args.get("channel", "")
+        content = args.get("content", "")
+
+        if not channel or not content:
+            return "Error: 'channel' and 'content' are required."
+
+        if self.config.require_approval:
+            return await self._create_approval_task(
+                channel=CommsChannel.SLACK,
+                payload={"channel": channel, "content": content},
+                preview=f"**Channel:** {channel}\n\n{content}",
+            )
+
+        from axon.comms.credentials import resolve_credential
+        from axon.comms.senders import send_slack_message
+        bot_token = await resolve_credential(self.org_id, "slack_bot_token") or ""
+        return await send_slack_message(bot_token, channel, content)
+
+    async def _send_teams(self, args: dict) -> str:
+        """Queue or send a Teams message."""
+        channel = args.get("channel", "")
+        content = args.get("content", "")
+
+        if not channel or not content:
+            return "Error: 'channel' and 'content' are required."
+
+        if self.config.require_approval:
+            return await self._create_approval_task(
+                channel=CommsChannel.TEAMS,
+                payload={"channel": channel, "content": content},
+                preview=f"**Channel:** {channel}\n\n{content}",
+            )
+
+        from axon.comms.credentials import resolve_credential
+        from axon.comms.senders import send_teams_message
+        app_id = await resolve_credential(self.org_id, "teams_app_id") or ""
+        app_secret = await resolve_credential(self.org_id, "teams_app_secret") or ""
+        service_url = "https://smba.trafficmanager.net/amer/"
+        return await send_teams_message(app_id, app_secret, service_url, channel, content)
+
+    async def _send_zoom(self, args: dict) -> str:
+        """Queue or send a Zoom Team Chat message."""
+        channel = args.get("channel", "")
+        content = args.get("content", "")
+
+        if not channel or not content:
+            return "Error: 'channel' and 'content' are required."
+
+        if self.config.require_approval:
+            return await self._create_approval_task(
+                channel=CommsChannel.ZOOM,
+                payload={"channel": channel, "content": content},
+                preview=f"**Channel:** {channel}\n\n{content}",
+            )
+
+        from axon.comms.credentials import resolve_credential
+        from axon.comms.senders_zoom import send_zoom_chat
+        account_id = await resolve_credential(self.org_id, "zoom_account_id") or ""
+        client_id = await resolve_credential(self.org_id, "zoom_client_id") or ""
+        client_secret = await resolve_credential(self.org_id, "zoom_client_secret") or ""
+        return await send_zoom_chat(account_id, client_id, client_secret, channel, content)
+
+    async def _create_zoom_meeting(self, args: dict) -> str:
+        from axon.comms.executor_meetings import handle_create_zoom_meeting
+        return await handle_create_zoom_meeting(self.org_id, args)
+
+    async def _create_teams_meeting(self, args: dict) -> str:
+        from axon.comms.executor_meetings import handle_create_teams_meeting
+        return await handle_create_teams_meeting(self.org_id, self.config, args)
+
+    async def _create_discord_event(self, args: dict) -> str:
+        from axon.comms.executor_meetings import handle_create_discord_event
+        return await handle_create_discord_event(self.org_id, self.config, args)
 
     async def _create_approval_task(
         self, channel: CommsChannel, payload: dict, preview: str,
@@ -139,47 +228,5 @@ class CommsToolExecutor:
         return f"{channel.value.title()} to {recipient} queued for approval."
 
     async def _lookup_contact(self, args: dict) -> str:
-        """Search contacts directory in shared vault."""
-        query = args.get("query", "").lower().strip()
-        if not query:
-            return "Error: 'query' is required."
-
-        contacts_dir = Path(self.shared_vault.vault_path) / "contacts"
-        if not contacts_dir.exists():
-            return "No contacts directory found. Ask the user to add contacts."
-
-        matches = []
-        for md_file in contacts_dir.glob("*.md"):
-            if md_file.name.endswith("-index.md"):
-                continue
-            try:
-                meta, body = self.shared_vault.read_file(f"contacts/{md_file.name}")
-                searchable = " ".join(str(v).lower() for v in meta.values()) + " " + body.lower()
-                if query in searchable:
-                    matches.append(self._format_contact(meta, body))
-            except Exception:
-                continue
-
-        if not matches:
-            return f"No contacts found matching '{query}'."
-        return f"Found {len(matches)} contact(s):\n\n" + "\n---\n".join(matches)
-
-    @staticmethod
-    def _format_contact(meta: dict, body: str) -> str:
-        """Format a contact for display."""
-        lines = []
-        if meta.get("name"):
-            lines.append(f"**Name:** {meta['name']}")
-        if meta.get("email"):
-            lines.append(f"**Email:** {meta['email']}")
-        if meta.get("discord_id"):
-            lines.append(f"**Discord:** {meta['discord_id']}")
-        if meta.get("phone"):
-            lines.append(f"**Phone:** {meta['phone']}")
-        if meta.get("role"):
-            lines.append(f"**Role:** {meta['role']}")
-        if meta.get("company"):
-            lines.append(f"**Company:** {meta['company']}")
-        if body.strip():
-            lines.append(f"**Notes:** {body.strip()[:200]}")
-        return "\n".join(lines)
+        from axon.comms.contacts import lookup_contact
+        return await lookup_contact(self.shared_vault, args.get("query", ""))

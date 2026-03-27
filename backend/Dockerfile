@@ -6,9 +6,10 @@ WORKDIR /app
 RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Copy source and install
-COPY pyproject.toml .
-COPY axon/ axon/
-COPY models/ models/
+COPY backend/pyproject.toml .
+COPY backend/axon/ axon/
+COPY backend/models/ models/
+COPY VERSION .
 RUN pip install --no-cache-dir ".[voice]"
 
 EXPOSE 8000

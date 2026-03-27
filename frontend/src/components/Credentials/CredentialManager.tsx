@@ -4,6 +4,14 @@ import { useCredentialStore } from "../../stores/credentialStore";
 const PROVIDERS = [
   { value: "resend", label: "Resend (Email)" },
   { value: "discord", label: "Discord (Bot Token)" },
+  { value: "slack_bot_token", label: "Slack (Bot Token)" },
+  { value: "slack_app_token", label: "Slack (App Token)" },
+  { value: "teams_app_id", label: "Teams (App ID)" },
+  { value: "teams_app_secret", label: "Teams (App Secret)" },
+  { value: "teams_organizer_id", label: "Teams (Organizer ID)" },
+  { value: "zoom_account_id", label: "Zoom (Account ID)" },
+  { value: "zoom_client_id", label: "Zoom (Client ID)" },
+  { value: "zoom_client_secret", label: "Zoom (Client Secret)" },
 ] as const;
 
 export function CredentialManager() {
@@ -38,7 +46,7 @@ export function CredentialManager() {
         </div>
       ) : credentials.length === 0 && !adding ? (
         <div className="text-xs text-base-content/60 py-1">
-          No API keys configured. Add credentials to enable email and Discord.
+          No API keys configured. Add credentials to enable integrations.
         </div>
       ) : (
         <div className="space-y-2">

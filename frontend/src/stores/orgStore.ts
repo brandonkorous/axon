@@ -1,10 +1,38 @@
 import { create } from "zustand";
 
+export interface DiscordConfig {
+  guild_id: string;
+  channel_mappings: Record<string, string>; // channel_id -> agent_id or "huddle"
+}
+
+export interface SlackConfig {
+  channel_mappings: Record<string, string>; // channel_id -> agent_id or "huddle"
+}
+
+export interface TeamsConfig {
+  tenant_id: string;
+  channel_mappings: Record<string, string>; // channel_id -> agent_id or "huddle"
+}
+
+export interface ZoomConfig {
+  channel_mappings: Record<string, string>; // channel_id -> agent_id or "huddle"
+}
+
 export interface OrgComms {
   require_approval: boolean;
   email_domain: string;
   email_signature: string;
   inbound_polling: boolean;
+  discord: DiscordConfig;
+  slack: SlackConfig;
+  teams: TeamsConfig;
+  zoom: ZoomConfig;
+}
+
+export interface OrgAgent {
+  id: string;
+  name: string;
+  title: string;
 }
 
 export interface OrgInfo {
@@ -13,6 +41,7 @@ export interface OrgInfo {
   description: string;
   type: string;
   comms: OrgComms;
+  agents: OrgAgent[];
   agent_count: number;
   has_huddle: boolean;
 }
@@ -47,7 +76,7 @@ interface OrgStore {
     name?: string;
     description?: string;
     type?: string;
-    comms?: Partial<OrgComms>;
+    comms?: Partial<OrgComms> & { discord?: Partial<DiscordConfig>; slack?: Partial<SlackConfig>; teams?: Partial<TeamsConfig>; zoom?: Partial<ZoomConfig> };
   }) => Promise<boolean>;
 }
 

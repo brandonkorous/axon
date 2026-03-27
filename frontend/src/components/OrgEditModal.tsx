@@ -69,6 +69,10 @@ export function OrgEditModal({ isOpen, onClose, org }: OrgEditModalProps) {
         email_domain: emailDomain,
         email_signature: emailSignature,
         inbound_polling: inboundPolling,
+        discord: org.comms.discord, // preserve existing discord config
+        slack: org.comms.slack, // preserve existing slack config
+        teams: org.comms.teams, // preserve existing teams config
+        zoom: org.comms.zoom, // preserve existing zoom config
       },
     });
     if (ok) {

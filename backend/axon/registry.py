@@ -69,7 +69,25 @@ def list_orgs() -> list[dict]:
                 "email_domain": org.config.comms.email_domain,
                 "email_signature": org.config.comms.email_signature,
                 "inbound_polling": org.config.comms.inbound_polling,
+                "discord": {
+                    "guild_id": (org.config.comms.discord.guild_id if org.config.comms.discord else ""),
+                    "channel_mappings": (org.config.comms.discord.channel_mappings if org.config.comms.discord else {}),
+                },
+                "slack": {
+                    "channel_mappings": (org.config.comms.slack.channel_mappings if org.config.comms.slack else {}),
+                },
+                "teams": {
+                    "tenant_id": (org.config.comms.teams.tenant_id if org.config.comms.teams else ""),
+                    "channel_mappings": (org.config.comms.teams.channel_mappings if org.config.comms.teams else {}),
+                },
+                "zoom": {
+                    "channel_mappings": (org.config.comms.zoom.channel_mappings if org.config.comms.zoom else {}),
+                },
             },
+            "agents": [
+                {"id": agent.id, "name": agent.name, "title": getattr(agent.config, "title", "")}
+                for agent in org.agent_registry.values()
+            ],
             "agent_count": len(org.agent_registry),
             "has_huddle": org.huddle is not None,
         }
