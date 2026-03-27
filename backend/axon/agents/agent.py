@@ -142,6 +142,26 @@ class Agent:
             from axon.web.executor import WebToolExecutor
             self._web_executor = WebToolExecutor(config=config.web)
 
+        # Media executor (YouTube transcripts, summarization)
+        self._media_executor = None
+        if config.media.enabled:
+            from axon.media.executor import MediaToolExecutor
+            self._media_executor = MediaToolExecutor(config=config.media)
+
+        # Browser executor (Playwright-based web automation)
+        self._browser_executor = None
+        if config.browser.enabled:
+            from axon.browser.executor import BrowserToolExecutor
+            self._browser_executor = BrowserToolExecutor(config=config.browser)
+
+        # Integration executor (external service plugins)
+        self._integration_executor = None
+        if config.integrations.enabled:
+            from axon.integrations.registry import create_integration_executor
+            self._integration_executor = create_integration_executor(
+                config.integrations.enabled,
+            )
+
         # Tools
         self.tool_executor = ToolExecutor(
             self.vault, self.id,
@@ -153,6 +173,9 @@ class Agent:
             conversation_manager=self.conversation_manager,
             comms_executor=self._comms_executor,
             web_executor=self._web_executor,
+            browser_executor=self._browser_executor,
+            media_executor=self._media_executor,
+            integration_executor=self._integration_executor,
         )
         self.tools = self._build_tool_list()
 
@@ -165,6 +188,22 @@ class Agent:
 
         # Concurrency guard — only one process() at a time per agent
         self._processing_lock = asyncio.Lock()
+
+    async def setup(self) -> None:
+        """Async post-init — load credentials for integrations."""
+        if not self._integration_executor:
+            return
+        from axon.integrations.credentials import load_integration_credentials
+        credentials_map = await load_integration_credentials(
+            self._org_id, self.config.integrations.enabled,
+        )
+        if credentials_map:
+            from axon.integrations.registry import create_integration_executor
+            self._integration_executor = create_integration_executor(
+                self.config.integrations.enabled, credentials_map,
+            )
+            self.tool_executor._integration_executor = self._integration_executor
+            self.tools = self._build_tool_list()
 
     @property
     def conversation(self) -> Conversation:
@@ -413,9 +452,14 @@ class Agent:
                 "5. `vault_list('inbox')` — check your inbox for delegated work.\n\n"
                 "### Rules\n"
                 "- **When asked about your tasks**: call `task_list(assignee='" + self.id + "')` first.\n"
-                "- **Tasks assigned to you are YOUR work.** Do the work, don't just report it.\n"
-                "  When asked for an update, actually work on the task — research, analyze, "
-                "  write findings to your vault, then update the task status.\n"
+                "- **Tasks assigned to you are YOUR responsibility.** "
+                + ("Use `delegate_task` to assign implementation work to your delegates, "
+                   "then track and relay results. "
+                   if delegates else
+                   "Do the work, don't just report it. "
+                   "When asked for an update, actually work on the task — research, analyze, "
+                   "write findings to your vault, then update the task status. ")
+                + "\n"
                 "- **Use exact paths** from task_list when calling task_update.\n"
                 "- Never refer to yourself in third person. You ARE `" + self.id + "`.\n\n"
             )
@@ -520,6 +564,25 @@ class Agent:
         if self._web_executor:
             from axon.web.tools import WEB_TOOLS
             tools.extend(WEB_TOOLS)
+
+        # Research tools — always available when web is enabled
+        if self._web_executor:
+            from axon.research.tools import RESEARCH_TOOLS
+            tools.extend(RESEARCH_TOOLS)
+
+        # Browser tools when enabled
+        if self._browser_executor:
+            from axon.browser.tools import BROWSER_TOOLS
+            tools.extend(BROWSER_TOOLS)
+
+        # Media tools when enabled
+        if self._media_executor:
+            from axon.media.tools import MEDIA_TOOLS
+            tools.extend(MEDIA_TOOLS)
+
+        # Integration tools when integrations are enabled
+        if self._integration_executor:
+            tools.extend(self._integration_executor.get_tools())
 
         # All agents can request new agents
         tools.extend(RECRUITMENT_TOOLS)

@@ -20,6 +20,7 @@ export function WorkerSetupView() {
   const [codebasePath, setCodebasePath] = useState("");
   const [typeConfig, setTypeConfig] = useState<Record<string, string>>({});
   const [acceptsFrom, setAcceptsFrom] = useState<string[]>(["axon"]);
+  const [sandboxEnabled, setSandboxEnabled] = useState(false);
 
   useEffect(() => {
     reset();
@@ -50,6 +51,7 @@ export function WorkerSetupView() {
       codebase_path: codebasePath,
       accepts_from: acceptsFrom,
       type_config: Object.keys(typeConfig).length > 0 ? typeConfig : undefined,
+      sandbox: { enabled: sandboxEnabled },
     });
     if (ok) {
       fetchAgents();
@@ -89,6 +91,7 @@ export function WorkerSetupView() {
               codebasePath={codebasePath}
               typeConfig={typeConfig}
               acceptsFrom={acceptsFrom}
+              sandboxEnabled={sandboxEnabled}
               delegators={delegators}
               creating={creating}
               onNameChange={setName}
@@ -96,6 +99,7 @@ export function WorkerSetupView() {
               onCodebaseChange={setCodebasePath}
               onTypeConfigChange={handleTypeConfigChange}
               onToggleAgent={toggleAgent}
+              onSandboxChange={setSandboxEnabled}
               onSubmit={handleCreate}
             />
           )}
@@ -114,14 +118,15 @@ export function WorkerSetupView() {
 }
 
 function SetupForm({
-  name, workerType, codebasePath, typeConfig, acceptsFrom, delegators, creating,
-  onNameChange, onWorkerTypeChange, onCodebaseChange, onTypeConfigChange, onToggleAgent, onSubmit,
+  name, workerType, codebasePath, typeConfig, acceptsFrom, sandboxEnabled, delegators, creating,
+  onNameChange, onWorkerTypeChange, onCodebaseChange, onTypeConfigChange, onToggleAgent, onSandboxChange, onSubmit,
 }: {
   name: string;
   workerType: WorkerType;
   codebasePath: string;
   typeConfig: Record<string, string>;
   acceptsFrom: string[];
+  sandboxEnabled: boolean;
   delegators: { id: string; name: string }[];
   creating: boolean;
   onNameChange: (v: string) => void;
@@ -129,6 +134,7 @@ function SetupForm({
   onCodebaseChange: (v: string) => void;
   onTypeConfigChange: (key: string, value: string) => void;
   onToggleAgent: (id: string) => void;
+  onSandboxChange: (v: boolean) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
@@ -173,6 +179,24 @@ function SetupForm({
         <p className="text-xs text-base-content/60 mt-1">
           Which agents can delegate tasks to this worker
         </p>
+      </div>
+
+      <div>
+        <label className="label text-sm font-medium">Isolation</label>
+        <label className="flex items-center gap-3 cursor-pointer mt-1">
+          <input
+            type="checkbox"
+            className="toggle toggle-sm toggle-info"
+            checked={sandboxEnabled}
+            onChange={(e) => onSandboxChange(e.target.checked)}
+          />
+          <div>
+            <span className="text-sm">Run in sandbox</span>
+            <p className="text-xs text-base-content/60">
+              Execute in an isolated Docker container with resource limits
+            </p>
+          </div>
+        </label>
       </div>
 
       <button

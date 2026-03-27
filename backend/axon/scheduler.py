@@ -337,6 +337,18 @@ class AgentScheduler:
             )
             prompt = ACTION_PROMPTS[action_key].format(task_details=task_details)
 
+            # If agent can delegate, append delegation instructions
+            delegates = agent.config.delegation.can_delegate_to if hasattr(agent, "config") else []
+            if delegates and action_key == "work_on_tasks":
+                names = ", ".join(delegates)
+                prompt += (
+                    f"\n\n**IMPORTANT — Delegation:** You can delegate work to: {names}. "
+                    f"If this task involves code implementation, code changes, or technical "
+                    f"execution, use `delegate_task` to assign the work to the appropriate "
+                    f"agent rather than doing it yourself. Provide clear, detailed instructions "
+                    f"including file paths, expected behavior, and acceptance criteria."
+                )
+
             try:
                 if is_external:
                     # Huddle-originated task: process standalone, push to ws_target

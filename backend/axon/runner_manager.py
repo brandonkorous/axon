@@ -4,6 +4,9 @@ The backend writes state.json files to signal desired state.
 A host-side runner service (runner_host.py) watches these files
 and manages the actual subprocess lifecycle on the host machine
 where Claude CLI and codebases are accessible.
+
+Workers with sandbox enabled are launched in Docker containers
+instead of bare Node.js processes on the host.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from axon.config import settings
 
@@ -40,17 +44,72 @@ class RunnerManager:
         except (FileNotFoundError, json.JSONDecodeError):
             return "stopped"
 
+    @staticmethod
+    def _read_config(runner_dir: Path) -> dict[str, Any]:
+        """Read runner config.json."""
+        config_path = runner_dir / "config.json"
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    @staticmethod
+    def is_sandboxed(org_id: str, agent_id: str) -> bool:
+        """Check if a runner is configured for sandbox execution."""
+        runner_dir = Path(settings.axon_orgs_dir) / org_id / "runners" / agent_id
+        config = RunnerManager._read_config(runner_dir)
+        sandbox_cfg = config.get("sandbox", {})
+        return sandbox_cfg.get("enabled", False)
+
     # ── Lifecycle (writes desired state for host service) ──────────
 
     async def start(self, org_id: str, agent_id: str) -> None:
         runner_dir = self._runner_dir(org_id, agent_id)
         if not (runner_dir / "runner.js").exists():
             raise FileNotFoundError(f"Runner not scaffolded: {runner_dir}")
-        self._write_state(runner_dir, "running")
+
+        # If sandbox-enabled, start via SandboxManager instead
+        if self.is_sandboxed(org_id, agent_id):
+            await self._start_sandbox(org_id, agent_id, runner_dir)
+        else:
+            self._write_state(runner_dir, "running")
         logger.info("Requested start for %s/%s", org_id, agent_id)
+
+    async def _start_sandbox(self, org_id: str, agent_id: str, runner_dir: Path) -> None:
+        """Start a sandboxed runner via Docker container."""
+        from axon.sandbox.config import SandboxConfig
+        from axon.sandbox.manager import sandbox_manager
+
+        config_data = self._read_config(runner_dir)
+        sandbox_cfg = SandboxConfig(**config_data.get("sandbox", {}))
+        workspace = config_data.get("codebase", str(runner_dir))
+
+        env = {
+            "AXON_RUNNER_DIR": "/runner",
+            "AXON_WORKSPACE": "/workspace",
+            "AXON_URL": config_data.get("axon_url", "http://host.docker.internal:8000"),
+            "AXON_ORG_ID": org_id,
+            "AXON_AGENT_ID": agent_id,
+        }
+
+        await sandbox_manager.create(
+            org_id, agent_id,
+            runner_dir=str(runner_dir),
+            workspace_dir=workspace,
+            config=sandbox_cfg,
+            env=env,
+        )
+        self._write_state(runner_dir, "running")
 
     async def stop(self, org_id: str, agent_id: str) -> None:
         runner_dir = self._runner_dir(org_id, agent_id)
+
+        # If sandboxed, stop the container too
+        if self.is_sandboxed(org_id, agent_id):
+            from axon.sandbox.manager import sandbox_manager
+            await sandbox_manager.stop(org_id, agent_id)
+
         self._write_state(runner_dir, "stop")
         logger.info("Requested stop for %s/%s", org_id, agent_id)
 
@@ -76,6 +135,12 @@ class RunnerManager:
         if not log_path.exists():
             return []
         return _tail(log_path, lines)
+
+    def clear_logs(self, org_id: str, agent_id: str) -> None:
+        log_path = self._runner_dir(org_id, agent_id) / "runner.log"
+        if log_path.exists():
+            log_path.write_text("", encoding="utf-8")
+            logger.info("Cleared logs for %s/%s", org_id, agent_id)
 
     # ── Shutdown / cleanup ─────────────────────────────────────────
 

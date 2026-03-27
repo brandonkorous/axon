@@ -29,23 +29,25 @@
 Most AI tools give you a chatbot. Axon gives you a **boardroom**.
 
 Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define — that maintain persistent memory across sessions, debate each other in real-time, and proactively surface insights you didn't think to ask for. Everything runs on your machine. Your data never leaves your infrastructure.
+![axon Dashboard screenshot](.github/assets/axon-dashboard.png)
+![axon Huddle screenshot](.github/assets/axon-huddle.png)
 
 ---
 
 ## Features
 
-| | Feature | Description |
-|---|---|---|
-| **Agents** | Multi-Agent Orchestration | Run multiple AI advisors simultaneously with distinct personas and expertise |
-| **Memory** | Persistent Neural Memory | Structured vault-based memory that survives across sessions (Obsidian-compatible) |
-| **Voice** | Voice-First Interface | Talk to your advisors — each persona has a distinct voice |
-| **Boardroom** | Real-Time Huddles | Watch advisors discuss, debate, and converge on recommendations live |
-| **Brain** | Proactive Intelligence | Agents surface insights and flag issues without being asked |
-| **Runner** | Autonomous Task Execution | Agents can execute code and complete tasks on their own |
-| **Models** | Multi-LLM Support | Anthropic Claude, OpenAI, or local models via Ollama |
-| **Orgs** | Multi-Organization | Isolated vaults and agent configurations per organization |
-| **Shield** | Full Audit Logging | Complete transparency into every agent action and decision |
-| **Dashboard** | Command & Control | Active agents, decisions, action items, inbox, vault health — one view |
+|               | Feature                   | Description                                                                       |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **Agents**    | Multi-Agent Orchestration | Run multiple AI advisors simultaneously with distinct personas and expertise      |
+| **Memory**    | Persistent Neural Memory  | Structured vault-based memory that survives across sessions (Obsidian-compatible) |
+| **Voice**     | Voice-First Interface     | Talk to your advisors — each persona has a distinct voice                         |
+| **Boardroom** | Real-Time Huddles         | Watch advisors discuss, debate, and converge on recommendations live              |
+| **Brain**     | Proactive Intelligence    | Agents surface insights and flag issues without being asked                       |
+| **Runner**    | Autonomous Task Execution | Agents can execute code and complete tasks on their own                           |
+| **Models**    | Multi-LLM Support         | Anthropic Claude, OpenAI, or local models via Ollama                              |
+| **Orgs**      | Multi-Organization        | Isolated vaults and agent configurations per organization                         |
+| **Shield**    | Full Audit Logging        | Complete transparency into every agent action and decision                        |
+| **Dashboard** | Command & Control         | Active agents, decisions, action items, inbox, vault health — one view            |
 
 ---
 
@@ -110,14 +112,14 @@ Axon runs three services via Docker Compose:
 
 Copy `.env.example` to `.env` and configure:
 
-| Variable | Description | Required |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude models | If using Claude |
-| `OPENAI_API_KEY` | OpenAI API key | If using OpenAI |
-| `DEFAULT_MODEL` | Default LLM model identifier | Yes |
-| `OLLAMA_BASE_URL` | Ollama endpoint (default: `http://ollama:11434`) | If using local LLMs |
-| `DATABASE_URL` | Database connection string (default: SQLite) | No |
-| `VAULT_PATH` | Path to the memory vault directory | No |
+| Variable            | Description                                      | Required            |
+| ------------------- | ------------------------------------------------ | ------------------- |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude models              | If using Claude     |
+| `OPENAI_API_KEY`    | OpenAI API key                                   | If using OpenAI     |
+| `DEFAULT_MODEL`     | Default LLM model identifier                     | Yes                 |
+| `OLLAMA_BASE_URL`   | Ollama endpoint (default: `http://ollama:11434`) | If using local LLMs |
+| `DATABASE_URL`      | Database connection string (default: SQLite)     | No                  |
+| `VAULT_PATH`        | Path to the memory vault directory               | No                  |
 
 For a full list of options, see [`.env.example`](.env.example).
 
@@ -138,9 +140,9 @@ description: Financial strategy, fundraising, unit economics, and fiscal discipl
 model: claude-sonnet-4-20250514
 voice: onyx
 system_prompt: |
-  You are a seasoned CFO advising a startup. You focus on burn rate,
-  runway, unit economics, and fundraising strategy. Be direct and
-  data-driven. Flag financial risks early.
+    You are a seasoned CFO advising a startup. You focus on burn rate,
+    runway, unit economics, and fundraising strategy. Be direct and
+    data-driven. Flag financial risks early.
 ```
 
 Restart the backend and your new advisor appears in the dashboard. No code changes required.

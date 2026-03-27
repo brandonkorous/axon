@@ -6,7 +6,7 @@ interface WorkerLogPanelProps {
 }
 
 export function WorkerLogPanel({ agentId }: WorkerLogPanelProps) {
-  const { fetchLogs } = useWorkerStore();
+  const { fetchLogs, clearLogs } = useWorkerStore();
   const [lines, setLines] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
   const scrollRef = useRef<HTMLPreElement>(null);
@@ -15,6 +15,11 @@ export function WorkerLogPanel({ agentId }: WorkerLogPanelProps) {
   const loadLogs = async () => {
     const result = await fetchLogs(agentId);
     setLines(result);
+  };
+
+  const handleClear = async () => {
+    const ok = await clearLogs(agentId);
+    if (ok) setLines([]);
   };
 
   useEffect(() => {
@@ -38,12 +43,23 @@ export function WorkerLogPanel({ agentId }: WorkerLogPanelProps) {
 
   return (
     <div className="space-y-2">
-      <button
-        className="btn btn-ghost btn-xs text-base-content/60"
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? "\u25BE Hide logs" : "\u25B8 Show logs"}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          className="btn btn-ghost btn-xs text-base-content/60"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "\u25BE Hide logs" : "\u25B8 Show logs"}
+        </button>
+
+        {expanded && lines.length > 0 && (
+          <button
+            className="btn btn-ghost btn-xs text-error/60 hover:text-error"
+            onClick={handleClear}
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       {expanded && (
         <pre

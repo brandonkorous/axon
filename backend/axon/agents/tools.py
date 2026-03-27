@@ -249,6 +249,9 @@ class ToolExecutor:
         advisor_ids: list[str] | None = None,
         comms_executor: "CommsToolExecutor | None" = None,
         web_executor: "WebToolExecutor | None" = None,
+        browser_executor: "BrowserToolExecutor | None" = None,
+        media_executor: "MediaToolExecutor | None" = None,
+        integration_executor: "IntegrationToolExecutor | None" = None,
     ):
         self.vault = vault
         self.agent_id = agent_id
@@ -269,6 +272,19 @@ class ToolExecutor:
 
         # Web executor for search/fetch tools
         self._web_executor: "WebToolExecutor | None" = web_executor
+
+        # Browser executor for Playwright-based automation
+        self._browser_executor: "BrowserToolExecutor | None" = browser_executor
+
+        # Media executor for YouTube/podcast consumption
+        self._media_executor: "MediaToolExecutor | None" = media_executor
+
+        # Integration executor for external service plugins
+        self._integration_executor: "IntegrationToolExecutor | None" = integration_executor
+
+        # Research executor for structured research workflows
+        from axon.research.executor import ResearchToolExecutor
+        self._research_executor = ResearchToolExecutor()
 
         # Shared vault executor for task/issue/knowledge tools
         self._shared_executor: "SharedVaultToolExecutor | None" = None
@@ -301,6 +317,30 @@ class ToolExecutor:
         # Route web tools to the web executor
         if self._web_executor and tool_name.startswith("web_"):
             result = await self._web_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route research tools to the research executor
+        if tool_name.startswith("research_"):
+            result = await self._research_executor.execute(tool_name, arguments, self.agent_id)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route browser tools to the browser executor
+        if self._browser_executor and tool_name.startswith("browser_"):
+            result = await self._browser_executor.execute(tool_name, arguments, self.agent_id)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route media tools to the media executor
+        if self._media_executor and tool_name.startswith("media_"):
+            result = await self._media_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route integration tools to the integration executor
+        if self._integration_executor and tool_name in self._integration_executor._handler_map:
+            result = await self._integration_executor.execute(tool_name, arguments)
             self._log_audit(tool_name, arguments, result)
             return result
 
@@ -460,11 +500,15 @@ class ToolExecutor:
                 if hasattr(self, "conversation_manager") and self.conversation_manager
                 else ""
             )
+            # External agents (workers) pick up "pending" tasks via REST polling;
+            # regular agents pick up "in_progress" tasks via the scheduler.
+            is_target_external = getattr(target, "is_external", False)
+            task_status = "pending" if is_target_external else "in_progress"
             shared_meta = {
                 "name": args["task_description"][:80],
                 "type": "task",
                 "assignee": to_agent,
-                "status": "in_progress",
+                "status": task_status,
                 "priority": priority_map.get(args.get("priority", "medium"), "p2"),
                 "delegation_ref": task_path,
                 "created_by": self.agent_id,

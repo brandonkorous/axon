@@ -26,6 +26,12 @@ class ResultSubmission(BaseModel):
     error: str | None = None
 
 
+class ActivityUpdate(BaseModel):
+    phase: str  # "idle" | "generating_plan" | "awaiting_approval" | "executing"
+    task_name: str = ""
+    detail: str = ""
+
+
 def _get_external_agent(org_id: str, agent_id: str):
     org = registry.get_org(org_id)
     if not org:
@@ -210,6 +216,19 @@ async def submit_result(org_id: str, agent_id: str, task_path: str, data: Result
             delegating_agent.vault.write_file(notif_path, notif_meta, notif_body)
 
     return {"status": metadata["status"], "task_path": task_path}
+
+
+@org_router.post("/{agent_id}/activity")
+async def update_activity(org_id: str, agent_id: str, data: ActivityUpdate):
+    """Runner reports its current activity phase."""
+    _, agent = _get_external_agent(org_id, agent_id)
+    agent.current_activity = {
+        "phase": data.phase,
+        "task_name": data.task_name,
+        "detail": data.detail,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    return {"status": "ok"}
 
 
 @org_router.get("/{agent_id}/tasks/{task_path:path}/status")

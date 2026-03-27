@@ -69,6 +69,14 @@ async def get_worker_logs(org_id: str, agent_id: str, lines: int = 100):
     return {"lines": runner_manager.get_logs(org_id, agent_id, lines)}
 
 
+@org_router.delete("/{agent_id}/logs")
+async def clear_worker_logs(org_id: str, agent_id: str):
+    """Clear the runner log file."""
+    _validate_worker(org_id, agent_id)
+    runner_manager.clear_logs(org_id, agent_id)
+    return {"status": "cleared"}
+
+
 @org_router.get("/{agent_id}/status")
 async def worker_status(org_id: str, agent_id: str):
     """Get connection and process status for a worker agent."""

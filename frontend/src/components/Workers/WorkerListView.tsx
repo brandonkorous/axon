@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useOrgStore } from "../../stores/orgStore";
-import { useWorkerStore, WorkerInfo } from "../../stores/workerStore";
+import { useWorkerStore, WorkerActivity, WorkerInfo } from "../../stores/workerStore";
 import { WORKER_TYPE_MAP } from "../../constants/workerTypes";
 import { WorkerControls } from "./WorkerControls";
 
@@ -66,12 +66,30 @@ export function WorkerListView() {
   );
 }
 
+const ACTIVITY_LABEL: Record<string, string> = {
+  generating_plan: "Generating plan",
+  awaiting_approval: "Awaiting approval",
+  executing: "Executing",
+};
+
+function ActivityIndicator({ activity }: { activity: WorkerActivity }) {
+  if (activity.phase === "idle") return null;
+  const label = ACTIVITY_LABEL[activity.phase] || activity.phase;
+  return (
+    <p className="text-xs text-info truncate flex items-center gap-1.5">
+      <span className="loading loading-dots loading-xs" />
+      <span>{label}{activity.task_name ? `: ${activity.task_name}` : ""}</span>
+    </p>
+  );
+}
+
 function WorkerCard({ worker }: { worker: WorkerInfo }) {
   const navigate = useNavigate();
   const state = worker.process_state || "stopped";
   const dot = STATE_DOT[state] || STATE_DOT.stopped;
   const badge = STATE_BADGE[state] || STATE_BADGE.stopped;
   const typeInfo = WORKER_TYPE_MAP[worker.worker_type || "code"];
+  const activity = worker.activity;
 
   return (
     <div className="card bg-base-300 border border-neutral">
@@ -88,10 +106,19 @@ function WorkerCard({ worker }: { worker: WorkerInfo }) {
                 {typeInfo.label}
               </span>
             )}
+            {worker.sandboxed && (
+              <span className="badge badge-xs badge-info badge-outline" title="Running in isolated sandbox">
+                Sandboxed
+              </span>
+            )}
           </div>
-          <p className="text-xs text-base-content/60 truncate">
-            {worker.codebase_path || worker.agent_id}
-          </p>
+          {activity && activity.phase !== "idle" ? (
+            <ActivityIndicator activity={activity} />
+          ) : (
+            <p className="text-xs text-base-content/60 truncate">
+              {worker.codebase_path || worker.agent_id}
+            </p>
+          )}
         </div>
         <WorkerControls agentId={worker.agent_id} processState={state} />
         <span className={`badge badge-xs ${badge.cls}`}>

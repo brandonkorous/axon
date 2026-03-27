@@ -13,6 +13,9 @@ from pydantic_settings import BaseSettings
 
 from axon.comms.config import CommsConfig  # noqa: E402 — no circular import risk
 from axon.integrations.config import IntegrationConfig  # noqa: E402
+from axon.skills.config import SkillsConfig  # noqa: E402
+from axon.browser.config import BrowserConfig  # noqa: E402
+from axon.media.config import MediaConfig  # noqa: E402
 from axon.reasoning.config import ReasoningConfig  # noqa: E402 — no circular import risk (lazy __init__)
 from axon.web.config import WebConfig  # noqa: E402
 
@@ -163,6 +166,9 @@ class PersonaConfig(BaseModel):
     comms: CommsConfig = CommsConfig()
     web: WebConfig = WebConfig()
     integrations: IntegrationConfig = IntegrationConfig()
+    skills: SkillsConfig = SkillsConfig()
+    browser: BrowserConfig = BrowserConfig()
+    media: MediaConfig = MediaConfig()
     ui: UIConfig = UIConfig()
     external: bool = False  # Legacy — use type: external instead
     system_prompt: str = ""

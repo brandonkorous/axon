@@ -71,8 +71,8 @@ export function Layout() {
         />
       )}
 
-      <aside className={`fixed z-40 inset-y-0 left-0 w-64 bg-base-200 border-r border-neutral flex flex-col transition-transform duration-200 md:static md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="p-4 border-b border-neutral flex items-center justify-between">
+      <aside className={`fixed z-40 inset-y-0 left-0 w-64 bg-base-200 flex flex-col transition-transform duration-200 md:static md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="p-4 flex items-center justify-between">
           <div>
             <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold text-base-content tracking-tight">
               axon
@@ -220,6 +220,18 @@ export function Layout() {
               </NavLink>
             </li>
 
+            <li className="menu-title mt-4">Extensions</li>
+            <li>
+              <NavLink to="/skills" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Skills
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/artifacts" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Artifacts
+              </NavLink>
+            </li>
+
             <li className="menu-title mt-4">Knowledge</li>
             <li>
               <NavLink to="/mind" className={({ isActive }) => isActive ? "menu-active" : ""}>
@@ -251,7 +263,7 @@ export function Layout() {
 
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* Mobile header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral bg-base-200 md:hidden">
+        <div className="flex items-center gap-3 px-4 py-3 bg-base-200 md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             className="btn btn-ghost btn-sm btn-square"

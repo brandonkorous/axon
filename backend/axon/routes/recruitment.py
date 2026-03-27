@@ -144,6 +144,9 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
             if parent_agent and hasattr(parent_agent, "config"):
                 if agent_id not in parent_agent.config.delegation.can_delegate_to and "*" not in parent_agent.config.delegation.can_delegate_to:
                     parent_agent.config.delegation.can_delegate_to.append(agent_id)
+                    # Rebuild tool list so delegate_task becomes available
+                    if hasattr(parent_agent, "_build_tool_list"):
+                        parent_agent.tools = parent_agent._build_tool_list()
 
         # Update orchestrator's specialist roster
         _refresh_orchestrator_roster(org)

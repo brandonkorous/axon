@@ -146,7 +146,7 @@ export function ChatInput({
   };
 
   return (
-    <div className="border-t border-neutral bg-base-200 p-4">
+    <div className="bg-base-200 p-4">
       <div className="relative flex gap-2 items-end max-w-4xl mx-auto">
         {acMode && (
           <InputAutocomplete

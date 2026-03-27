@@ -39,6 +39,7 @@ def scaffold_runner(
     codebase_path: str,
     worker_type: str = WorkerType.CODE,
     type_config: dict | None = None,
+    sandbox: dict | None = None,
 ) -> Path:
     """Create a self-contained runner app for a worker agent.
 
@@ -69,6 +70,7 @@ def scaffold_runner(
         "codebase": codebase_path,
         "worker_type": worker_type,
         **({"type_config": type_config} if type_config else {}),
+        **({"sandbox": sandbox} if sandbox else {}),
     }
     config_path = runner_dir / "config.json"
     with open(config_path, "w", encoding="utf-8") as f:

@@ -17,6 +17,8 @@ import { WorkerListView } from "./components/Workers/WorkerListView";
 import { WorkerDetailView } from "./components/Workers/WorkerDetailView";
 import { WorkerSetupView } from "./components/Workers/WorkerSetupView";
 import { DocumentView } from "./components/Documents/DocumentView";
+import { SkillBrowser } from "./components/Skills/SkillBrowser";
+import { ArtifactViewer } from "./components/Artifacts/ArtifactViewer";
 
 export default function App() {
   return (
@@ -36,6 +38,8 @@ export default function App() {
         <Route path="/usage" element={<UsageView />} />
         <Route path="/mind/:agentId?" element={<MindView />} />
         <Route path="/memory/:agentId?" element={<MindView />} />
+        <Route path="/skills" element={<SkillBrowser />} />
+        <Route path="/artifacts" element={<ArtifactViewer />} />
         <Route path="/workers" element={<WorkerListView />} />
         <Route path="/workers/new" element={<WorkerSetupView />} />
         <Route path="/workers/:agentId" element={<WorkerDetailView />} />

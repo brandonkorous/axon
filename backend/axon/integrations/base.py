@@ -18,6 +18,13 @@ class BaseIntegration(ABC):
     """
 
     name: str = ""
+    description: str = ""
+    required_scopes: list[str] = []
+    tool_prefix: str = ""
+
+    def configure(self, credentials: dict[str, Any] | None = None) -> None:
+        """Inject credentials after instantiation. Override if needed."""
+        self._credentials = credentials or {}
 
     @abstractmethod
     def get_tools(self) -> list[dict[str, Any]]:
@@ -28,3 +35,10 @@ class BaseIntegration(ABC):
     async def execute(self, tool_name: str, arguments: str) -> str:
         """Execute a tool call for this integration."""
         ...
+
+    async def on_agent_start(self, agent_id: str) -> None:
+        """Called when an agent with this integration starts up."""
+
+    async def on_agent_message(self, agent_id: str, message: str) -> str | None:
+        """Called before processing — can inject context. Return None to skip."""
+        return None

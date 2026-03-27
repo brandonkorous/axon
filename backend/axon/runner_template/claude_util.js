@@ -69,8 +69,15 @@ function runClaude(workDir, prompt, extraArgs = []) {
     const stdoutChunks = [];
     const stderrChunks = [];
 
-    proc.stdout.on("data", (d) => stdoutChunks.push(d));
-    proc.stderr.on("data", (d) => stderrChunks.push(d));
+    proc.stdout.on("data", (d) => {
+      stdoutChunks.push(d);
+      // Stream to console (appears in runner.log) for real-time visibility
+      process.stdout.write(d);
+    });
+    proc.stderr.on("data", (d) => {
+      stderrChunks.push(d);
+      process.stderr.write(d);
+    });
 
     proc.on("error", (err) => {
       fs.closeSync(stdin);

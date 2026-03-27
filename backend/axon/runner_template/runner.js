@@ -132,12 +132,19 @@ class Runner {
     }
   }
 
+  async _reportActivity(phase, taskName = "", detail = "") {
+    try {
+      await httpPost(`${this.base}/activity`, { phase, task_name: taskName, detail });
+    } catch (_) { /* best-effort */ }
+  }
+
   async _handlePending(task) {
     if (this._busy) return;
     this._busy = true;
     try {
       const { path: taskPath, name = taskPath, body = "" } = task;
       log("INFO", `New task: ${name}`);
+      await this._reportActivity("generating_plan", name);
 
       let plan;
       try {
@@ -145,10 +152,12 @@ class Runner {
       } catch (err) {
         log("ERROR", `Plan generation failed: ${err.message}`);
         await this._submitResult(taskPath, false, String(err), "", String(err));
+        await this._reportActivity("idle");
         return;
       }
 
       log("INFO", `Submitting plan for approval: ${taskPath}`);
+      await this._reportActivity("awaiting_approval", name);
       const { statusCode, body: resp } = await httpPost(
         `${this.base}/tasks/${taskPath}/plan`, { plan, files_affected: [] }
       );
@@ -165,17 +174,20 @@ class Runner {
       if (!plan) { log("WARN", `Approved task has no plan content: ${taskPath}`); return; }
 
       log("INFO", `Executing approved plan: ${name}`);
+      await this._reportActivity("executing", name);
       let result;
       try {
         result = await this._executePlan(this.workDir, plan);
       } catch (err) {
         log("ERROR", `Execution failed: ${err.message}`);
         await this._submitResult(taskPath, false, String(err), "", String(err));
+        await this._reportActivity("idle");
         return;
       }
 
       await this._submitResult(taskPath, result.success, result.output.slice(0, 2000), result.diff || "", result.error);
       log("INFO", `Task ${result.success ? "done" : "failed"}: ${name}`);
+      await this._reportActivity("idle");
     } finally { this._busy = false; }
   }
 

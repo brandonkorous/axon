@@ -1,5 +1,149 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#F3EDE5"/>
-  <text x="16" y="24" text-anchor="middle" font-family="'Fraunces', Georgia, serif" font-size="22" font-weight="800" fill="#37342F">a</text>
-  <line x1="9" y1="19" x2="23" y2="19" stroke="#6B9E9E" stroke-width="1.2" opacity="0.4"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 200">
+  <!-- Generator: Adobe Illustrator 30.2.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 1)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: url(#logoGrid);
+      }
+
+      .st1, .st2, .st3, .st4, .st5, .st6, .st7, .st8, .st9, .st10, .st11, .st12, .st13, .st14, .st15 {
+        isolation: isolate;
+      }
+
+      .st1, .st4 {
+        fill: #6b9e9e;
+      }
+
+      .st1, .st6 {
+        opacity: .4;
+      }
+
+      .st2, .st3, .st5, .st16, .st7, .st9, .st10, .st11, .st14, .st15 {
+        fill: none;
+      }
+
+      .st2, .st3, .st14 {
+        stroke-width: .5px;
+      }
+
+      .st2, .st5 {
+        stroke: #c07050;
+      }
+
+      .st2, .st14 {
+        opacity: .2;
+      }
+
+      .st3, .st5, .st10, .st17, .st15 {
+        opacity: .3;
+      }
+
+      .st3, .st9, .st11, .st14, .st15 {
+        stroke: #6b9e9e;
+      }
+
+      .st4 {
+        opacity: .7;
+      }
+
+      .st5 {
+        stroke-width: .6px;
+      }
+
+      .st6, .st12 {
+        fill: #c07050;
+      }
+
+      .st18 {
+        fill: url(#radial-gradient);
+      }
+
+      .st7 {
+        opacity: 0;
+        stroke: #37342f;
+        stroke-width: .3px;
+      }
+
+      .st9 {
+        opacity: .1;
+        stroke-width: .4px;
+      }
+
+      .st10 {
+        stroke: #d1c6ab;
+      }
+
+      .st11 {
+        opacity: .5;
+        stroke-width: .7px;
+      }
+
+      .st12 {
+        opacity: .6;
+      }
+
+      .st13 {
+        fill: #37342f;
+        font-family: Georgia-Bold, Georgia;
+        font-size: 135.1px;
+        font-weight: 700;
+      }
+
+      .st19 {
+        fill: url(#linear-gradient);
+      }
+
+      .st15 {
+        stroke-width: 1.5px;
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="-1709.4" y1="4.4" x2="-1708.4" y2="5.4" gradientTransform="translate(341882 -878) scale(200)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f3ede5"/>
+      <stop offset="1" stop-color="#e8e0d4"/>
+    </linearGradient>
+    <pattern id="logoGrid" x="0" y="0" width="20" height="20" patternTransform="translate(38 16582)" patternUnits="userSpaceOnUse" viewBox="0 0 20 20">
+      <g>
+        <rect class="st16" width="20" height="20"/>
+        <g>
+          <rect class="st16" width="20" height="20"/>
+          <path class="st7" d="M20,0H0v20"/>
+        </g>
+      </g>
+    </pattern>
+    <radialGradient id="radial-gradient" cx="-1708.9" cy="4.8" fx="-1708.9" fy="4.8" r=".4" gradientTransform="translate(341882 -878) scale(200)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6b9e9e" stop-opacity=".1"/>
+      <stop offset="1" stop-color="#6b9e9e" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect class="st19" width="200" height="200" rx="24" ry="24"/>
+  <rect class="st0" width="200" height="200" rx="24" ry="24"/>
+  <rect class="st18" width="200" height="200" rx="24" ry="24"/>
+  <g class="st17">
+    <line class="st11" x1="70" y1="80" x2="40" y2="45"/>
+    <line class="st3" x1="40" y1="45" x2="55" y2="30"/>
+    <line class="st11" x1="130" y1="80" x2="160" y2="45"/>
+    <line class="st14" x1="160" y1="45" x2="170" y2="35"/>
+    <line class="st5" x1="75" y1="145" x2="38" y2="165"/>
+    <line class="st2" x1="38" y1="165" x2="30" y2="155"/>
+    <line class="st5" x1="125" y1="145" x2="162" y2="165"/>
+    <line class="st2" x1="162" y1="165" x2="175" y2="170"/>
+    <line class="st9" x1="40" y1="45" x2="38" y2="165"/>
+    <line class="st9" x1="160" y1="45" x2="162" y2="165"/>
+  </g>
+  <g>
+    <circle class="st4" cx="40" cy="45" r="2.5"/>
+    <circle class="st1" cx="55" cy="30" r="1.5"/>
+    <circle class="st4" cx="160" cy="45" r="2.5"/>
+    <circle class="st1" cx="170" cy="35" r="1.5"/>
+    <circle class="st12" cx="38" cy="165" r="2"/>
+    <circle class="st6" cx="30" cy="155" r="1.2"/>
+    <circle class="st12" cx="162" cy="165" r="2"/>
+    <circle class="st6" cx="175" cy="170" r="1.2"/>
+  </g>
+  <line class="st15" x1="72" y1="105" x2="128" y2="105"/>
+  <rect class="st10" x=".5" y=".5" width="199" height="199" rx="24" ry="24"/>
+  <g class="st8">
+    <text class="st13" transform="translate(59.8 136.7)"><tspan x="0" y="0">a</tspan></text>
+  </g>
 </svg>

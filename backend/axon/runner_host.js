@@ -112,10 +112,83 @@ function ensureDeps(runnerDir) {
   }
 }
 
+function readConfig(runnerDir) {
+  try {
+    const raw = fs.readFileSync(path.join(runnerDir, "config.json"), "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function isSandboxed(runnerDir) {
+  const config = readConfig(runnerDir);
+  return config.sandbox?.enabled === true;
+}
+
+function startSandboxRunner(key, runnerDir) {
+  const config = readConfig(runnerDir);
+  const sandbox = config.sandbox || {};
+  const resources = sandbox.resources || {};
+  const network = sandbox.network || {};
+  const image = sandbox.image || "axon-sandbox:latest";
+  const containerName = `axon-sandbox-${key.replace("/", "-")}`;
+  const codebase = config.codebase || runnerDir;
+
+  const logPath = path.join(runnerDir, "runner.log");
+  truncateLog(logPath);
+  const logFd = fs.openSync(logPath, "a");
+
+  // Build docker run args
+  const args = [
+    "run", "--rm",
+    "--name", containerName,
+    "--label", `axon.sandbox.key=${key}`,
+    "-v", `${runnerDir}:/runner`,
+    "-v", `${codebase}:/workspace`,
+  ];
+
+  // Resource limits
+  if (resources.cpu_count) args.push("--cpus", String(resources.cpu_count));
+  if (resources.memory_mb) args.push("--memory", `${resources.memory_mb}m`);
+  if (resources.pids_limit) args.push("--pids-limit", String(resources.pids_limit));
+
+  // Network
+  if (network.enabled === false) {
+    args.push("--network", "none");
+  }
+
+  // Add host.docker.internal for backend access
+  if (process.platform !== "linux") {
+    // Docker Desktop already provides this; Linux needs --add-host
+  } else {
+    args.push("--add-host", "host.docker.internal:host-gateway");
+  }
+
+  args.push(image);
+
+  const child = spawn("docker", args, {
+    cwd: runnerDir,
+    stdio: ["ignore", logFd, logFd],
+    env: buildEnv(),
+  });
+
+  processes.set(key, child);
+  logHandles.set(key, logFd);
+  writeStatus(runnerDir, "running");
+  log("INFO", `Started sandbox ${key} (container=${containerName}, pid=${child.pid})`);
+}
+
 function startRunner(key, runnerDir) {
   const runnerScript = path.join(runnerDir, "runner.js");
   if (!fs.existsSync(runnerScript)) {
     log("WARN", `No runner.js in ${runnerDir} — skipping`);
+    return;
+  }
+
+  // Use sandbox mode if configured
+  if (isSandboxed(runnerDir)) {
+    startSandboxRunner(key, runnerDir);
     return;
   }
 

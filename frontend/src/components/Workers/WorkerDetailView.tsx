@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useOrgStore } from "../../stores/orgStore";
-import { useWorkerStore, WorkerInfo, ProcessState } from "../../stores/workerStore";
+import { useWorkerStore, WorkerActivity, WorkerInfo, ProcessState } from "../../stores/workerStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { WORKER_TYPE_MAP } from "../../constants/workerTypes";
 import { WorkerControls } from "./WorkerControls";
 import { WorkerLogPanel } from "./WorkerLogPanel";
+
+const ACTIVITY_LABEL: Record<string, string> = {
+  generating_plan: "Generating plan",
+  awaiting_approval: "Awaiting approval",
+  executing: "Executing",
+};
 
 const STATE_DOT: Record<string, string> = {
   running: "bg-success",
@@ -109,6 +115,7 @@ export function WorkerDetailView() {
   // Prefer optimistic state from store (updated immediately by controls)
   const storeWorker = workers.find((w) => w.agent_id === agentId);
   const state: ProcessState = storeWorker?.process_state || worker.process_state || "stopped";
+  const activity: WorkerActivity | null = storeWorker?.activity || worker.activity || null;
   const delegators = agents.filter((a) => a.id !== "huddle");
 
   return (
@@ -129,7 +136,17 @@ export function WorkerDetailView() {
               </span>
             )}
           </div>
-          <p className="text-xs text-base-content/60 mt-1">{worker.agent_id}</p>
+          {activity && activity.phase !== "idle" ? (
+            <p className="text-xs text-info mt-1 flex items-center gap-1.5">
+              <span className="loading loading-dots loading-xs" />
+              <span>
+                {ACTIVITY_LABEL[activity.phase] || activity.phase}
+                {activity.task_name ? `: ${activity.task_name}` : ""}
+              </span>
+            </p>
+          ) : (
+            <p className="text-xs text-base-content/60 mt-1">{worker.agent_id}</p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <WorkerControls agentId={worker.agent_id} processState={state} />

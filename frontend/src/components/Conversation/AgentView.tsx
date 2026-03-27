@@ -233,7 +233,7 @@ export function AgentView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-neutral bg-base-200 px-6 py-4">
+      <div className="bg-base-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div

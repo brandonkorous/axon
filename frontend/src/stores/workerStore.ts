@@ -4,6 +4,13 @@ import { orgApiPath } from "./orgStore";
 export type ProcessState = "stopped" | "running" | "paused" | "starting" | "stopping";
 export type WorkerType = "code" | "documents" | "email" | "images" | "browser" | "shell";
 
+export interface WorkerActivity {
+  phase: "idle" | "generating_plan" | "awaiting_approval" | "executing";
+  task_name: string;
+  detail: string;
+  updated_at: string;
+}
+
 export interface WorkerInfo {
   agent_id: string;
   name: string;
@@ -14,6 +21,15 @@ export interface WorkerInfo {
   accepts_from: string[];
   color: string;
   process_state: ProcessState;
+  activity: WorkerActivity | null;
+  sandboxed: boolean;
+}
+
+interface SandboxCreateConfig {
+  enabled: boolean;
+  cpu_count?: number;
+  memory_mb?: number;
+  network_enabled?: boolean;
 }
 
 interface WorkerCreateData {
@@ -23,6 +39,7 @@ interface WorkerCreateData {
   accepts_from: string[];
   color?: string;
   type_config?: Record<string, unknown>;
+  sandbox?: SandboxCreateConfig;
 }
 
 interface WorkerUpdateData {
@@ -48,6 +65,7 @@ interface WorkerStore {
   pauseWorker: (agentId: string) => Promise<boolean>;
   resumeWorker: (agentId: string) => Promise<boolean>;
   fetchLogs: (agentId: string) => Promise<string[]>;
+  clearLogs: (agentId: string) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -225,6 +243,17 @@ export const useWorkerStore = create<WorkerStore>((set, get) => ({
       return data.lines || [];
     } catch {
       return [];
+    }
+  },
+
+  clearLogs: async (agentId) => {
+    try {
+      const res = await fetch(orgApiPath(`workers/${agentId}/logs`), {
+        method: "DELETE",
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   },
 

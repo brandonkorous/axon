@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 import axon.registry as registry
 from axon.config import AgentType, PersonaConfig, _load_agent_yaml, settings
-from axon.runner_manager import runner_manager
+from axon.runner_manager import RunnerManager, runner_manager
 from axon.runner_scaffold import scaffold_runner
 from axon.vault.scaffold import scaffold_vault
 from axon.worker_types import WorkerType
@@ -24,6 +24,13 @@ org_router = APIRouter()
 HEARTBEAT_TIMEOUT = 60
 
 
+class SandboxCreateConfig(BaseModel):
+    enabled: bool = False
+    cpu_count: float = 2.0
+    memory_mb: int = 2048
+    network_enabled: bool = True
+
+
 class WorkerCreateRequest(BaseModel):
     name: str
     agent_id: str = ""
@@ -32,6 +39,7 @@ class WorkerCreateRequest(BaseModel):
     accepts_from: list[str] = ["axon"]
     color: str = "#10B981"
     type_config: dict = {}
+    sandbox: SandboxCreateConfig = SandboxCreateConfig()
 
 
 class WorkerUpdateRequest(BaseModel):
@@ -65,6 +73,10 @@ def _worker_info(aid: str, agent, org_id: str) -> dict:
         accepts_from = data.get("delegation", {}).get("accepts_from", [])
         color = data.get("ui", {}).get("color", "#10B981")
 
+    activity = getattr(agent, "current_activity", None)
+
+    sandboxed = RunnerManager.is_sandboxed(org_id, aid)
+
     return {
         "agent_id": aid,
         "name": agent.name,
@@ -75,6 +87,8 @@ def _worker_info(aid: str, agent, org_id: str) -> dict:
         "accepts_from": accepts_from,
         "color": color,
         "process_state": runner_manager.status(org_id, aid),
+        "activity": activity,
+        "sandboxed": sandboxed,
     }
 
 
@@ -152,11 +166,24 @@ async def create_worker(org_id: str, body: WorkerCreateRequest, request: Request
     runners_dir = org_dir / "runners"
     runners_dir.mkdir(parents=True, exist_ok=True)
     axon_url = _resolve_axon_url(request)
+    # Build sandbox config for runner
+    sandbox_config = None
+    if body.sandbox.enabled:
+        sandbox_config = {
+            "enabled": True,
+            "resources": {
+                "cpu_count": body.sandbox.cpu_count,
+                "memory_mb": body.sandbox.memory_mb,
+            },
+            "network": {"enabled": body.sandbox.network_enabled},
+        }
+
     try:
         scaffold_runner(
             runners_dir, agent_id, axon_url, org_id, body.codebase_path,
             worker_type=body.worker_type,
             type_config=body.type_config or None,
+            sandbox=sandbox_config,
         )
     except FileExistsError:
         logger.warning("Runner dir already exists for '%s'", agent_id)
@@ -175,6 +202,17 @@ async def create_worker(org_id: str, body: WorkerCreateRequest, request: Request
             org_id=org_id,
         )
         org.agent_registry[agent_id] = agent
+
+        # Auto-wire delegation: agents listed in accepts_from gain can_delegate_to
+        for parent_id in body.accepts_from:
+            parent_agent = org.agent_registry.get(parent_id)
+            if parent_agent and hasattr(parent_agent, "config"):
+                if agent_id not in parent_agent.config.delegation.can_delegate_to:
+                    parent_agent.config.delegation.can_delegate_to.append(agent_id)
+                    # Rebuild tool list so delegate_task becomes available
+                    if hasattr(parent_agent, "_build_tool_list"):
+                        parent_agent.tools = parent_agent._build_tool_list()
+
         _refresh_orchestrator_roster(org)
         logger.info("Worker '%s' (%s) created in org '%s'", agent_id, body.worker_type, org_id)
     except Exception as e:

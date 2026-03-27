@@ -196,7 +196,7 @@ export function AxonView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-neutral bg-base-200 px-6 py-4">
+      <div className="bg-base-200 px-6 py-4">
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white bg-primary"

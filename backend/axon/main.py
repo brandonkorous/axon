@@ -50,6 +50,9 @@ from axon.routes import usage as usage_routes
 from axon.routes import worker_control as worker_control_routes
 from axon.routes import worker_setup as worker_setup_routes
 from axon.routes import credentials as credentials_routes
+from axon.routes import integrations as integrations_routes
+from axon.routes import sandbox as sandbox_routes
+from axon.routes import skills as skills_routes
 
 
 logger = logging.getLogger(__name__)
@@ -102,6 +105,16 @@ def _init_org_agents(
             parent_cfg = agents[config.parent_id]
             if agent_id not in parent_cfg.delegation.can_delegate_to and "*" not in parent_cfg.delegation.can_delegate_to:
                 parent_cfg.delegation.can_delegate_to.append(agent_id)
+
+    # Auto-wire accepts_from → can_delegate_to for external agents
+    for agent_id, config in agents.items():
+        if config.type != AgentType.EXTERNAL:
+            continue
+        for parent_id in config.delegation.accepts_from:
+            if parent_id in agents:
+                parent_cfg = agents[parent_id]
+                if agent_id not in parent_cfg.delegation.can_delegate_to and "*" not in parent_cfg.delegation.can_delegate_to:
+                    parent_cfg.delegation.can_delegate_to.append(agent_id)
 
     logger.debug(f"[{org_config.id}] Loaded {len(agents)} agents: {list(agents.keys())}")
 
@@ -194,6 +207,13 @@ def init_orgs() -> None:
     _configure_logging()
     _export_api_keys()
 
+    # Discover available integration plugins before loading agents
+    from axon.integrations.registry import discover_integrations
+    discover_integrations()
+
+    from axon.skills.registry import discover_skills
+    discover_skills()
+
     orgs_dir = settings.axon_orgs_dir
     orgs_path = Path(orgs_dir)
 
@@ -238,6 +258,12 @@ async def lifespan(app: FastAPI):
     # Initialize database (SQLite by default, Postgres via DATABASE_URL)
     from axon.db import init_db, shutdown_db
     await init_db()
+
+    # Load integration credentials now that DB is available
+    for org in registry.org_registry.values():
+        for agent in org.agent_registry.values():
+            if hasattr(agent, "setup"):
+                await agent.setup()
 
     # Clean up stale runner PIDs from previous backend runs
     from axon.runner_manager import runner_manager
@@ -311,8 +337,11 @@ app.include_router(approvals_routes.org_router, prefix="/api/orgs/{org_id}/appro
 app.include_router(recruitment_routes.org_router, prefix="/api/orgs/{org_id}/recruitment", tags=["recruitment"])
 app.include_router(worker_setup_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(worker_control_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
+app.include_router(sandbox_routes.org_router, prefix="/api/orgs/{org_id}/sandbox", tags=["sandbox"])
+app.include_router(skills_routes.org_router, prefix="/api/orgs/{org_id}/skills", tags=["skills"])
 app.include_router(usage_routes.org_router, prefix="/api/orgs/{org_id}/usage", tags=["usage"])
 app.include_router(credentials_routes.org_router, prefix="/api/orgs/{org_id}/credentials", tags=["credentials"])
+app.include_router(integrations_routes.org_router, prefix="/api/orgs/{org_id}/integrations", tags=["integrations"])
 
 # ── Legacy routes (backward compat — route to default org) ─────────
 app.include_router(agents_routes.router, prefix="/api/agents", tags=["agents"])

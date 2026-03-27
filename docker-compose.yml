@@ -5,6 +5,7 @@ services:
       - "8000:8000"
     volumes:
       - ${AXON_ORGS_DIR:-./orgs}:/orgs
+      - /var/run/docker.sock:/var/run/docker.sock  # Sandbox container management
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
