@@ -103,7 +103,8 @@ jobs:
 
       - uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.component }}
+          context: .
+          file: ./${{ matrix.component }}/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository }}-${{ matrix.component }}:${{ needs.version.outputs.version }}
