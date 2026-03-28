@@ -122,6 +122,7 @@ export function useConversationSwitching({
         timestamp: number;
         speaker?: string;
         target?: string;
+        metadata?: Record<string, unknown>;
       }>;
 
       const mapped: ChatMessage[] = (history || []).map((m, i) => ({
@@ -132,6 +133,7 @@ export function useConversationSwitching({
         speaker: m.speaker,
         target: m.target,
         timestamp: m.timestamp * 1000,
+        ...(m.metadata ? { metadata: m.metadata } : {}),
       }));
 
       replaceMessages(agentId, mapped);

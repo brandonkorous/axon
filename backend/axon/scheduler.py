@@ -458,7 +458,7 @@ class AgentScheduler:
             })
 
             # Emit agent_result so the frontend can show completion inline
-            await ws_registry.push(agent_id, conversation_id, {
+            sent = await ws_registry.push(agent_id, conversation_id, {
                 "type": "agent_result",
                 "agent_id": agent_id,
                 "content": response_text[:500] if response_text else "",
@@ -470,17 +470,27 @@ class AgentScheduler:
                 },
             })
 
-            # Inject result into conversation history so the agent knows
-            # about the completed work on its next turn
-            if response_text:
-                summary = response_text[:1000]
-                agent.conversation.messages.append(
-                    _make_system_message(
-                        f"[TASK COMPLETED] {task_title}\n\n"
-                        f"Agent `{agent_id}` finished the task. Summary:\n{summary}"
-                    )
+            # No browser tab open — send push notification
+            if sent == 0:
+                from axon.push import fire_push_notification
+                fire_push_notification(
+                    "task_done",
+                    agent_id=agent_id,
+                    agent_name=getattr(agent, "name", agent_id),
+                    task_title=task_title,
+                    org_id="",
                 )
-                agent.conversation._save()
+
+            # Persist the agent_result as a system message so it survives refresh
+            agent.conversation.add_system_message(
+                task_title,
+                metadata={
+                    "type": "agent_result",
+                    "source_agent": agent_id,
+                    "task_summary": task_title,
+                    "status": "success",
+                },
+            )
 
             logger.info(
                 "[SCHEDULER] Task '%s' complete — %d chars",
@@ -492,22 +502,38 @@ class AgentScheduler:
                 "[SCHEDULER] Task '%s' timed out after %ds",
                 task_title, TASK_TIMEOUT,
             )
-            await ws_registry.push(agent_id, conversation_id, {
+            sent = await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
                 "status": "failed",
             })
+            if sent == 0:
+                from axon.push import fire_push_notification
+                fire_push_notification(
+                    "task_failed",
+                    agent_id=agent_id,
+                    agent_name=getattr(agent, "name", agent_id),
+                    task_title=task_title,
+                )
         except Exception as e:
             logger.error("[SCHEDULER] Task '%s' failed: %s", task_title, e)
-            await ws_registry.push(agent_id, conversation_id, {
+            sent = await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
                 "status": "failed",
             })
+            if sent == 0:
+                from axon.push import fire_push_notification
+                fire_push_notification(
+                    "task_failed",
+                    agent_id=agent_id,
+                    agent_name=getattr(agent, "name", agent_id),
+                    task_title=task_title,
+                )
         finally:
             if switched:
                 try:
@@ -592,7 +618,7 @@ class AgentScheduler:
             })
 
             # Emit agent_result so the delegating agent's conversation gets the output
-            await ws_registry.push(ws_target, conversation_id, {
+            sent = await ws_registry.push(ws_target, conversation_id, {
                 "type": "agent_result",
                 "agent_id": agent_id,
                 "content": response_text[:500] if response_text else "",
@@ -604,8 +630,17 @@ class AgentScheduler:
                 },
             })
 
+            if sent == 0:
+                from axon.push import fire_push_notification
+                fire_push_notification(
+                    "task_done",
+                    agent_id=agent_id,
+                    agent_name=getattr(agent, "name", agent_id),
+                    task_title=task_title,
+                )
+
             # Inject result into the delegating agent's conversation history
-            if response_text and ws_target:
+            if ws_target:
                 import axon.registry as _reg
                 # Find delegator in any org — try each until found
                 delegator = None
@@ -614,14 +649,16 @@ class AgentScheduler:
                         delegator = _org.agent_registry[ws_target]
                         break
                 if delegator and hasattr(delegator, "conversation"):
-                    summary = response_text[:1000]
-                    delegator.conversation.messages.append(
-                        _make_system_message(
-                            f"[TASK COMPLETED by `{agent_id}`] {task_title}\n\n"
-                            f"Summary:\n{summary}"
-                        )
+                    # Persist as activity badge so it renders on refresh
+                    delegator.conversation.add_system_message(
+                        task_title,
+                        metadata={
+                            "type": "agent_result",
+                            "source_agent": agent_id,
+                            "task_summary": task_title,
+                            "status": "success",
+                        },
                     )
-                    delegator.conversation._save()
 
             logger.info(
                 "[SCHEDULER] External task '%s' → %s complete — %d chars",
@@ -633,22 +670,38 @@ class AgentScheduler:
                 "[SCHEDULER] External task '%s' timed out after %ds",
                 task_title, TASK_TIMEOUT,
             )
-            await ws_registry.push(ws_target, conversation_id, {
+            sent = await ws_registry.push(ws_target, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
                 "status": "failed",
             })
+            if sent == 0:
+                from axon.push import fire_push_notification
+                fire_push_notification(
+                    "task_failed",
+                    agent_id=agent_id,
+                    agent_name=getattr(agent, "name", agent_id),
+                    task_title=task_title,
+                )
         except Exception as e:
             logger.error("[SCHEDULER] External task '%s' failed: %s", task_title, e)
-            await ws_registry.push(ws_target, conversation_id, {
+            sent = await ws_registry.push(ws_target, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
                 "status": "failed",
             })
+            if sent == 0:
+                from axon.push import fire_push_notification
+                fire_push_notification(
+                    "task_failed",
+                    agent_id=agent_id,
+                    agent_name=getattr(agent, "name", agent_id),
+                    task_title=task_title,
+                )
 
     @staticmethod
     def _append_to_external_conversation(

@@ -326,12 +326,15 @@ export function AgentView() {
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {conversationMessages.map((msg) => {
+          const isFromHistory = msg.id.startsWith("hist-");
+
           if (msg.metadata?.type === "tool_use") {
             return (
               <ToolUseBadge
                 key={msg.id}
                 tool={msg.metadata.tool as string}
                 agentId={agent.id}
+                live={!isFromHistory}
               />
             );
           }
@@ -345,6 +348,7 @@ export function AgentView() {
                 taskSummary={msg.content}
                 mode={msg.metadata.mode as string}
                 status={msg.metadata.status as string}
+                live={!isFromHistory}
               />
             );
           }

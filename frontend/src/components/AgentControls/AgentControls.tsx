@@ -42,7 +42,6 @@ export function AgentControls({
   const [confirmTerminate, setConfirmTerminate] = useState(false);
 
   const isTerminated = lifecycle.status === "terminated";
-  const isAdvisor = agent?.type === "advisor";
 
   return (
     <div className="bg-base-200 border border-neutral rounded-lg p-4 space-y-3">
@@ -96,17 +95,15 @@ export function AgentControls({
           >
             {lifecycle.strategy_override ? "Edit Strategy" : "Set Strategy"}
           </button>
-          {isAdvisor && (
-            <button
-              onClick={() => {
-                setShowPersona(!showPersona);
-                if (!showPersona) setShowStrategy(false);
-              }}
-              className="btn btn-soft btn-info btn-xs"
-            >
-              Edit Persona
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setShowPersona(!showPersona);
+              if (!showPersona) setShowStrategy(false);
+            }}
+            className="btn btn-soft btn-info btn-xs"
+          >
+            Edit Persona
+          </button>
           {!confirmTerminate ? (
             <button
               onClick={() => setConfirmTerminate(true)}

@@ -53,15 +53,17 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
     active_conv_id = agent.conversation_manager.active_id
     ws_registry.register(agent_id, active_conv_id, websocket)
 
-    # Send existing conversation history on connect
+    # Send existing conversation history on connect (skip "tool" role — LLM-only context)
     history = [
         {
             "role": m.role,
             "content": m.content,
             "agent_id": m.agent_id,
             "timestamp": m.timestamp,
+            **({"metadata": m.metadata} if m.metadata else {}),
         }
         for m in agent.conversation.messages
+        if m.role != "tool"
     ]
     await websocket.send_json({
         "type": "switched",
@@ -221,8 +223,10 @@ async def _handle_switch(websocket: WebSocket, agent, message: dict):
                 "content": m.content,
                 "agent_id": m.agent_id,
                 "timestamp": m.timestamp,
+                **({"metadata": m.metadata} if m.metadata else {}),
             }
             for m in agent.conversation.messages
+            if m.role != "tool"
         ]
         await websocket.send_json({
             "type": "switched",
@@ -257,6 +261,8 @@ async def _process_and_stream(
 
     # Collect full response for TTS
     full_response = ""
+    # Activity event types that should be persisted in conversation history
+    PERSISTED_ACTIVITY_TYPES = {"tool_use", "agent_activated", "agent_result"}
 
     async for chunk in target_agent.process(user_content):
         response = {
@@ -266,6 +272,13 @@ async def _process_and_stream(
         }
         if chunk.metadata:
             response["metadata"] = chunk.metadata
+
+        # Persist activity events so they survive refresh/switch
+        if chunk.type in PERSISTED_ACTIVITY_TYPES:
+            agent.conversation.add_system_message(
+                chunk.content,
+                metadata={"type": chunk.type, **(chunk.metadata or {})},
+            )
 
         # Handle routing — switch to target agent
         if chunk.type == "route" and chunk.metadata:
@@ -278,6 +291,12 @@ async def _process_and_stream(
                 async for sub_chunk in routed_agent.process(routed_message):
                     if sub_chunk.type == "text":
                         full_response += sub_chunk.content
+                    # Persist activity events from routed agents too
+                    if sub_chunk.type in PERSISTED_ACTIVITY_TYPES:
+                        agent.conversation.add_system_message(
+                            sub_chunk.content,
+                            metadata={"type": sub_chunk.type, **(sub_chunk.metadata or {})},
+                        )
                     await websocket.send_json({
                         "type": sub_chunk.type,
                         "agent_id": sub_chunk.agent_id,
@@ -371,6 +390,7 @@ async def get_conversation_history(agent_id: str):
                 "content": m.content,
                 "agent_id": m.agent_id,
                 "timestamp": m.timestamp,
+                **({"metadata": m.metadata} if m.metadata else {}),
             }
             for m in agent.conversation.messages
         ],
@@ -434,6 +454,7 @@ async def get_org_conversation_history(org_id: str, agent_id: str):
                 "content": m.content,
                 "agent_id": m.agent_id,
                 "timestamp": m.timestamp,
+                **({"metadata": m.metadata} if m.metadata else {}),
             }
             for m in agent.conversation.messages
         ],

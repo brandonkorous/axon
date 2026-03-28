@@ -1,0 +1,45 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting pywebpush
+  Downloading pywebpush-2.3.0-py3-none-any.whl.metadata (9.7 kB)
+Requirement already satisfied: aiohttp in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from pywebpush) (3.13.3)
+Requirement already satisfied: cryptography>=2.6.1 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from pywebpush) (46.0.5)
+Collecting http-ece>=1.1.0 (from pywebpush)
+  Downloading http_ece-1.2.1.tar.gz (8.8 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: requests>=2.21.0 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from pywebpush) (2.32.5)
+Collecting py-vapid>=1.7.0 (from pywebpush)
+  Downloading py_vapid-1.9.4-py2.py3-none-any.whl.metadata (4.6 kB)
+Requirement already satisfied: cffi>=2.0.0 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from cryptography>=2.6.1->pywebpush) (2.0.0)
+Requirement already satisfied: pycparser in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from cffi>=2.0.0->cryptography>=2.6.1->pywebpush) (3.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from requests>=2.21.0->pywebpush) (3.4.3)
+Requirement already satisfied: idna<4,>=2.5 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from requests>=2.21.0->pywebpush) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from requests>=2.21.0->pywebpush) (2.5.0)
+Requirement already satisfied: certifi>=2017.4.17 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from requests>=2.21.0->pywebpush) (2025.8.3)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiohttp->pywebpush) (2.6.1)
+Requirement already satisfied: aiosignal>=1.4.0 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiohttp->pywebpush) (1.4.0)
+Requirement already satisfied: attrs>=17.3.0 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiohttp->pywebpush) (26.1.0)
+Requirement already satisfied: frozenlist>=1.1.1 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiohttp->pywebpush) (1.8.0)
+Requirement already satisfied: multidict<7.0,>=4.5 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiohttp->pywebpush) (6.7.1)
+Requirement already satisfied: propcache>=0.2.0 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiohttp->pywebpush) (0.4.1)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiohttp->pywebpush) (1.23.0)
+Requirement already satisfied: typing-extensions>=4.2 in C:\Users\brand\AppData\Roaming\Python\Python312\site-packages (from aiosignal>=1.4.0->aiohttp->pywebpush) (4.14.1)
+Downloading pywebpush-2.3.0-py3-none-any.whl (22 kB)
+Downloading py_vapid-1.9.4-py2.py3-none-any.whl (23 kB)
+Building wheels for collected packages: http-ece
+  Building wheel for http-ece (pyproject.toml): started
+  Building wheel for http-ece (pyproject.toml): finished with status 'done'
+  Created wheel for http-ece: filename=http_ece-1.2.1-py2.py3-none-any.whl size=4866 sha256=0ac7b298e9071434823188233da26e6dc7328ab28020b5c5d35309683ec6450c
+  Stored in directory: c:\users\brand\appdata\local\pip\cache\wheels\56\8a\f9\f6f6e54ccc92850ca699e76891bfbc0b80301e3951ca6c41e0
+Successfully built http-ece
+Installing collected packages: py-vapid, http-ece, pywebpush
+  WARNING: The script vapid.exe is installed in 'C:\Users\brand\AppData\Roaming\Python\Python312\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+  WARNING: The script pywebpush.exe is installed in 'C:\Users\brand\AppData\Roaming\Python\Python312\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+
+Successfully installed http-ece-1.2.1 py-vapid-1.9.4 pywebpush-2.3.0

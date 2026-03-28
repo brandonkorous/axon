@@ -78,6 +78,15 @@ class Conversation:
         self._save()
         return msg
 
+    def add_system_message(
+        self, content: str, metadata: dict[str, Any] | None = None
+    ) -> Message:
+        """Add a system/activity message (tool_use, agent events, etc.)."""
+        msg = Message(role="system", content=content, metadata=metadata or {})
+        self.messages.append(msg)
+        self._save()
+        return msg
+
     def add_tool_result(self, tool_call_id: str, content: str) -> Message:
         """Add a tool result message."""
         msg = Message(role="tool", content=content, tool_call_id=tool_call_id)

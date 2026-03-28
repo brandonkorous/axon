@@ -36,19 +36,53 @@ Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define �
 
 ## Features
 
+### Intelligence
+
 |               | Feature                   | Description                                                                       |
 | ------------- | ------------------------- | --------------------------------------------------------------------------------- |
-| **Agents**    | Multi-Agent Orchestration | Run multiple AI advisors simultaneously with distinct personas and expertise      |
-| **Memory**    | Persistent Neural Memory  | Structured vault-based memory that survives across sessions (Obsidian-compatible) |
-| **Voice**     | Voice-First Interface     | Talk to your advisors — each persona has a distinct voice                         |
-| **Boardroom** | Real-Time Huddles         | Watch advisors discuss, debate, and converge on recommendations live              |
-| **Brain**     | Proactive Intelligence    | Agents surface insights and flag issues without being asked                       |
-| **Runner**    | Autonomous Task Execution | Agents can execute code and complete tasks on their own                           |
-| **Models**    | Multi-LLM Support         | Anthropic Claude, OpenAI, or local models via Ollama                              |
-| **Orgs**      | Multi-Organization        | Isolated vaults and agent configurations per organization                         |
-| **Shield**    | Full Audit Logging        | Complete transparency into every agent action and decision                        |
-| **Connect**   | Platform Integrations     | Slack, Microsoft Teams, Zoom, and Discord — advisors meet your team where they work |
-| **Dashboard** | Command & Control         | Active agents, decisions, action items, inbox, vault health — one view            |
+| **Agents**    | Specialist Advisors       | A team of domain experts with distinct personas, vaults, voices, and delegation rules — not one generic chatbot |
+| **Boardroom** | Real-Time Huddles         | Group discussions with multiple AI specialists. Six modes: standard, vote, devil's advocate, pressure test, quick take, decision |
+| **Brain**     | Structured Reasoning      | Graph-based reasoning engine with multi-strategy evaluation, confidence scoring, contradiction detection, and full decision traceability |
+| **Delegate**  | Task Delegation           | Advisors delegate work to each other autonomously (sync or async) across research, audit, implementation, and investigation tasks |
+| **Recruit**   | Agent Recruitment         | Request new specialist agents on the fly with user approval workflows |
+
+### Memory
+
+|               | Feature                   | Description                                                                       |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **Vault**     | Neural Memory Trees       | Obsidian-compatible markdown vaults with YAML frontmatter, wikilinks, full-text search, and graph-based relationship tracking |
+| **Consolidate** | Memory Consolidation   | LLM-driven vault maintenance — duplicate merging, stale archiving, contradiction detection, orphan adoption, and confidence scoring |
+| **Recall**    | Intelligent Recall        | Context-aware retrieval that surfaces relevant vault entries during conversations. Outcome linking lets advisors learn from experience |
+| **Watch**     | Vault Sync                | File watcher for external changes — edit vaults in Obsidian and they sync automatically |
+
+### Interaction
+
+|               | Feature                   | Description                                                                       |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **Voice**     | Voice-First Interface     | Whisper STT, Piper/ElevenLabs/Azure TTS, per-advisor voice catalog, adjustable speed, continuous voice mode |
+| **Connect**   | Platform Integrations     | Slack (Socket Mode), Microsoft Teams (Bot Framework), Zoom (meetings + transcription), Discord (server deployment) |
+| **Dashboard** | Command Center            | Unified view: active agents, kanban task board, issues, approvals, vault health, and per-agent cost tracking |
+| **Commands**  | Slash Commands            | Direct memory operations: `/sleep`, `/remember`, `/recall`, `/forget`, `/tasks`, `/status` |
+
+### Autonomy
+
+|               | Feature                   | Description                                                                       |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **Runner**    | Autonomous Runners        | Agent-spawned worker processes via Claude CLI with Docker sandbox, lifecycle management, and real-time monitoring |
+| **Schedule**  | Proactive Scheduling      | Background heartbeat for inbox checks, task execution, and knowledge review at configurable intervals |
+| **Research**  | Deep Research             | Two-tier LLM strategy (local compression + reasoning analysis), web scraping, YouTube transcript extraction, multi-source synthesis |
+| **Media**     | Media Processing          | YouTube transcript extraction and analysis with two-tier compression for cost-effective processing |
+
+### Infrastructure
+
+|               | Feature                   | Description                                                                       |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **Models**    | Multi-LLM Support         | Anthropic Claude, OpenAI, or fully local via Ollama — no API keys required for local operation |
+| **Orgs**      | Multi-Organization        | Isolated vaults, agents, and settings per organization with pre-built templates (Startup, Student, Job Hunt, Family, Creator) |
+| **Shield**    | Full Audit Trail          | Append-only, immutable audit logs filterable by date, agent, action, or tool — complete transparency |
+| **Extend**    | Plugins & Skills          | Plugin architecture with registry and 10 built-in skills (brainstorming, code review, debugging, decision analysis, etc.) |
+| **Secure**    | Encryption & Isolation    | AES encryption for stored credentials, Docker sandboxing for workers, network isolation |
+| **Work**      | Task & Issue Management   | Tasks (P0-P3 priority), issues, threaded comments, approval workflows, and achievement tracking |
 
 ---
 
@@ -180,19 +214,27 @@ Supported local models include `llama3`, `qwen2.5`, `mistral`, `codellama`, and 
 
 - [x] Multi-agent orchestration with persistent memory
 - [x] Voice-first interface with per-persona voices
-- [x] Real-time boardroom / Huddle sessions
+- [x] Real-time boardroom / Huddle sessions (6 modes)
 - [x] Docker Compose deployment
 - [x] Multi-LLM support (Claude, OpenAI, Ollama)
 - [x] Achievement system and audit logging
-- [ ] Slack, Teams, Zoom, and Discord integrations
-- [ ] Plugin system for third-party integrations
-- [ ] Mobile companion app
-- [ ] Agent-to-agent delegation chains
+- [x] Slack, Teams, Zoom, and Discord integrations
+- [x] Plugin system with registry and built-in web research
+- [x] Agent-to-agent delegation chains (sync and async)
+- [x] Scheduled agent behaviors (proactive inbox, task execution, knowledge review)
+- [x] Structured reasoning engine with decision graphs
+- [x] Memory consolidation and intelligent recall
+- [x] Autonomous runner framework with Docker sandboxing
+- [x] Deep research with web scraping and YouTube transcripts
+- [x] Skills system (brainstorming, code review, debugging, decision analysis, etc.)
+- [x] Organization templates (Startup, Student, Job Hunt, Family, Creator)
+- [x] Task, issue, and approval management
+- [x] Google Calendar and Linear integrations
 - [ ] RAG over uploaded documents and codebases
-- [ ] Scheduled agent briefings (daily standup, weekly report)
-- [ ] Webhook triggers for external event-driven advice
+- [ ] Mobile companion app
 - [ ] Multi-user collaboration with role-based access
 - [ ] One-click cloud deploy templates (Railway, Fly.io)
+- [ ] Webhook triggers for external event-driven advice
 
 ---
 

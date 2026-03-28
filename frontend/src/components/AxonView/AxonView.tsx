@@ -7,6 +7,7 @@ import { ConversationSwitcher } from "../Conversation/ConversationSwitcher";
 import { ToolUseBadge } from "../Conversation/ToolUseBadge";
 import { AgentActivityBadge } from "../Conversation/AgentActivityBadge";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
+import { AgentControls, StatusBadge } from "../AgentControls/AgentControls";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useAgentRuntimeStore, useAgentRuntime } from "../../stores/agentRuntimeStore";
@@ -265,6 +266,7 @@ export function AxonView() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold text-base-content">Axon</h2>
+              {axonAgent?.lifecycle && <StatusBadge status={axonAgent.lifecycle.status} />}
               <ConversationSwitcher
                 conversations={conversations}
                 activeId={activeId}
@@ -278,10 +280,17 @@ export function AxonView() {
             </p>
           </div>
         </div>
+        {axonAgent?.lifecycle && (
+          <div className="mt-3">
+            <AgentControls agentId={AGENT_ID} lifecycle={axonAgent.lifecycle} agent={axonAgent} />
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {conversationMessages.map((msg) => {
+          const isFromHistory = msg.id.startsWith("hist-");
+
           if (msg.metadata?.type === "delegation") {
             return (
               <DelegationBanner
@@ -298,6 +307,7 @@ export function AxonView() {
                 key={msg.id}
                 tool={msg.metadata.tool as string}
                 agentId={msg.metadata.agent_id as string}
+                live={!isFromHistory}
               />
             );
           }
@@ -329,6 +339,7 @@ export function AxonView() {
                 taskSummary={msg.content}
                 mode={msg.metadata.mode as string}
                 status={msg.metadata.status as string}
+                live={!isFromHistory}
               />
             );
           }

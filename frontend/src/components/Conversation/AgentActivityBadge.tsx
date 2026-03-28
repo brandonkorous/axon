@@ -7,9 +7,11 @@ interface Props {
   taskSummary: string;
   mode?: string;
   status?: string;
+  /** Whether this event is happening live (true) or loaded from history (false). */
+  live?: boolean;
 }
 
-export function AgentActivityBadge({ type, agentId, taskSummary, mode, status }: Props) {
+export function AgentActivityBadge({ type, agentId, taskSummary, mode, status, live = true }: Props) {
   const { agents } = useAgentStore();
   const agent = agents.find((a) => a.id === agentId);
   const name = agent?.name || agentId;
@@ -26,7 +28,7 @@ export function AgentActivityBadge({ type, agentId, taskSummary, mode, status }:
         }}
       >
         <span
-          className="w-1.5 h-1.5 rounded-full animate-pulse motion-reduce:animate-none shrink-0"
+          className={`w-1.5 h-1.5 rounded-full shrink-0 ${live ? "animate-pulse motion-reduce:animate-none" : ""}`}
           style={{ backgroundColor: color }}
         />
         <span className="font-medium">{name}</span>

@@ -1,0 +1,15 @@
+{
+  "name": "Axon — AI Command Center",
+  "short_name": "Axon",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8F5",
+  "theme_color": "#4A8C7F",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}

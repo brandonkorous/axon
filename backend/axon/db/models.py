@@ -93,3 +93,25 @@ class UserPreference(Base, TimestampMixin):
     theme: Mapped[str] = mapped_column(String(20), default="dark")
     voice_settings_json: Mapped[str] = mapped_column(Text, default="{}")
     display_prefs_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class VapidKeys(Base, TimestampMixin):
+    """VAPID key pair for Web Push — one row, generated on first boot."""
+
+    __tablename__ = "vapid_keys"
+
+    id: Mapped[str] = mapped_column(String(10), primary_key=True, default="default")
+    public_key: Mapped[str] = mapped_column(Text)
+    private_key_enc: Mapped[str] = mapped_column(Text)
+
+
+class PushSubscription(Base, TimestampMixin):
+    """Browser push subscription endpoint."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    p256dh: Mapped[str] = mapped_column(Text)
+    auth: Mapped[str] = mapped_column(Text)
+    user_id: Mapped[str] = mapped_column(String(36), default="default")

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useNotifications } from "../../hooks/useNotifications";
 
 function getTheme(): "axon" | "axon-dark" {
   const stored = localStorage.getItem("axon-theme");
@@ -33,6 +34,8 @@ export function GeneralTab() {
     savePreferences({ theme: next === "axon-dark" ? "dark" : "light" });
   };
 
+  const notifications = useNotifications();
+
   return (
     <div className="space-y-6">
       <div>
@@ -51,6 +54,41 @@ export function GeneralTab() {
             onChange={toggle}
           />
         </label>
+      </div>
+
+      <div>
+        <h4 className="text-sm font-semibold mb-3">Notifications</h4>
+        {!notifications.supported ? (
+          <p className="text-xs text-base-content/50">
+            Push notifications are not supported in this browser.
+          </p>
+        ) : notifications.permission === "denied" ? (
+          <p className="text-xs text-base-content/50">
+            Notifications are blocked. Enable them in your browser settings for
+            this site, then reload.
+          </p>
+        ) : (
+          <label className="flex items-center justify-between gap-3 cursor-pointer">
+            <div>
+              <span className="text-sm">Push notifications</span>
+              <p className="text-xs text-base-content/60 mt-0.5">
+                Get notified when agents complete tasks, even when Axon isn't
+                open
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              className="toggle toggle-sm toggle-primary"
+              checked={notifications.enabled}
+              disabled={notifications.loading}
+              onChange={(e) =>
+                e.target.checked
+                  ? notifications.enable()
+                  : notifications.disable()
+              }
+            />
+          </label>
+        )}
       </div>
     </div>
   );

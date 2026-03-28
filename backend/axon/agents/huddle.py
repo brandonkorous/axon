@@ -326,23 +326,20 @@ class Huddle:
         async def _run_advisor(advisor_id: str) -> None:
             """Run a single advisor — streams directly to WebSocket."""
             nonlocal pending
-            agent = self.advisor_agents.get(advisor_id)
-            if not agent:
+            if advisor_id not in self.advisor_agents:
                 return
 
             cfg = self.advisor_configs.get(advisor_id)
             advisor_name = cfg.name if cfg else advisor_id
 
-            prompt = self._build_advisor_prompt(
-                advisor_id, advisor_name, full_message,
-                vault_context,
-                is_addressed=(advisor_id in addressed_ids),
-                mode=mode,
-            )
-
             advisor_text = ""
             try:
-                async for chunk in self._call_advisor(agent, prompt):
+                async for chunk in self._call_advisor(
+                    advisor_id, advisor_name, full_message,
+                    vault_context,
+                    is_addressed=(advisor_id in addressed_ids),
+                    mode=mode,
+                ):
                     advisor_text += chunk
                     await self._push(conv_id, HuddleChunk(
                         speaker=advisor_id, target=None,
@@ -387,7 +384,60 @@ class Huddle:
         for aid in responding_ids:
             asyncio.create_task(_run_advisor(aid))
 
-    def _build_advisor_prompt(
+    def _build_advisor_system_prompt(
+        self,
+        advisor_id: str,
+        advisor_name: str,
+        vault_context: str,
+        mode: str = "standard",
+    ) -> str:
+        """Build the system prompt for an advisor's isolated huddle call."""
+        # Start with the advisor's own system prompt for domain expertise
+        agent = self.advisor_agents.get(advisor_id)
+        base_prompt = ""
+        if agent:
+            base_prompt = agent.system_prompt or ""
+
+        huddle_rules = (
+            f"You are **{advisor_name}** in a group huddle.\n\n"
+            f"## CRITICAL RULES\n"
+            f"- You are {advisor_name}. Respond ONLY as yourself.\n"
+            f"- Do NOT write dialogue for other advisors.\n"
+            f"- Do NOT prefix your response with your name or **{advisor_name}:**.\n"
+            f"- Do NOT simulate a round-table discussion.\n"
+            f"- Just give YOUR perspective, in YOUR voice.\n"
+        )
+
+        mode_instruction = {
+            "standard": (
+                "Respond substantively from your domain expertise. "
+                "Be concise but thorough — say what needs to be said."
+            ),
+            "vote": (
+                "State your position (for/against/conditional) "
+                "with one-sentence reasoning."
+            ),
+            "devils_advocate": "Argue AGAINST the proposed idea from your domain.",
+            "pressure_test": (
+                "Attack this from your domain — find the weaknesses."
+            ),
+            "quick_take": "One sentence only, no discussion.",
+            "decision": (
+                "State your recommendation clearly with brief reasoning."
+            ),
+        }.get(mode, "")
+
+        parts = [huddle_rules]
+        if mode_instruction:
+            parts.append(f"## Mode\n{mode_instruction}\n")
+        if base_prompt:
+            parts.append(f"## Your Expertise\n{base_prompt}\n")
+        if vault_context:
+            parts.append(f"## Shared Context\n{vault_context}\n")
+
+        return "\n".join(parts)
+
+    def _build_advisor_messages(
         self,
         advisor_id: str,
         advisor_name: str,
@@ -395,68 +445,129 @@ class Huddle:
         vault_context: str,
         is_addressed: bool,
         mode: str = "standard",
-    ) -> str:
-        """Build the prompt an advisor sees during a huddle turn."""
-        parts = [
-            f"[HUDDLE SESSION] You are participating in a group chat as {advisor_name}. "
-            f"Respond ONLY as yourself — do NOT write dialogue for other advisors or "
-            f"prefix your response with your name. "
-            f"When the user shares structured data (color values, specifications, "
-            f"configurations, numbers), extract and reference the exact values — "
-            f"do not paraphrase or guess. "
-            f"If you need to take action (share knowledge, create tasks, save to vault, "
-            f"request new team members via `request_agent`), "
-            f"use your tools directly — don't just say you'll do it.",
+    ) -> list[dict[str, str]]:
+        """Build the full message array for an advisor's isolated huddle call.
+
+        History is collapsed into user/assistant turns that model the
+        advisor's OWN prior responses (assistant) and everything else
+        (user context summaries).  This prevents the LLM from copying
+        the [Speaker]: pattern it would see in raw history.
+        """
+        system_prompt = self._build_advisor_system_prompt(
+            advisor_id, advisor_name, vault_context, mode,
+        )
+
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system_prompt},
         ]
 
-        if mode == "standard":
-            parts.append(
-                "Respond substantively from your domain expertise. "
-                "Be concise but thorough — say what needs to be said."
-            )
-        elif mode == "vote":
-            parts.append(
-                "State your position (for/against/conditional) "
-                "with one-sentence reasoning."
-            )
-        elif mode == "devils_advocate":
-            parts.append("Argue AGAINST the proposed idea from your domain.")
-        elif mode == "pressure_test":
-            parts.append(
-                "Attack this from your domain — find the weaknesses."
-            )
-        elif mode == "quick_take":
-            parts.append("One sentence only, no discussion.")
-        elif mode == "decision":
-            parts.append(
-                "State your recommendation clearly with brief reasoning."
-            )
+        # Group history into per-turn blocks: user message + advisor responses
+        # Each user message starts a new turn. Advisor responses within the
+        # same turn are grouped into a context summary (for others) or kept
+        # as assistant messages (for this advisor's own responses).
+        history = self.conversation.messages
+        i = 0
+        while i < len(history):
+            msg = history[i]
+            if msg.role == "user":
+                messages.append({"role": "user", "content": msg.content})
+                # Collect all advisor responses following this user message
+                own_response = ""
+                other_summaries: list[str] = []
+                j = i + 1
+                while j < len(history) and history[j].role != "user":
+                    resp = history[j]
+                    if resp.role == "assistant":
+                        speaker_name = resp.agent_id or "unknown"
+                        if resp.agent_id and resp.agent_id in self.advisor_configs:
+                            speaker_name = self.advisor_configs[resp.agent_id].name
+                        elif resp.agent_id == "table":
+                            speaker_name = "The Table"
 
+                        if resp.agent_id == advisor_id:
+                            own_response = resp.content
+                        else:
+                            other_summaries.append(
+                                f"{speaker_name}: {resp.content}"
+                            )
+                    j += 1
+
+                # Emit this advisor's own prior response as assistant
+                if own_response:
+                    messages.append({"role": "assistant", "content": own_response})
+                elif other_summaries:
+                    # If this advisor didn't respond but others did, show
+                    # a brief context note so the advisor has awareness
+                    summary = "\n\n".join(other_summaries)
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"[The other advisors responded to this. "
+                            f"Here is a summary for context — do NOT "
+                            f"repeat or role-play their responses.]\n\n{summary}"
+                        ),
+                    })
+
+                i = j
+            else:
+                i += 1
+
+        # Add the current user message
+        mention_note = ""
         if is_addressed:
-            parts.append(
-                "\nYou were directly @mentioned — respond substantively."
-            )
+            mention_note = " (You were directly @mentioned — respond substantively.)"
+        messages.append({
+            "role": "user",
+            "content": f"{user_message}{mention_note}",
+        })
 
-        if vault_context:
-            parts.append(f"\n**Shared context:**\n{vault_context}")
-
-        parts.append(f"\n**User says:** {user_message}")
-
-        return "\n".join(parts)
+        return messages
 
     async def _call_advisor(
-        self, agent: "Agent", prompt: str,
+        self,
+        advisor_id: str,
+        advisor_name: str,
+        user_message: str,
+        vault_context: str,
+        is_addressed: bool,
+        mode: str = "standard",
     ) -> AsyncIterator[str]:
-        """Call an advisor agent and yield text chunks.
+        """Call an advisor with an isolated LLM call — no shared state.
 
-        Uses agent.process(save_history=False) so huddle exchanges
-        don't pollute the advisor's direct chat history. Tool calls
-        execute normally within the agent's turn.
+        Each advisor gets its own system prompt, huddle history, and
+        a direct stream_completion call. This prevents cross-talk where
+        one advisor generates dialogue for others.
         """
-        async for chunk in agent.process(prompt, save_history=False):
-            if chunk.type == "text":
-                yield chunk.content
-            # tool_use, tool_result, thinking — handled internally by agent
+        messages = self._build_advisor_messages(
+            advisor_id, advisor_name, user_message,
+            vault_context, is_addressed, mode,
+        )
+
+        cfg = self.advisor_configs.get(advisor_id)
+        model = cfg.model.reasoning if cfg else self.config.model.reasoning
+
+        async for chunk in stream_completion(
+            model=model,
+            messages=messages,
+            max_tokens=cfg.model.max_tokens if cfg else 1000,
+            temperature=cfg.model.temperature if cfg else 0.7,
+        ):
+            if chunk["type"] == "text":
+                yield chunk["content"]
+            elif chunk["type"] == "usage" and self._usage_tracker:
+                try:
+                    self._usage_tracker.record(
+                        model=model,
+                        prompt_tokens=chunk.get("prompt_tokens", 0),
+                        completion_tokens=chunk.get("completion_tokens", 0),
+                        total_tokens=chunk.get("total_tokens", 0),
+                        cost=chunk.get("cost", 0.0),
+                        agent_id=advisor_id,
+                        call_type="stream",
+                        caller="huddle_advisor",
+                    )
+                except Exception:
+                    pass
 
     async def _synthesize_table(
         self,

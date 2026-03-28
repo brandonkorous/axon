@@ -56,6 +56,7 @@ from axon.routes import skills as skills_routes
 from axon.routes import user_prefs as user_prefs_routes
 from axon.routes import teams_webhook as teams_webhook_routes
 from axon.routes import zoom_webhook as zoom_webhook_routes
+from axon.routes import push as push_routes
 
 
 logger = logging.getLogger(__name__)
@@ -459,6 +460,7 @@ app.include_router(credentials_routes.org_router, prefix="/api/orgs/{org_id}/cre
 app.include_router(user_prefs_routes.router, prefix="/api/preferences", tags=["preferences"])
 app.include_router(teams_webhook_routes.router, prefix="/api/teams", tags=["teams"])
 app.include_router(zoom_webhook_routes.router, prefix="/api/zoom", tags=["zoom"])
+app.include_router(push_routes.router, prefix="/api/push", tags=["push"])
 
 # ── Legacy routes (backward compat — route to default org) ─────────
 app.include_router(agents_routes.router, prefix="/api/agents", tags=["agents"])
