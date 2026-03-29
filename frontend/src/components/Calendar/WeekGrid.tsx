@@ -13,10 +13,12 @@ export function WeekGrid({
   currentDate,
   events,
   onEventClick,
+  onDateClick,
 }: {
   currentDate: Date;
   events: CalendarEvent[];
   onEventClick: (event: CalendarEvent) => void;
+  onDateClick?: (dateStr: string) => void;
 }) {
   const dates = useMemo(() => weekGridDates(currentDate), [currentDate]);
   const today = new Date();
@@ -33,7 +35,8 @@ export function WeekGrid({
           return (
             <div
               key={dateStr}
-              className="border-r border-base-300 flex flex-col overflow-hidden"
+              onClick={() => onDateClick?.(dateStr)}
+              className="border-r border-base-300 flex flex-col overflow-hidden cursor-pointer hover:bg-base-200/50 transition-colors"
             >
               {/* Day header */}
               <div

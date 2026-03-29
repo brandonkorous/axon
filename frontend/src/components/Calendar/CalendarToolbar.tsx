@@ -9,7 +9,7 @@ const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: "sandbox", label: "Sandboxes" },
 ];
 
-export function CalendarToolbar() {
+export function CalendarToolbar({ onNewTask }: { onNewTask: () => void }) {
   const {
     viewMode,
     currentDate,
@@ -95,6 +95,11 @@ export function CalendarToolbar() {
           </option>
         ))}
       </select>
+
+      {/* New task */}
+      <button onClick={onNewTask} className="btn btn-primary btn-sm">
+        + Task
+      </button>
 
       {/* View toggle */}
       <div className="join">

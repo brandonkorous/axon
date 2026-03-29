@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useTaskStore, Task } from "../../stores/taskStore";
-import { useAgentStore } from "../../stores/agentStore";
 import { PRIORITY_BADGE } from "../../constants/badges";
 import { TaskEditModal } from "./TaskEditModal";
+import { CreateTaskModal } from "./CreateTaskModal";
 
 const COLUMNS: { key: Task["status"]; label: string; color: string }[] = [
   { key: "pending", label: "Pending", color: "border-neutral-content/30" },
@@ -74,7 +74,14 @@ function TaskCard({
         )}
 
         <div className="flex items-center justify-between text-xs text-base-content/60">
-          <span>{task.assignee || "Unassigned"}</span>
+          <div className="flex items-center gap-2">
+            <span>{task.assignee || "Unassigned"}</span>
+            {task.responses?.length > 0 && (
+              <span className="badge badge-ghost badge-xs" title={`${task.responses.length} response(s)`}>
+                {task.responses.length} reply
+              </span>
+            )}
+          </div>
           {task.due_date && <span>{task.due_date}</span>}
         </div>
 
@@ -157,98 +164,6 @@ function KanbanColumn({
         )}
       </div>
     </div>
-  );
-}
-
-function CreateTaskModal({
-  onClose,
-  onCreate,
-}: {
-  onClose: () => void;
-  onCreate: (data: {
-    title: string;
-    description: string;
-    assignee: string;
-    priority: string;
-  }) => void;
-}) {
-  const { agents } = useAgentStore();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [assignee, setAssignee] = useState("");
-  const [priority, setPriority] = useState("p2");
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    dialogRef.current?.showModal();
-  }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    onCreate({ title, description, assignee, priority });
-    onClose();
-  };
-
-  return (
-    <dialog ref={dialogRef} className="modal" onClose={onClose}>
-      <div className="modal-box">
-        <h3 className="text-lg font-bold mb-4">Create Task</h3>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            autoFocus
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Task title"
-            aria-label="Task title"
-            className="input input-sm w-full"
-          />
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description (optional)"
-            aria-label="Task description"
-            rows={3}
-            className="textarea textarea-sm w-full resize-none"
-          />
-          <div className="flex gap-3">
-            <select
-              value={assignee}
-              onChange={(e) => setAssignee(e.target.value)}
-              aria-label="Assignee"
-              className="select select-sm flex-1"
-            >
-              <option value="">Unassigned</option>
-              {agents
-                .filter((a) => a.id !== "axon")
-                .map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-            </select>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              aria-label="Priority"
-              className="select select-sm w-24"
-            >
-              <option value="p0">P0</option>
-              <option value="p1">P1</option>
-              <option value="p2">P2</option>
-              <option value="p3">P3</option>
-            </select>
-          </div>
-          <div className="modal-action">
-            <button type="button" onClick={onClose} className="btn btn-ghost btn-sm">
-              Cancel
-            </button>
-            <button type="submit" disabled={!title.trim()} className="btn btn-primary btn-sm">
-              Create
-            </button>
-          </div>
-        </form>
-      </div>
-      <form method="dialog" className="modal-backdrop"><button>close</button></form>
-    </dialog>
   );
 }
 

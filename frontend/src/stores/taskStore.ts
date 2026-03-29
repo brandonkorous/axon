@@ -1,12 +1,21 @@
 import { create } from "zustand";
 import { orgApiPath } from "./orgStore";
 
+export interface TaskResponse {
+  from: string;
+  content: string;
+  attachments: { type: string; path: string; label: string }[];
+  timestamp: string;
+  status?: "success" | "error";
+}
+
 export interface Task {
   path: string;
   name: string;
   type: string;
   assignee: string;
-  status: "pending" | "in_progress" | "done" | "blocked";
+  owner: string;
+  status: "pending" | "in_progress" | "done" | "blocked" | "failed";
   priority: "p0" | "p1" | "p2" | "p3";
   due_date: string;
   start_date: string;
@@ -17,6 +26,7 @@ export interface Task {
   created_at: string;
   updated_at: string;
   body: string;
+  responses: TaskResponse[];
 }
 
 interface TaskStore {

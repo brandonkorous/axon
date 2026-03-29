@@ -449,6 +449,9 @@ class AgentScheduler:
                     response_text, agent_id=agent_id,
                 )
 
+            # Persist agent response to the task's response thread in the vault
+            self._save_task_response(agent, agent_id, task_path, response_text)
+
             await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
@@ -502,6 +505,10 @@ class AgentScheduler:
                 "[SCHEDULER] Task '%s' timed out after %ds",
                 task_title, TASK_TIMEOUT,
             )
+            self._save_task_response(
+                agent, agent_id, task_path,
+                f"Task timed out after {TASK_TIMEOUT}s", status="error",
+            )
             sent = await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
@@ -519,6 +526,10 @@ class AgentScheduler:
                 )
         except Exception as e:
             logger.error("[SCHEDULER] Task '%s' failed: %s", task_title, e)
+            self._save_task_response(
+                agent, agent_id, task_path,
+                f"Task failed: {e}", status="error",
+            )
             sent = await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
@@ -609,6 +620,9 @@ class AgentScheduler:
                     ws_target, conversation_id, response_text, agent_id,
                 )
 
+            # Persist agent response to the task's response thread in the vault
+            self._save_task_response(agent, agent_id, task_path, response_text)
+
             await ws_registry.push(ws_target, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
@@ -670,6 +684,10 @@ class AgentScheduler:
                 "[SCHEDULER] External task '%s' timed out after %ds",
                 task_title, TASK_TIMEOUT,
             )
+            self._save_task_response(
+                agent, agent_id, task_path,
+                f"Task timed out after {TASK_TIMEOUT}s", status="error",
+            )
             sent = await ws_registry.push(ws_target, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
@@ -687,6 +705,10 @@ class AgentScheduler:
                 )
         except Exception as e:
             logger.error("[SCHEDULER] External task '%s' failed: %s", task_title, e)
+            self._save_task_response(
+                agent, agent_id, task_path,
+                f"Task failed: {e}", status="error",
+            )
             sent = await ws_registry.push(ws_target, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
@@ -745,6 +767,41 @@ class AgentScheduler:
                     pass
 
     @staticmethod
+    def _save_task_response(
+        agent: "Agent",
+        agent_id: str,
+        task_path: str,
+        response_text: str,
+        status: str = "success",
+    ) -> None:
+        """Write the agent's response to the task's responses[] array in the vault."""
+        shared_vault = agent.shared_vault
+        if not shared_vault or not response_text:
+            return
+        try:
+            metadata, body = shared_vault.read_file(task_path)
+            if "responses" not in metadata:
+                metadata["responses"] = []
+            metadata["responses"].append({
+                "from": agent_id,
+                "content": response_text,
+                "attachments": [],
+                "timestamp": datetime.now().isoformat() + "Z",
+                "status": status,
+            })
+            metadata["updated_at"] = datetime.now().isoformat() + "Z"
+            shared_vault.write_file(task_path, metadata, body)
+            logger.info(
+                "[SCHEDULER] Saved response (%d chars) to task '%s'",
+                len(response_text), task_path,
+            )
+        except Exception as e:
+            logger.warning(
+                "[SCHEDULER] Failed to save response to task '%s': %s",
+                task_path, e,
+            )
+
+    @staticmethod
     def _auto_complete_task(agent: "Agent", task_path: str, task_title: str) -> None:
         """Auto-mark a task as done if the agent didn't do it during processing."""
         shared_vault = agent.shared_vault
@@ -795,6 +852,17 @@ class AgentScheduler:
                     "[SCHEDULER] Task %s: assignee=%r status=%r conv_id=%r (want agent=%r)",
                     md_file.name, assignee, status, bool(conv_id), agent_id,
                 )
+                # Skip tasks with a future start_date
+                start_date = metadata.get("start_date", "")
+                if start_date:
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    if start_date > today:
+                        logger.debug(
+                            "[SCHEDULER] Task %s: start_date %s is in the future — skipping",
+                            md_file.name, start_date,
+                        )
+                        continue
+
                 if (
                     assignee == agent_id
                     and status in ("pending", "in_progress")

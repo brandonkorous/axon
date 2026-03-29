@@ -15,10 +15,12 @@ export function MonthGrid({
   currentDate,
   events,
   onEventClick,
+  onDateClick,
 }: {
   currentDate: Date;
   events: CalendarEvent[];
   onEventClick: (event: CalendarEvent) => void;
+  onDateClick?: (dateStr: string) => void;
 }) {
   const dates = useMemo(() => monthGridDates(currentDate), [currentDate]);
   const today = new Date();
@@ -50,7 +52,8 @@ export function MonthGrid({
           return (
             <div
               key={dateStr}
-              className={`border-b border-r border-base-300 p-1 min-h-0 overflow-hidden flex flex-col ${
+              onClick={() => onDateClick?.(dateStr)}
+              className={`border-b border-r border-base-300 p-1 min-h-0 overflow-hidden flex flex-col cursor-pointer hover:bg-base-200/50 transition-colors ${
                 isCurrentMonth ? "" : "opacity-40"
               }`}
             >
