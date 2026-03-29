@@ -7,7 +7,8 @@
 # Target size: ~1.5GB
 # Build: docker build -t axon-sandbox-full:latest .
 
-FROM axon-sandbox-base:latest
+ARG BASE_IMAGE=axon-sandbox-base:latest
+FROM ${BASE_IMAGE}
 
 USER root
 

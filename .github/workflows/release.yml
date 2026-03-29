@@ -110,34 +110,114 @@ jobs:
             ghcr.io/${{ github.repository }}-${{ matrix.component }}:${{ needs.version.outputs.version }}
             ghcr.io/${{ github.repository }}-${{ matrix.component }}:latest
 
-  publish-sandbox-images:
+  # Sandbox images must build in dependency order:
+  #   base (root) → browser, code, media, full (extend base)
+  #                → data, documents (extend code)
+  #                → ml (extends data)
+
+  publish-sandbox-base:
     needs: version
     if: needs.version.outputs.bumped == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        sandbox: [base, browser, code, data, ml, documents, media, full]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
-
+        with: { ref: main }
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./backend/axon/sandbox/images/base
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/axon-sandbox-base:${{ needs.version.outputs.version }}
+            ghcr.io/${{ github.repository }}/axon-sandbox-base:latest
 
+  publish-sandbox-tier1:
+    needs: [version, publish-sandbox-base]
+    if: needs.version.outputs.bumped == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - sandbox: browser
+            base: ghcr.io/${{ github.repository }}/axon-sandbox-base:latest
+          - sandbox: code
+            base: ghcr.io/${{ github.repository }}/axon-sandbox-base:latest
+          - sandbox: media
+            base: ghcr.io/${{ github.repository }}/axon-sandbox-base:latest
+          - sandbox: full
+            base: ghcr.io/${{ github.repository }}/axon-sandbox-base:latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v5
         with:
           context: ./backend/axon/sandbox/images/${{ matrix.sandbox }}
+          build-args: BASE_IMAGE=${{ matrix.base }}
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/axon-sandbox-${{ matrix.sandbox }}:${{ needs.version.outputs.version }}
             ghcr.io/${{ github.repository }}/axon-sandbox-${{ matrix.sandbox }}:latest
 
+  publish-sandbox-tier2:
+    needs: [version, publish-sandbox-tier1]
+    if: needs.version.outputs.bumped == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - sandbox: data
+            base: ghcr.io/${{ github.repository }}/axon-sandbox-code:latest
+          - sandbox: documents
+            base: ghcr.io/${{ github.repository }}/axon-sandbox-code:latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./backend/axon/sandbox/images/${{ matrix.sandbox }}
+          build-args: BASE_IMAGE=${{ matrix.base }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/axon-sandbox-${{ matrix.sandbox }}:${{ needs.version.outputs.version }}
+            ghcr.io/${{ github.repository }}/axon-sandbox-${{ matrix.sandbox }}:latest
+
+  publish-sandbox-tier3:
+    needs: [version, publish-sandbox-tier2]
+    if: needs.version.outputs.bumped == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./backend/axon/sandbox/images/ml
+          build-args: BASE_IMAGE=ghcr.io/${{ github.repository }}/axon-sandbox-data:latest
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/axon-sandbox-ml:${{ needs.version.outputs.version }}
+            ghcr.io/${{ github.repository }}/axon-sandbox-ml:latest
+
   github-release:
-    needs: [version, publish-images, publish-sandbox-images]
+    needs: [version, publish-images, publish-sandbox-tier3]
     if: needs.version.outputs.bumped == 'true'
     runs-on: ubuntu-latest
     steps:
