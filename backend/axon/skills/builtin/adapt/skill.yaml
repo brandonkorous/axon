@@ -15,6 +15,8 @@ triggers:
   - container queries
   - responsive design
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

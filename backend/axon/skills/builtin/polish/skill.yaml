@@ -14,6 +14,8 @@ triggers:
   - pixel perfect
   - final pass
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

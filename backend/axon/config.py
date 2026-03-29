@@ -143,11 +143,25 @@ class LearningConfig(BaseModel):
     archive_confidence_threshold: float = 0.2  # auto-archive below this
 
 
+class ActionBias(str, Enum):
+    """How aggressively an agent should use tools vs. respond with text.
+
+    - proactive: Act first, explain later. Use tools whenever possible.
+    - balanced: Act when clearly asked, think when ambiguous.
+    - deliberative: Think first, act only when confident. Good for high-stakes roles.
+    """
+
+    PROACTIVE = "proactive"
+    BALANCED = "balanced"
+    DELIBERATIVE = "deliberative"
+
+
 class BehaviorConfig(BaseModel):
     """Agent behavior settings."""
 
     auto_save: bool = True
     first_message: bool = True
+    action_bias: ActionBias = ActionBias.PROACTIVE
     proactive_checks: list[ProactiveCheck] = []
 
 

@@ -30,6 +30,7 @@ class PersonaUpdateRequest(BaseModel):
     sparkle_color: str | None = None
     comms_enabled: bool | None = None
     email_alias: str | None = None
+    action_bias: str | None = None  # proactive | balanced | deliberative
 
 
 class ModelUpdateRequest(BaseModel):
@@ -89,6 +90,7 @@ def _list_agents_for_registry(agent_reg: dict, email_domain: str = "") -> list[d
             "comms_enabled": getattr(agent.config.comms, "enabled", False) if hasattr(agent.config, "comms") else False,
             "email_alias": getattr(agent.config.comms, "email_alias", "") if hasattr(agent.config, "comms") else "",
             "parent_id": agent.config.parent_id,
+            "action_bias": agent.config.behavior.action_bias.value,
         })
     return agents
 
@@ -120,6 +122,7 @@ def _get_agent_detail(agent, email_domain: str = "") -> dict:
         "lifecycle": agent.lifecycle.to_dict() if hasattr(agent, "lifecycle") else None,
         "email": _agent_email(agent, email_domain),
         "parent_id": agent.config.parent_id,
+        "action_bias": agent.config.behavior.action_bias.value,
     }
 
 
@@ -221,6 +224,14 @@ async def update_agent_persona(org_id: str, agent_id: str, body: PersonaUpdateRe
         # Rebuild comms so the executor picks up the new alias
         if hasattr(agent, "_rebuild_comms"):
             agent._rebuild_comms(org.config.comms)
+    if body.action_bias is not None:
+        from axon.config import ActionBias
+        try:
+            bias = ActionBias(body.action_bias)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid action_bias: {body.action_bias}")
+        data.setdefault("behavior", {})["action_bias"] = bias.value
+        agent.config.behavior.action_bias = bias
     with open(agent_yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 

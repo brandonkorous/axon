@@ -31,6 +31,7 @@ export interface AgentInfo {
   email?: string | null;
   comms_enabled?: boolean;
   email_alias?: string;
+  action_bias?: "proactive" | "balanced" | "deliberative";
 }
 
 export interface PersonaUpdate {
@@ -43,6 +44,7 @@ export interface PersonaUpdate {
   sparkle_color?: string;
   comms_enabled?: boolean;
   email_alias?: string;
+  action_bias?: "proactive" | "balanced" | "deliberative";
 }
 
 interface AgentStore {

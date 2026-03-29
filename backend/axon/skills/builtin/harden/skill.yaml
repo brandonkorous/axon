@@ -16,6 +16,8 @@ triggers:
   - error resilience
   - production ready
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

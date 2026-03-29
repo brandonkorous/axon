@@ -34,7 +34,9 @@ function TaskCard({
     <div
       draggable
       onDragStart={handleDragStart}
-      className="group card bg-base-300 border border-secondary hover:border-neutral-content/40 transition-colors cursor-grab active:cursor-grabbing"
+      className={`group card bg-base-300 border hover:border-neutral-content/40 transition-colors cursor-grab active:cursor-grabbing ${
+        task.status === "failed" ? "border-error/40" : "border-secondary"
+      }`}
     >
       <div className="card-body p-3 gap-2">
         <div className="flex items-start justify-between gap-2">
@@ -64,6 +66,11 @@ function TaskCard({
             >
               {task.priority}
             </span>
+            {task.status === "failed" && (
+              <span className="badge badge-soft badge-warning badge-xs font-bold">
+                Failed
+              </span>
+            )}
           </div>
         </div>
 
@@ -350,7 +357,11 @@ export function TaskBoardView() {
 
   const grouped = COLUMNS.map((col) => ({
     ...col,
-    tasks: filtered.filter((t) => t.status === col.key),
+    tasks: filtered.filter((t) =>
+      col.key === "blocked"
+        ? t.status === "blocked" || t.status === "failed"
+        : t.status === col.key
+    ),
   }));
 
   return (

@@ -14,6 +14,8 @@ triggers:
   - review code
   - audit code
 
+requires_code_access: true
+
 inputs:
   - name: code
     type: string

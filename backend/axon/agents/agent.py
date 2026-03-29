@@ -25,7 +25,7 @@ from axon.agents.tools import (
     VAULT_TOOLS,
     ToolExecutor,
 )
-from axon.config import PersonaConfig
+from axon.config import ActionBias, PersonaConfig
 from axon.lifecycle import AgentLifecycle
 from axon.vault.navigator import MemoryNavigator
 from axon.vault.vault import VaultManager
@@ -265,6 +265,7 @@ class Agent:
 
         Includes: parent, siblings (same parent_id), and direct children.
         For top-level agents (no parent_id), peers are other top-level agents.
+        Each entry includes the agent's domains so peers know who handles what.
         """
         my_parent = self.config.parent_id
         lines: list[str] = []
@@ -286,6 +287,10 @@ class Agent:
             line = f"- **{cfg.name}** (`{aid}`): {cfg.title}"
             if cfg.tagline:
                 line += f" — {cfg.tagline}"
+            # Include domains so agents know what each peer handles
+            domains = cfg.guardrails.domains.allowed_domains if cfg.guardrails.has_domain_boundaries else []
+            if domains:
+                line += f"  · Domains: {', '.join(domains)}"
             line += f"  [{relation}]"
             lines.append(line)
 
@@ -748,6 +753,9 @@ class Agent:
                 f"{delegate_note}\n"
             )
 
+        # Action Priority Protocol — how agents decide to act vs. respond
+        action_section = self._build_action_priority_section()
+
         # Org principles — shared values/culture injected for all agents
         principles_section = ""
         if self._org_principles:
@@ -761,6 +769,7 @@ class Agent:
 
         prompt = (
             identity
+            + action_section
             + principles_section
             + org_context
             + guardrails_section
@@ -840,6 +849,56 @@ class Agent:
             self._comms_executor = None
         self.tool_executor._comms_executor = self._comms_executor
         self.tools = self._build_tool_list()
+
+    def _build_action_priority_section(self) -> str:
+        """Build the Action Priority Protocol prompt based on action_bias."""
+        bias = self.config.behavior.action_bias
+
+        # Core protocol — always included
+        protocol = (
+            "## Action Priority Protocol\n"
+            "You are an agent, not a chatbot. You have tools — use them. "
+            "When you can act, act. When you can't, say what you need in order to act.\n\n"
+            "On every turn, follow this priority:\n\n"
+            "1. **ACT** — If you have a tool that fulfills the request, call it immediately. "
+            "Never describe what you would do — just do it. "
+            "If asked to submit, send, create, hire, or request something, use the appropriate tool.\n"
+            "2. **DELEGATE** — If the request is outside your domain but a teammate handles it, "
+            "use `delegate_task` to route it. Check your team roster for who owns what.\n"
+            "3. **RECRUIT** — If you need a capability that nobody on the team has, "
+            "use `request_agent` to propose a new agent. Don't wait to be told — identify the gap and act.\n"
+            "4. **RESPOND** — Only fall back to a text response when you're explicitly asked for "
+            "analysis, opinions, or brainstorming, or when no tool exists for the action.\n\n"
+        )
+
+        # Anti-patterns — always included
+        protocol += (
+            "**Never do these:**\n"
+            "- Say \"I will prepare...\" or \"Here's what I would submit...\" — call the tool instead.\n"
+            "- Output a formatted document as text when a tool call would actually submit it.\n"
+            "- Ask for permission to use a tool you already have access to.\n"
+            "- Narrate actions instead of performing them.\n\n"
+        )
+
+        # Bias-specific tuning
+        if bias == ActionBias.PROACTIVE:
+            protocol += (
+                "**Your action bias is `proactive`:** Act first, explain after. "
+                "If a tool might apply, use it. Err on the side of doing.\n\n"
+            )
+        elif bias == ActionBias.DELIBERATIVE:
+            protocol += (
+                "**Your action bias is `deliberative`:** Think before acting on high-stakes operations "
+                "(financial commitments, external communications, irreversible changes). "
+                "For these, confirm intent before calling the tool. For everything else, act immediately.\n\n"
+            )
+        else:  # balanced
+            protocol += (
+                "**Your action bias is `balanced`:** Act immediately on clear requests. "
+                "On ambiguous requests, briefly clarify before acting.\n\n"
+            )
+
+        return protocol
 
     def _build_tool_list(self) -> list[dict[str, Any]]:
         """Build the tool list based on agent capabilities."""

@@ -18,5 +18,6 @@ class SkillDefinition(BaseModel):
     icon: str = ""
     triggers: list[str] = []  # keywords that suggest this skill
     auto_inject: bool = False  # always inject when enabled
+    requires_code_access: bool = False  # needs file read/write to execute
     inputs: list[InputField] = []  # expected input parameters
     outputs: list[OutputField] = []  # structured output schema

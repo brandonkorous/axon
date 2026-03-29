@@ -24,6 +24,7 @@ export function PersonaEditor({
   const [sparkleColor, setSparkleColor] = useState(agent.ui.sparkle_color);
   const [commsEnabled, setCommsEnabled] = useState(agent.comms_enabled ?? false);
   const [emailAlias, setEmailAlias] = useState(agent.email_alias ?? "");
+  const [actionBias, setActionBias] = useState(agent.action_bias ?? "proactive");
   const [systemPrompt, setSystemPrompt] = useState("");
 
   // Derive the domain from the current email address
@@ -57,6 +58,8 @@ export function PersonaEditor({
       update.comms_enabled = commsEnabled;
     if (emailAlias !== (agent.email_alias ?? ""))
       update.email_alias = emailAlias;
+    if (actionBias !== (agent.action_bias ?? "proactive"))
+      update.action_bias = actionBias as PersonaUpdate["action_bias"];
 
     try {
       await updatePersona(agent.id, update);
@@ -149,6 +152,19 @@ export function PersonaEditor({
           </div>
         </label>
       )}
+
+      <label className="form-control">
+        <span className="label-text text-xs mb-1">Action Bias</span>
+        <select
+          value={actionBias}
+          onChange={(e) => setActionBias(e.target.value as "proactive" | "balanced" | "deliberative")}
+          className="select select-sm select-bordered w-full"
+        >
+          <option value="proactive">Proactive — Act first, explain after</option>
+          <option value="balanced">Balanced — Act on clear requests, clarify ambiguous ones</option>
+          <option value="deliberative">Deliberative — Think before high-stakes actions</option>
+        </select>
+      </label>
 
       <div className="flex gap-3">
         <label className="form-control">

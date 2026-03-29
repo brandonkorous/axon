@@ -14,6 +14,8 @@ triggers:
   - rendering performance
   - page speed
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

@@ -18,6 +18,8 @@ triggers:
   - ui review
   - ux review
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

@@ -16,6 +16,8 @@ triggers:
   - tooltip tour
   - welcome flow
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

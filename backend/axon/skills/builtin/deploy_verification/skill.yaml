@@ -15,6 +15,8 @@ triggers:
   - production verification
   - merge and deploy
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

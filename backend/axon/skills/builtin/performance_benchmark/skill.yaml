@@ -13,6 +13,8 @@ triggers:
   - performance baseline
   - performance budget
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string

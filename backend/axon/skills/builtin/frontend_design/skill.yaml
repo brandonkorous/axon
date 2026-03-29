@@ -15,6 +15,8 @@ triggers:
   - production ui
   - design interface
 
+requires_code_access: true
+
 inputs:
   - name: subject
     type: string
