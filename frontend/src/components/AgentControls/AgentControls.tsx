@@ -33,13 +33,14 @@ export function AgentControls({
   lifecycle: LifecycleState;
   agent?: AgentInfo;
 }) {
-  const { lifecycleAction } = useAgentStore();
+  const { lifecycleAction, deleteAgent } = useAgentStore();
   const [showStrategy, setShowStrategy] = useState(false);
   const [showPersona, setShowPersona] = useState(false);
   const [strategyPrompt, setStrategyPrompt] = useState(
     lifecycle.strategy_override || ""
   );
   const [confirmTerminate, setConfirmTerminate] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isTerminated = lifecycle.status === "terminated";
 
@@ -135,9 +136,38 @@ export function AgentControls({
       )}
 
       {isTerminated && (
-        <p className="text-xs text-error">
-          This agent has been terminated and cannot be restarted.
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-error">
+            This agent has been terminated.
+          </p>
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="btn btn-error btn-xs"
+            >
+              Delete Permanently
+            </button>
+          ) : (
+            <span className="flex items-center gap-1">
+              <span className="text-xs text-error font-semibold">Delete vault and all data?</span>
+              <button
+                onClick={() => {
+                  deleteAgent(agentId);
+                  setConfirmDelete(false);
+                }}
+                className="btn btn-error btn-xs"
+              >
+                Yes, Delete
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="btn btn-ghost btn-xs"
+              >
+                No
+              </button>
+            </span>
+          )}
+        </div>
       )}
 
       {showStrategy && !isTerminated && (

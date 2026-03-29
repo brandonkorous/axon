@@ -122,13 +122,39 @@ def _build_vault_summary(vault: VaultManager) -> str:
 def _execute_searches(
     vault: VaultManager, queries: list[str], branches: list[str],
 ) -> dict[str, dict[str, Any]]:
-    """Execute search queries against the vault, return candidate files."""
+    """Execute search queries against the vault, return candidate files.
+
+    Prioritizes memory tiers: short-term first, then long-term, then other
+    branches. Never searches deep/ or conversations/ — those are archived.
+    """
+    # Excluded paths — archived trees with independent roots
+    excluded_prefixes = ("deep/", "conversations/")
+
     candidates: dict[str, dict[str, Any]] = {}
+
+    # Priority 1: Search memory tiers directly
+    for memory_branch in ["memory/short-term", "memory/long-term"]:
+        for f in vault.list_branch(memory_branch)[:10]:
+            if f["path"] not in candidates:
+                candidates[f["path"]] = {
+                    "path": f["path"],
+                    "title": f.get("title", f["name"]),
+                    "snippet": f.get("description", ""),
+                }
+
+    # Priority 2: Execute search queries
     for query in queries[:3]:
         for r in vault.search(query, max_results=5):
-            if r["path"] not in candidates:
-                candidates[r["path"]] = r
+            path = r["path"]
+            if any(path.startswith(p) for p in excluded_prefixes):
+                continue
+            if path not in candidates:
+                candidates[path] = r
+
+    # Priority 3: Browse requested branches (excluding archived)
     for branch in branches[:3]:
+        if any(branch.startswith(p.rstrip("/")) for p in excluded_prefixes):
+            continue
         for f in vault.list_branch(branch)[:5]:
             if f["path"] not in candidates:
                 candidates[f["path"]] = {

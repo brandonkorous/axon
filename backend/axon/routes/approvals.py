@@ -55,11 +55,22 @@ async def list_pending_approvals(org_id: str):
                     "created_at": metadata.get("created_at", ""),
                     "updated_at": metadata.get("updated_at", ""),
                 }
-                # Include comms-specific fields for outbound message approvals
-                if metadata.get("type") == "comms_outbound":
-                    item["type"] = "comms_outbound"
+                # Include type-specific fields
+                task_type = metadata.get("type", "")
+                if task_type:
+                    item["type"] = task_type
+
+                if task_type == "comms_outbound":
                     item["channel"] = metadata.get("channel", "")
                     item["comms_payload"] = metadata.get("comms_payload", "")
+                elif task_type == "recruitment":
+                    item["role"] = metadata.get("role", "")
+                    item["reason"] = metadata.get("reason", "")
+                    item["requested_by"] = metadata.get("requested_by", "")
+                    item["system_prompt"] = metadata.get("system_prompt", "")
+                    item["domains"] = metadata.get("domains", [])
+                    item["suggested_capabilities"] = metadata.get("suggested_capabilities", [])
+
                 pending.append(item)
         except Exception:
             continue
@@ -162,7 +173,13 @@ async def approve_task(org_id: str, task_path: str):
         role = metadata.get("role", "New Agent")
         agent_id = role.lower().replace(" ", "_")
         requested_by = metadata.get("requested_by", "")
-        body_req = ApproveRequest(name=role, agent_id=agent_id, parent_id=requested_by)
+        body_req = ApproveRequest(
+            name=role,
+            agent_id=agent_id,
+            parent_id=requested_by,
+            system_prompt=metadata.get("system_prompt", ""),
+            domains=metadata.get("domains", []),
+        )
         return await approve_recruitment(org_id, task_path, body_req)
 
     metadata["status"] = "approved"

@@ -129,6 +129,14 @@ class LearningConfig(BaseModel):
 
     When enabled, a local LLM (e.g. ollama/llama3:8b) manages all memory —
     semantic recall before paid-model reasoning, and insight extraction after.
+
+    Memory is organized into three tiers:
+    - short-term: working context from recent conversations (5-7 day TTL)
+    - long-term: validated insights and persistent knowledge
+    - deep: forgotten memories awaiting user review before deletion
+
+    Each memory fragment is kept to 100-200 words. Larger extractions are
+    split into linked fragments for associative recall.
     """
 
     enabled: bool = True
@@ -141,6 +149,12 @@ class LearningConfig(BaseModel):
     deep_consolidation_batch_size: int = 10  # entries per LLM call
     deep_consolidation_min_entries: int = 5  # skip if fewer active entries
     archive_confidence_threshold: float = 0.2  # auto-archive below this
+
+    # Memory tiers
+    short_term_ttl_days: int = 7  # short-term memories expire after this
+    max_memory_words: int = 150  # target 100-200 words per fragment
+    promotion_confidence: float = 0.7  # confidence needed to promote to long-term
+    deep_review_interval_days: int = 30  # surface deep memories for user review
 
 
 class ActionBias(str, Enum):

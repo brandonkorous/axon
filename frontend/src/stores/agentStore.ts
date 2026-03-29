@@ -54,6 +54,7 @@ interface AgentStore {
   lifecycleAction: (agentId: string, action: string, body?: object) => Promise<void>;
   updatePersona: (agentId: string, update: PersonaUpdate) => Promise<void>;
   fetchAgentDetail: (agentId: string) => Promise<AgentInfo | null>;
+  deleteAgent: (agentId: string) => Promise<void>;
 }
 
 export const useAgentStore = create<AgentStore>((set) => ({
@@ -88,6 +89,18 @@ export const useAgentStore = create<AgentStore>((set) => ({
     });
     if (!res.ok) throw new Error("Failed to update persona");
     // Refresh agent list to reflect changes
+    const { fetchAgents } = useAgentStore.getState();
+    await fetchAgents();
+  },
+
+  deleteAgent: async (agentId) => {
+    const res = await fetch(orgApiPath(`lifecycle/${agentId}`), {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || "Failed to delete agent");
+    }
     const { fetchAgents } = useAgentStore.getState();
     await fetchAgents();
   },

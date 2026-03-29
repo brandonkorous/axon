@@ -468,8 +468,16 @@ class Agent:
         vault_context = await vault_task
         logger.debug("[%s] Vault context: %d chars", self.id, len(vault_context) if vault_context else 0)
 
-        # 2. Build messages
-        messages = self._build_messages(user_message, vault_context)
+        # 2. Classify intent and build targeted tool list + messages
+        from axon.agents.intent_router import classify_intent
+        routing = classify_intent(user_message)
+        logger.debug(
+            "[%s] Intent: %s (confidence=%.2f, tools=%s, patterns=%s)",
+            self.id, routing.intent, routing.confidence,
+            routing.tool_groups, routing.pattern_names,
+        )
+        routed_tools = self._build_tool_list(routing.tool_groups)
+        messages = self._build_messages(user_message, vault_context, routing.pattern_names)
 
         # 3. Add user message to history (skip for scheduler-triggered tasks)
         if save_history:
@@ -483,7 +491,7 @@ class Agent:
             async for chunk in stream_completion(
                 model=self.config.model.reasoning,
                 messages=messages,
-                tools=self.tools if self.tools else None,
+                tools=routed_tools if routed_tools else None,
                 max_tokens=self.config.model.max_tokens,
                 temperature=self.config.model.temperature,
             ):
@@ -588,9 +596,17 @@ class Agent:
     async def _process_turn_for_learning(
         self, user_message: str, response: str, vault_context: str,
     ) -> None:
-        """Fire-and-forget: let the memory manager extract learnings from this turn."""
+        """Fire-and-forget: let the memory manager extract memories from this turn."""
         try:
-            await self.memory_manager.process_turn(user_message, response, vault_context)
+            conv_id = ""
+            if self.conversation_manager:
+                conv_id = self.conversation_manager.active_id
+            elif self.conversation and self.conversation.conversation_id:
+                conv_id = self.conversation.conversation_id
+            await self.memory_manager.process_turn(
+                user_message, response, vault_context,
+                conversation_id=conv_id,
+            )
         except Exception as e:
             logger.debug("Learning extraction failed (non-critical): %s", e)
 
@@ -643,7 +659,8 @@ class Agent:
             yield chunk
 
     def _build_messages(
-        self, user_message: str, vault_context: str
+        self, user_message: str, vault_context: str,
+        routed_patterns: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Build the full message array for the LLM."""
         # Inject agent identity and org context
@@ -652,6 +669,14 @@ class Agent:
             f"You are **{self.name}** (agent ID: `{self.id}`). "
             f"When you see tasks, inbox items, or references assigned to "
             f"`{self.id}`, those are assigned to **you** — act on them directly.\n\n"
+            f"## Personal Vault\n"
+            f"You have a personal knowledge vault. Use it actively:\n"
+            f"- **Before responding**, check your vault for relevant context "
+            f"(`vault_search`, `vault_list`).\n"
+            f"- **After learning something important**, store it "
+            f"(`vault_write`) so you can reference it later.\n"
+            f"- Your vault is your memory across conversations — "
+            f"decisions, research, insights, and working notes belong there.\n\n"
         )
 
         # Shared org context — tasks, issues, delegation
@@ -789,10 +814,15 @@ class Agent:
             if skill_prompt:
                 prompt += f"\n\n{skill_prompt}"
 
-        # Inject cognitive patterns based on agent role/title
+        # Inject cognitive patterns — filtered by intent router when available
         from axon.patterns.resolver import resolve_patterns_for_agent, build_pattern_prompt
-        explicit = getattr(self.config, "cognitive_patterns", None) or []
-        patterns = resolve_patterns_for_agent(self.config.title, explicit or None)
+        if routed_patterns is not None:
+            # Intent router selected specific patterns for this message
+            explicit = routed_patterns if routed_patterns else None
+        else:
+            explicit = getattr(self.config, "cognitive_patterns", None) or []
+            explicit = explicit or None
+        patterns = resolve_patterns_for_agent(self.config.title, explicit)
         pattern_prompt = build_pattern_prompt(patterns)
         if pattern_prompt:
             prompt += f"\n\n{pattern_prompt}"
@@ -807,11 +837,12 @@ class Agent:
                 "content": f"## Memory (from your vault)\n\n{vault_context}",
             })
 
-        # Add conversation history
-        messages.extend(self.conversation.get_llm_messages())
+        # NO raw conversation history replay. Context comes from vault memory
+        # (short-term + long-term). The memory manager extracts and stores
+        # relevant context from each turn, so the agent has continuity
+        # without burning tokens on full chat replay.
 
-        # Inject unread inbox notifications AFTER history so they take priority
-        # over any stale conversation context about "waiting for updates"
+        # Inject unread inbox notifications
         inbox_summary = self._get_inbox_summary()
         logger.debug("[%s] Inbox summary: %d chars", self.id, len(inbox_summary))
         if inbox_summary:
@@ -871,12 +902,29 @@ class Agent:
             "analysis, opinions, or brainstorming, or when no tool exists for the action.\n\n"
         )
 
+        # Recruitment guidance — when and how to hire
+        protocol += (
+            "### When to Recruit\n"
+            "- **Capability gap.** A request needs sustained, specialist effort outside your domain — "
+            "don't fake expertise you don't have. A shallow answer is worse than no answer.\n"
+            "- **Repeated need.** The same type of request keeps coming up and no one on the team covers it.\n"
+            "- **Quality gap.** You or a teammate are producing shallow output on a topic that isn't your specialty.\n\n"
+            "Before recruiting, check if an existing teammate covers the need (`find_agents`). "
+            "If someone fits, `delegate_task`. If no one fits, use `request_agent`.\n\n"
+            "**IMPORTANT: To hire or recruit a new agent, ALWAYS use `request_agent`. "
+            "Do NOT use `task_create` for hiring — `task_create` creates a task, not an agent. "
+            "Only `request_agent` triggers the recruitment pipeline that actually creates a new team member.** "
+            "Provide the role, reason, and a description of what the agent should do. "
+            "The system will automatically craft a detailed persona from your brief.\n\n"
+        )
+
         # Anti-patterns — always included
         protocol += (
             "**Never do these:**\n"
             "- Say \"I will prepare...\" or \"Here's what I would submit...\" — call the tool instead.\n"
             "- Output a formatted document as text when a tool call would actually submit it.\n"
             "- Ask for permission to use a tool you already have access to.\n"
+            "- Use `task_create` when you mean to hire — use `request_agent` instead.\n"
             "- Narrate actions instead of performing them.\n\n"
         )
 
@@ -900,67 +948,77 @@ class Agent:
 
         return protocol
 
-    def _build_tool_list(self) -> list[dict[str, Any]]:
-        """Build the tool list based on agent capabilities."""
+    def _build_tool_list(self, tool_groups: list[str] | None = None) -> list[dict[str, Any]]:
+        """Build the tool list based on agent capabilities and intent routing.
+
+        When tool_groups is provided (from intent router), only include tools
+        for the specified groups. Otherwise includes all available tools.
+        """
+        from axon.agents.intent_router import (
+            TOOL_GROUP_ACHIEVEMENT, TOOL_GROUP_BROWSER, TOOL_GROUP_COMMS,
+            TOOL_GROUP_DELEGATION, TOOL_GROUP_DISCOVERY, TOOL_GROUP_ISSUES,
+            TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_LEARNING, TOOL_GROUP_MEDIA,
+            TOOL_GROUP_PERFORMANCE, TOOL_GROUP_REASONING, TOOL_GROUP_RECRUITMENT,
+            TOOL_GROUP_RESEARCH, TOOL_GROUP_TASKS, TOOL_GROUP_VAULT, TOOL_GROUP_WEB,
+        )
+
+        def _want(group: str) -> bool:
+            """Check if a tool group is requested (or if we're in unfiltered mode)."""
+            return tool_groups is None or group in tool_groups
+
+        # Vault tools are always included as baseline
         tools = list(VAULT_TOOLS)
 
-        if self.config.delegation.can_delegate_to:
+        if _want(TOOL_GROUP_DELEGATION) and self.config.delegation.can_delegate_to:
             tools.extend(DELEGATION_TOOLS)
 
-        # Learning tools (outcome linking) when memory manager is active
-        if self.memory_manager:
+        if _want(TOOL_GROUP_LEARNING) and self.memory_manager:
             tools.extend(LEARNING_TOOLS)
 
-        # Reasoning tools when engine is active
-        if self.reasoning_engine:
+        if _want(TOOL_GROUP_REASONING) and self.reasoning_engine:
             from axon.reasoning.tools import REASONING_TOOLS
             tools.extend(REASONING_TOOLS)
 
-        # Comms tools when enabled
-        if self._comms_executor:
+        if _want(TOOL_GROUP_COMMS) and self._comms_executor:
             from axon.comms.tools import COMMS_TOOLS
             tools.extend(COMMS_TOOLS)
 
-        # Web tools when enabled
-        if self._web_executor:
+        if _want(TOOL_GROUP_WEB) and self._web_executor:
             from axon.web.tools import WEB_TOOLS
             tools.extend(WEB_TOOLS)
 
-        # Research tools — always available when web is enabled
-        if self._web_executor:
+        if _want(TOOL_GROUP_RESEARCH) and self._web_executor:
             from axon.research.tools import RESEARCH_TOOLS
             tools.extend(RESEARCH_TOOLS)
 
-        # Browser tools when enabled
-        if self._browser_executor:
+        if _want(TOOL_GROUP_BROWSER) and self._browser_executor:
             from axon.browser.tools import BROWSER_TOOLS
             tools.extend(BROWSER_TOOLS)
 
-        # Media tools when enabled
-        if self._media_executor:
+        if _want(TOOL_GROUP_MEDIA) and self._media_executor:
             from axon.media.tools import MEDIA_TOOLS
             tools.extend(MEDIA_TOOLS)
 
-        # Integration tools when integrations are enabled
-        if self._integration_executor:
+        if tool_groups is None and self._integration_executor:
             tools.extend(self._integration_executor.get_tools())
 
-        # All agents can discover other agents in the org
-        tools.extend(DISCOVERY_TOOLS)
+        if _want(TOOL_GROUP_DISCOVERY):
+            tools.extend(DISCOVERY_TOOLS)
 
-        # All agents can request new agents
-        tools.extend(RECRUITMENT_TOOLS)
+        if _want(TOOL_GROUP_RECRUITMENT):
+            tools.extend(RECRUITMENT_TOOLS)
 
-        # Shared vault tools (tasks + issues + achievements + knowledge) when org has a shared vault
         if self.shared_vault:
-            tools.extend(TASK_TOOLS)
-            tools.extend(ISSUE_TOOLS)
-            tools.extend(ACHIEVEMENT_TOOLS)
-            tools.extend(KNOWLEDGE_TOOLS)
-
-        # Performance tools when shared vault is available
-        if self.shared_vault:
-            tools.extend(PERFORMANCE_TOOLS)
+            if _want(TOOL_GROUP_TASKS):
+                tools.extend(TASK_TOOLS)
+            if _want(TOOL_GROUP_ISSUES):
+                tools.extend(ISSUE_TOOLS)
+            if _want(TOOL_GROUP_ACHIEVEMENT):
+                tools.extend(ACHIEVEMENT_TOOLS)
+            if _want(TOOL_GROUP_KNOWLEDGE):
+                tools.extend(KNOWLEDGE_TOOLS)
+            if _want(TOOL_GROUP_PERFORMANCE):
+                tools.extend(PERFORMANCE_TOOLS)
 
         # Apply guardrail tool restrictions (whitelist/blacklist/action gates)
         if self.config.guardrails.has_tool_restrictions or not self.config.guardrails.actions.can_send:

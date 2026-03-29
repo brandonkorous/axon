@@ -89,21 +89,33 @@ class MemoryNavigator:
                 query=query,
             )
 
+        # Archived trees — independent roots not part of active recall
+        excluded_prefixes = ("deep/", "conversations/")
+
         # Score all files — from cache if available, else disk
         scores: dict[str, float] = {}
         file_contents: dict[str, str] = {}
 
         if self._cache:
             for rel_path, cached in self._cache.files.items():
+                if any(rel_path.startswith(p) for p in excluded_prefixes):
+                    continue
                 file_contents[rel_path] = cached.raw
                 score = self._score_file(rel_path, cached.raw, keywords)
                 if score > 0:
+                    # Boost memory tiers: short-term most relevant, long-term next
+                    if rel_path.startswith("memory/short-term/"):
+                        score += 3.0
+                    elif rel_path.startswith("memory/long-term/"):
+                        score += 1.5
                     scores[rel_path] = score
         else:
             for md_file in self.vault_path.rglob("*.md"):
                 if md_file.name.startswith("."):
                     continue
                 rel_path = str(md_file.relative_to(self.vault_path)).replace("\\", "/")
+                if any(rel_path.startswith(p) for p in excluded_prefixes):
+                    continue
                 try:
                     content = md_file.read_text(encoding="utf-8")
                 except Exception:
@@ -111,6 +123,10 @@ class MemoryNavigator:
                 file_contents[rel_path] = content
                 score = self._score_file(rel_path, content, keywords)
                 if score > 0:
+                    if rel_path.startswith("memory/short-term/"):
+                        score += 3.0
+                    elif rel_path.startswith("memory/long-term/"):
+                        score += 1.5
                     scores[rel_path] = score
 
         # Boost scores based on graph signals

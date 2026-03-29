@@ -77,7 +77,19 @@ prefer high-confidence validated knowledge over low-confidence entries."""
 
 PROCESS_TURN_PROMPT = """\
 You are a memory manager for an AI agent. Analyze this conversation turn and \
-decide if anything is worth saving to the agent's long-term memory vault.
+extract memories worth saving. Memories come in two types:
+
+**Short-term**: Working context — what's being discussed, active problems, \
+in-flight decisions, names/details mentioned. These help the agent maintain \
+continuity across turns and sessions for the next 5-7 days.
+
+**Long-term**: Validated insights — patterns, corrections, preferences, \
+strategic knowledge. These persist indefinitely and shape future behavior.
+
+CRITICAL: Each memory must be 100-200 words MAX. Think fragments, not documents. \
+If a topic needs more than 200 words, split it into multiple related memories \
+that reference each other. Humans recall partial memories that assemble together — \
+so should this agent.
 
 ## User Message
 {user_message}
@@ -92,9 +104,16 @@ Respond with JSON only:
 ```json
 {{
   "worth_saving": true/false,
-  "insights": [
+  "short_term": [
     {{
-      "insight": "what was learned",
+      "memory": "100-200 word fragment about working context",
+      "tags": "tag1, tag2",
+      "related_files": ["path/to/related.md"]
+    }}
+  ],
+  "long_term": [
+    {{
+      "memory": "100-200 word fragment about a validated insight",
       "confidence": 0.7,
       "tags": "tag1, tag2",
       "related_files": ["path/to/related.md"]
@@ -116,9 +135,18 @@ Respond with JSON only:
 }}
 ```
 
-Be selective. The bar is: "would this change how the agent handles a future \
-conversation?" Greetings, simple facts, and routine answers are NOT worth saving. \
-Only extract genuine insights, patterns, corrections, or validated knowledge."""
+## What to save
+
+**Short-term** (save liberally): Active bugs being debugged, decisions in progress, \
+user requests and their context, names/entities mentioned, current goals or tasks. \
+If the user came back tomorrow and asked "where were we?" — this is the answer.
+
+**Long-term** (save selectively): User preferences, validated patterns, corrections \
+to prior advice, strategic decisions with reasoning, things that change how the \
+agent should behave in future conversations.
+
+**Skip entirely**: Greetings, small talk, routine confirmations, information already \
+captured in existing vault context."""
 
 CONSOLIDATION_REVIEW_PROMPT = """\
 You are a memory consolidation engine. Review these learning entries from an \

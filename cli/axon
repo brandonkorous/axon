@@ -66,6 +66,121 @@ detect_platform() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  Hardware Detection
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Detect total system RAM in GB (integer)
+detect_ram_gb() {
+  local ram_kb=0
+  case "$PLATFORM" in
+    linux)
+      ram_kb=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}')
+      ;;
+    macos)
+      local ram_bytes
+      ram_bytes=$(sysctl -n hw.memsize 2>/dev/null)
+      ram_kb=$((ram_bytes / 1024))
+      ;;
+    windows)
+      local ram_bytes
+      ram_bytes=$(wmic.exe OS get TotalVisibleMemorySize /value 2>/dev/null | grep -o '[0-9]*')
+      ram_kb=${ram_bytes:-0}
+      ;;
+  esac
+  RAM_GB=$(( (ram_kb + 524288) / 1048576 ))  # round to nearest GB
+}
+
+# Detect GPU and VRAM. Sets GPU_NAME and GPU_VRAM_GB (0 if none found)
+detect_gpu() {
+  GPU_NAME=""
+  GPU_VRAM_GB=0
+
+  # Try nvidia-smi first (NVIDIA GPUs)
+  if command -v nvidia-smi > /dev/null 2>&1; then
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+    local vram_mb
+    vram_mb=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+    if [ -n "$vram_mb" ]; then
+      GPU_VRAM_GB=$(( (vram_mb + 512) / 1024 ))
+    fi
+    return
+  fi
+
+  # macOS — check for Apple Silicon (unified memory, shared with GPU)
+  if [ "$PLATFORM" = "macos" ]; then
+    local chip
+    chip=$(sysctl -n machdep.cpu.brand_string 2>/dev/null)
+    if echo "$chip" | grep -qi "apple"; then
+      GPU_NAME="$chip (unified memory)"
+      GPU_VRAM_GB=$RAM_GB  # Apple Silicon shares RAM with GPU
+    fi
+    return
+  fi
+
+  # Windows — try wmic for any GPU
+  if [ "$PLATFORM" = "windows" ]; then
+    GPU_NAME=$(wmic.exe path win32_VideoController get name /value 2>/dev/null | grep -o '=.*' | sed 's/=//' | head -1 | tr -d '\r')
+    local vram_bytes
+    vram_bytes=$(wmic.exe path win32_VideoController get AdapterRAM /value 2>/dev/null | grep -o '[0-9]*' | head -1)
+    if [ -n "$vram_bytes" ] && [ "$vram_bytes" -gt 0 ] 2>/dev/null; then
+      GPU_VRAM_GB=$(( (vram_bytes + 536870912) / 1073741824 ))
+    fi
+  fi
+}
+
+# Detect available disk space in GB for the current directory
+detect_disk_gb() {
+  DISK_GB=0
+  case "$PLATFORM" in
+    linux|macos)
+      DISK_GB=$(df -BG . 2>/dev/null | awk 'NR==2{print $4}' | tr -d 'G')
+      ;;
+    windows)
+      DISK_GB=$(df -BG . 2>/dev/null | awk 'NR==2{print $4}' | tr -d 'G' || echo 0)
+      ;;
+  esac
+}
+
+# Print hardware summary
+print_hardware_summary() {
+  detect_ram_gb
+  detect_gpu
+  detect_disk_gb
+
+  step "System hardware"
+  info "RAM: ${RAM_GB} GB"
+
+  if [ -n "$GPU_NAME" ]; then
+    info "GPU: ${GPU_NAME}"
+    info "VRAM: ${GPU_VRAM_GB} GB"
+  else
+    info "GPU: None detected"
+  fi
+
+  info "Disk available: ~${DISK_GB} GB"
+}
+
+# Recommend model tier based on hardware. Sets RECOMMENDED_TIER (1-4)
+# Tier 1: minimal (8GB RAM, no GPU)     → llama3:8b only
+# Tier 2: moderate (16GB RAM or 6GB+ VRAM) → + qwen2.5:7b
+# Tier 3: strong (32GB RAM or 8GB+ VRAM)  → + qwen2.5:14b, mistral-small
+# Tier 4: max (48GB+ RAM or 12GB+ VRAM)   → + llama3.1:70b, qwen2.5:32b
+recommend_model_tier() {
+  detect_ram_gb
+  detect_gpu
+
+  if [ "$GPU_VRAM_GB" -ge 12 ] 2>/dev/null || [ "$RAM_GB" -ge 48 ] 2>/dev/null; then
+    RECOMMENDED_TIER=4
+  elif [ "$GPU_VRAM_GB" -ge 8 ] 2>/dev/null || [ "$RAM_GB" -ge 32 ] 2>/dev/null; then
+    RECOMMENDED_TIER=3
+  elif [ "$GPU_VRAM_GB" -ge 6 ] 2>/dev/null || [ "$RAM_GB" -ge 16 ] 2>/dev/null; then
+    RECOMMENDED_TIER=2
+  else
+    RECOMMENDED_TIER=1
+  fi
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Docker Detection & Installation
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -469,6 +584,105 @@ GI
 #  Commands
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Local model selection (interactive) ─────────────────────────────────────
+select_local_model() {
+  recommend_model_tier
+
+  printf "\n"
+  step "Local LLM Setup"
+  printf "\n"
+  info "RAM: ${RAM_GB} GB"
+  if [ -n "$GPU_NAME" ]; then
+    info "GPU: ${GPU_NAME} (${GPU_VRAM_GB} GB VRAM)"
+  else
+    info "GPU: None detected (models will run on CPU — slower but functional)"
+  fi
+  printf "\n"
+
+  case "$RECOMMENDED_TIER" in
+    1)
+      printf "  ${YELLOW}${BOLD}Limited hardware detected.${RESET}\n"
+      printf "  With ${RAM_GB} GB RAM, only small models will run reliably.\n\n"
+      printf "    ${BOLD}1)${RESET} llama3:8b ${DIM}(~5 GB — recommended for your system)${RESET}\n"
+      printf "    ${BOLD}2)${RESET} qwen2.5:7b ${DIM}(~4.5 GB — may be tight on memory)${RESET}\n"
+      printf "    ${BOLD}3)${RESET} phi4-mini:3.8b ${DIM}(~2.5 GB — fastest, least capable)${RESET}\n"
+      printf "    ${BOLD}c)${RESET} Custom model name\n\n"
+      ;;
+    2)
+      printf "  ${CYAN}Moderate hardware detected.${RESET} Good for medium models.\n\n"
+      printf "    ${BOLD}1)${RESET} qwen2.5:7b ${DIM}(~4.5 GB — recommended for your system)${RESET}\n"
+      printf "    ${BOLD}2)${RESET} llama3:8b ${DIM}(~5 GB — solid general purpose)${RESET}\n"
+      printf "    ${BOLD}3)${RESET} mistral:7b ${DIM}(~4.5 GB — fast reasoning)${RESET}\n"
+      printf "    ${BOLD}4)${RESET} codellama:7b ${DIM}(~4 GB — code-focused)${RESET}\n"
+      printf "    ${BOLD}c)${RESET} Custom model name\n\n"
+      ;;
+    3)
+      printf "  ${GREEN}Strong hardware detected.${RESET} You can run larger models.\n\n"
+      printf "    ${BOLD}1)${RESET} qwen2.5:14b ${DIM}(~9 GB — recommended for your system)${RESET}\n"
+      printf "    ${BOLD}2)${RESET} mistral-small:22b ${DIM}(~13 GB — excellent reasoning)${RESET}\n"
+      printf "    ${BOLD}3)${RESET} llama3:8b ${DIM}(~5 GB — lighter, faster)${RESET}\n"
+      printf "    ${BOLD}4)${RESET} codellama:13b ${DIM}(~8 GB — code-focused)${RESET}\n"
+      printf "    ${BOLD}c)${RESET} Custom model name\n\n"
+      ;;
+    4)
+      printf "  ${GREEN}${BOLD}Excellent hardware detected.${RESET} You can run large models.\n\n"
+      printf "    ${BOLD}1)${RESET} qwen2.5:32b ${DIM}(~20 GB — recommended for your system)${RESET}\n"
+      printf "    ${BOLD}2)${RESET} llama3.1:70b ${DIM}(~40 GB — maximum capability)${RESET}\n"
+      printf "    ${BOLD}3)${RESET} qwen2.5:14b ${DIM}(~9 GB — fast + capable)${RESET}\n"
+      printf "    ${BOLD}4)${RESET} mistral-small:22b ${DIM}(~13 GB — strong reasoning)${RESET}\n"
+      printf "    ${BOLD}c)${RESET} Custom model name\n\n"
+      ;;
+  esac
+
+  ask "Choose model:"
+  read -r model_choice
+
+  case "$RECOMMENDED_TIER" in
+    1)
+      case "$model_choice" in
+        1) LOCAL_MODEL="llama3:8b" ;;
+        2) LOCAL_MODEL="qwen2.5:7b" ;;
+        3) LOCAL_MODEL="phi4-mini:3.8b" ;;
+        c|C) ask "Model name (e.g. mistral:7b):"; read -r LOCAL_MODEL ;;
+        *) LOCAL_MODEL="llama3:8b"; warn "Defaulting to llama3:8b" ;;
+      esac
+      ;;
+    2)
+      case "$model_choice" in
+        1) LOCAL_MODEL="qwen2.5:7b" ;;
+        2) LOCAL_MODEL="llama3:8b" ;;
+        3) LOCAL_MODEL="mistral:7b" ;;
+        4) LOCAL_MODEL="codellama:7b" ;;
+        c|C) ask "Model name (e.g. qwen2.5:14b):"; read -r LOCAL_MODEL ;;
+        *) LOCAL_MODEL="qwen2.5:7b"; warn "Defaulting to qwen2.5:7b" ;;
+      esac
+      ;;
+    3)
+      case "$model_choice" in
+        1) LOCAL_MODEL="qwen2.5:14b" ;;
+        2) LOCAL_MODEL="mistral-small:22b" ;;
+        3) LOCAL_MODEL="llama3:8b" ;;
+        4) LOCAL_MODEL="codellama:13b" ;;
+        c|C) ask "Model name (e.g. llama3.1:70b):"; read -r LOCAL_MODEL ;;
+        *) LOCAL_MODEL="qwen2.5:14b"; warn "Defaulting to qwen2.5:14b" ;;
+      esac
+      ;;
+    4)
+      case "$model_choice" in
+        1) LOCAL_MODEL="qwen2.5:32b" ;;
+        2) LOCAL_MODEL="llama3.1:70b" ;;
+        3) LOCAL_MODEL="qwen2.5:14b" ;;
+        4) LOCAL_MODEL="mistral-small:22b" ;;
+        c|C) ask "Model name (e.g. qwen2.5:32b):"; read -r LOCAL_MODEL ;;
+        *) LOCAL_MODEL="qwen2.5:32b"; warn "Defaulting to qwen2.5:32b" ;;
+      esac
+      ;;
+  esac
+
+  ok "Selected model: ${LOCAL_MODEL}"
+  info "llama3:8b will also be pulled as the navigator model"
+}
+
 # ── axon init <name> ────────────────────────────────────────────────────────
 cmd_init() {
   local name="${1:-}"
@@ -517,7 +731,7 @@ cmd_init() {
       ;;
     3)
       use_local=true
-      info "Will configure for local LLMs via Ollama"
+      select_local_model
       ;;
     s|S)
       info "Skipping API key setup. Edit .env before starting."
@@ -544,10 +758,12 @@ cmd_init() {
     rm -f "${name}/.env.bak"
   fi
 
-  # If local-only, set the model to Ollama
+  # If local-only, set the model to the user's chosen Ollama model
   if [ "$use_local" = true ]; then
+    local chosen_model="${LOCAL_MODEL:-llama3:8b}"
     sed -i.bak "s/^ANTHROPIC_API_KEY=.*/ANTHROPIC_API_KEY=/" "${name}/.env"
-    sed -i.bak "s/^DEFAULT_MODEL=.*/DEFAULT_MODEL=ollama\/llama3/" "${name}/.env"
+    sed -i.bak "s/^DEFAULT_MODEL=.*/DEFAULT_MODEL=ollama\/${chosen_model}/" "${name}/.env"
+    sed -i.bak "s/^OLLAMA_MODEL=.*/OLLAMA_MODEL=${chosen_model}/" "${name}/.env"
     rm -f "${name}/.env.bak"
   fi
 
@@ -692,7 +908,50 @@ cmd_doctor() {
     warn "No .env file"
   fi
 
+  # Hardware
+  step "Checking hardware..."
+
+  detect_ram_gb
+  if [ "$RAM_GB" -ge 16 ] 2>/dev/null; then
+    ok "RAM: ${RAM_GB} GB"
+  elif [ "$RAM_GB" -ge 8 ] 2>/dev/null; then
+    warn "RAM: ${RAM_GB} GB (16 GB+ recommended for local LLMs)"
+  else
+    warn "RAM: ${RAM_GB} GB (minimum 8 GB required, 16 GB+ recommended)"
+  fi
+
+  detect_gpu
+  if [ -n "$GPU_NAME" ]; then
+    ok "GPU: ${GPU_NAME}"
+    if [ "$GPU_VRAM_GB" -ge 8 ] 2>/dev/null; then
+      ok "VRAM: ${GPU_VRAM_GB} GB"
+    elif [ "$GPU_VRAM_GB" -gt 0 ] 2>/dev/null; then
+      warn "VRAM: ${GPU_VRAM_GB} GB (8 GB+ recommended for local LLMs)"
+    fi
+  else
+    info "GPU: None detected (local LLMs will use CPU)"
+  fi
+
+  detect_disk_gb
+  if [ "$DISK_GB" -ge 20 ] 2>/dev/null; then
+    ok "Disk: ~${DISK_GB} GB available"
+  else
+    warn "Disk: ~${DISK_GB} GB available (20 GB+ recommended for model storage)"
+  fi
+
+  # Model recommendations
+  recommend_model_tier
+  printf "\n"
+  case "$RECOMMENDED_TIER" in
+    1) info "Local LLM tier: Basic — small models only (llama3:8b, phi4-mini)" ;;
+    2) info "Local LLM tier: Moderate — medium models (qwen2.5:7b, mistral:7b)" ;;
+    3) info "Local LLM tier: Strong — large models (qwen2.5:14b, mistral-small:22b)" ;;
+    4) info "Local LLM tier: Excellent — very large models (qwen2.5:32b, llama3.1:70b)" ;;
+  esac
+
   # Port availability
+  step "Checking ports..."
+
   for port in 3000 8000; do
     if ! (echo > /dev/tcp/localhost/$port) 2>/dev/null; then
       ok "Port $port available"

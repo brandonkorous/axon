@@ -36,6 +36,10 @@ class VaultEntry(AgentBase):
     confidence: Mapped[float] = mapped_column(Float, default=0.5)
     status: Mapped[str] = mapped_column(String(20), default="active")
     learning_type: Mapped[str] = mapped_column(String(50), default="")
+    # Memory tier: short_term, long_term, deep, conversation, or empty for non-memory files
+    memory_tier: Mapped[str] = mapped_column(String(20), default="")
+    # Conversation ID that produced this memory (for short-term tracing)
+    conversation_id: Mapped[str] = mapped_column(String(100), default="")
     date: Mapped[str] = mapped_column(String(20), default="")
     link_count: Mapped[int] = mapped_column(Integer, default=0)
     backlink_count: Mapped[int] = mapped_column(Integer, default=0)

@@ -103,6 +103,51 @@ export function ApprovalDetailModal({ approval, onClose }: ApprovalDetailModalPr
         <div className="flex-1 overflow-y-auto space-y-4">
           {approval.type === "comms_outbound" && approval.comms_payload ? (
             <CommsPreview channel={approval.channel} payload={approval.comms_payload} />
+          ) : approval.type === "recruitment" ? (
+            <>
+              <div className="bg-base-100 rounded p-4 space-y-3 text-sm">
+                <div>
+                  <span className="text-base-content/60">Role:</span>{" "}
+                  <span className="text-base-content font-medium">{approval.role}</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Requested by:</span>{" "}
+                  <span className="text-base-content">{approval.requested_by}</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Reason:</span>{" "}
+                  <span className="text-base-content">{approval.reason}</span>
+                </div>
+                {approval.domains && approval.domains.length > 0 && (
+                  <div>
+                    <span className="text-base-content/60">Domains:</span>{" "}
+                    <span className="flex flex-wrap gap-1 mt-1">
+                      {approval.domains.map((d) => (
+                        <span key={d} className="badge badge-soft badge-xs badge-info">{d}</span>
+                      ))}
+                    </span>
+                  </div>
+                )}
+                {approval.suggested_capabilities && approval.suggested_capabilities.length > 0 && (
+                  <div>
+                    <span className="text-base-content/60">Capabilities:</span>{" "}
+                    <span className="flex flex-wrap gap-1 mt-1">
+                      {approval.suggested_capabilities.map((c) => (
+                        <span key={c} className="badge badge-soft badge-xs badge-ghost">{c}</span>
+                      ))}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {approval.system_prompt && (
+                <div>
+                  <h4 className="text-sm font-semibold text-base-content/60 mb-2">System Prompt</h4>
+                  <pre className="p-4 bg-base-100 rounded text-xs text-base-content/80 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
+                    {approval.system_prompt}
+                  </pre>
+                </div>
+              )}
+            </>
           ) : (
             <>
               {approval.plan_content && (

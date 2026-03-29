@@ -1,7 +1,11 @@
 """Memory learning — outbound side of the MemoryManager.
 
-Extracts learnings from conversation turns, updates confidence on existing
-vault entries, handles outcome linking and confidence decay.
+Extracts memories from conversation turns into tiered storage:
+- short-term: working context (5-7 day TTL)
+- long-term: validated insights (persistent)
+
+Each memory is kept to 100-200 words. Oversized extractions are split
+into linked fragments for associative recall.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from axon.config import LearningConfig
 if TYPE_CHECKING:
     from axon.usage import UsageTracker
 from axon.vault.memory_prompts import PROCESS_TURN_PROMPT, parse_llm_json
+from axon.vault.memory_splitter import split_memory
 from axon.vault.vault import VaultManager
 
 logger = logging.getLogger(__name__)
@@ -32,8 +37,9 @@ async def extract_learnings(
     usage_tracker: "UsageTracker | None" = None,
     agent_id: str = "",
     org_id: str = "",
+    conversation_id: str = "",
 ) -> None:
-    """Use the local LLM to extract learnings from a conversation turn."""
+    """Use the local LLM to extract memories from a conversation turn."""
     logger.debug("LEARN — asking local model to analyze turn (model=%s)", model)
     prompt = PROCESS_TURN_PROMPT.format(
         user_message=user_message,
@@ -68,14 +74,22 @@ async def extract_learnings(
         return
 
     today = str(date.today())
-    insights = result.get("insights", [])
+    short_term = result.get("short_term", [])
+    long_term = result.get("long_term", [])
     updates = result.get("confidence_updates", [])
     contradictions = result.get("contradictions", [])
+
+    # Backward compat: old "insights" key maps to long_term
+    if not long_term and result.get("insights"):
+        long_term = result["insights"]
+
     logger.debug(
-        "LEARN — saving: %d insights, %d confidence updates, %d contradictions",
-        len(insights), len(updates), len(contradictions),
+        "LEARN — saving: %d short-term, %d long-term, %d updates, %d contradictions",
+        len(short_term), len(long_term), len(updates), len(contradictions),
     )
-    _write_insights(vault, insights, today)
+    max_words = config.max_memory_words
+    _write_short_term(vault, short_term, today, conversation_id, max_words)
+    _write_long_term(vault, long_term, today, max_words)
     _apply_confidence_updates(vault, updates, today)
     _apply_contradictions(vault, contradictions, today)
     logger.debug("LEARN — all writes complete")
@@ -176,75 +190,133 @@ def apply_confidence_decay(
 # ── Internal helpers ─────────────────────────────────────────────
 
 
-def _ensure_learnings_linked(vault: VaultManager) -> None:
-    """Ensure the vault's root file links to the learnings branch.
+def _ensure_memory_linked(vault: VaultManager) -> None:
+    """Ensure the vault's root file links to the memory branch.
 
-    If the root file exists but doesn't contain a [[learnings/ link,
-    append a Learnings section. This prevents orphaned subtrees.
+    If the root file exists but doesn't contain a memory link,
+    append a Memory section. Migration handles this for existing vaults,
+    but this catches edge cases.
     """
     root_path = Path(vault.vault_path) / vault.root_file
     if not root_path.exists():
         return
 
     content = root_path.read_text(encoding="utf-8")
-    if "[[learnings/" in content:
-        return  # Already linked
+    if "[[memory/memory-index]]" in content:
+        return
 
-    # Append the learnings branch link
     content = content.rstrip() + (
-        "\n\n### Learnings\n"
-        "Auto-extracted insights, patterns, and corrections from conversations.\n"
-        "- [[learnings/learnings-index|Learnings]]\n"
+        "\n\n## Memory\n"
+        "Active memory — short-term working context and long-term validated knowledge.\n"
+        "- [[memory/memory-index]]\n"
     )
     root_path.write_text(content, encoding="utf-8")
-    logger.info("LEARN — linked learnings branch to root file: %s", vault.root_file)
+    logger.info("LEARN — linked memory branch to root file: %s", vault.root_file)
 
 
-def _write_insights(
-    vault: VaultManager, insights: list[dict[str, Any]], today: str,
+def _write_short_term(
+    vault: VaultManager,
+    memories: list[dict[str, Any]],
+    today: str,
+    conversation_id: str,
+    max_words: int,
 ) -> None:
-    """Write new insight files to the learnings/ branch."""
-    if insights:
-        _ensure_learnings_linked(vault)
+    """Write short-term memory fragments to memory/short-term/."""
+    if not memories:
+        return
+    _ensure_memory_linked(vault)
 
-    for insight_data in insights:
-        insight = insight_data.get("insight", "")
-        if not insight:
+    for mem_data in memories:
+        text = mem_data.get("memory", "")
+        if not text:
             continue
 
-        slug = insight[:50].lower().replace(" ", "-")
-        slug = "".join(c for c in slug if c.isalnum() or c == "-")
-        filename = f"{today}-{slug}"
-        logger.debug("LEARN — writing insight: %s → learnings/%s", insight[:80], filename)
+        tags = mem_data.get("tags", "")
+        related = mem_data.get("related_files", [])
+        fragments = split_memory(text, text[:80], tags, related, max_words)
 
-        metadata: dict[str, Any] = {
-            "name": insight[:100],
-            "description": insight[:200],
-            "type": "learning",
-            "learning_type": "insight",
-            "confidence": insight_data.get("confidence", 0.6),
-            "confidence_history": [{
+        for fragment in fragments:
+            slug = fragment.name[:50].lower().replace(" ", "-")
+            slug = "".join(c for c in slug if c.isalnum() or c == "-")
+            filename = f"{today}-{slug}"
+            logger.debug("LEARN — writing short-term: %s", filename)
+
+            metadata: dict[str, Any] = {
+                "name": fragment.name[:100],
+                "description": fragment.name[:200],
+                "type": "memory",
+                "memory_tier": "short_term",
+                "conversation_id": conversation_id,
+                "tags": fragment.tags,
+                "status": "active",
                 "date": today,
-                "value": insight_data.get("confidence", 0.6),
-                "reason": "extracted from conversation",
-            }],
-            "validated_by": [],
-            "contradicted_by": [],
-            "last_validated": today,
-            "source_conversations": 1,
-            "tags": insight_data.get("tags", ""),
-            "status": "active",
-            "date": today,
-        }
+            }
 
-        body = f"## Insight\n{insight}\n"
-        related = insight_data.get("related_files", [])
-        if related:
-            body += "\n## Evidence\n"
-            for ref in related:
-                body += f"- [[{Path(ref).stem}]]\n"
+            body = f"{fragment.body}\n"
+            if fragment.related_files:
+                body += "\n**References:**\n"
+                for ref in fragment.related_files:
+                    body += f"- [[{Path(ref).stem}]]\n"
 
-        vault.create_file("learnings", filename, metadata, body)
+            vault.create_file("memory/short-term", filename, metadata, body)
+
+
+def _write_long_term(
+    vault: VaultManager,
+    memories: list[dict[str, Any]],
+    today: str,
+    max_words: int,
+) -> None:
+    """Write long-term memory fragments to memory/long-term/."""
+    if not memories:
+        return
+    _ensure_memory_linked(vault)
+
+    for mem_data in memories:
+        # Support both "memory" (new) and "insight" (old) keys
+        text = mem_data.get("memory", "") or mem_data.get("insight", "")
+        if not text:
+            continue
+
+        confidence = mem_data.get("confidence", 0.6)
+        tags = mem_data.get("tags", "")
+        related = mem_data.get("related_files", [])
+        fragments = split_memory(text, text[:80], tags, related, max_words)
+
+        for fragment in fragments:
+            slug = fragment.name[:50].lower().replace(" ", "-")
+            slug = "".join(c for c in slug if c.isalnum() or c == "-")
+            filename = f"{today}-{slug}"
+            logger.debug("LEARN — writing long-term: %s", filename)
+
+            metadata: dict[str, Any] = {
+                "name": fragment.name[:100],
+                "description": fragment.name[:200],
+                "type": "memory",
+                "memory_tier": "long_term",
+                "learning_type": "insight",
+                "confidence": confidence,
+                "confidence_history": [{
+                    "date": today,
+                    "value": confidence,
+                    "reason": "extracted from conversation",
+                }],
+                "validated_by": [],
+                "contradicted_by": [],
+                "last_validated": today,
+                "source_conversations": 1,
+                "tags": fragment.tags,
+                "status": "active",
+                "date": today,
+            }
+
+            body = f"{fragment.body}\n"
+            if fragment.related_files:
+                body += "\n**Evidence:**\n"
+                for ref in fragment.related_files:
+                    body += f"- [[{Path(ref).stem}]]\n"
+
+            vault.create_file("memory/long-term", filename, metadata, body)
 
 
 def _apply_confidence_updates(

@@ -26,6 +26,8 @@ class ApproveRequest(BaseModel):
     tagline: str = ""
     color: str = "#6B7280"
     parent_id: str = ""  # If set, creates a sub-agent under this parent
+    system_prompt: str = ""  # Custom instructions (overwrites template instructions.md)
+    domains: list[str] = []  # Advisory domains (written to agent.yaml guardrails)
 
 
 class DeclineRequest(BaseModel):
@@ -51,8 +53,7 @@ async def list_pending_recruitment(org_id: str):
         if not f.get("name", "").startswith("recruit-") and "recruit" not in f.get("path", ""):
             continue
         try:
-            content = org.shared_vault.read_file(f["path"])
-            meta = content.get("metadata", {})
+            meta, body = org.shared_vault.read_file(f["path"])
             if meta.get("type") != "recruitment":
                 continue
             if meta.get("status") != "awaiting_approval":
@@ -62,6 +63,8 @@ async def list_pending_recruitment(org_id: str):
                 "role": meta.get("role", ""),
                 "reason": meta.get("reason", ""),
                 "requested_by": meta.get("requested_by", ""),
+                "system_prompt": meta.get("system_prompt", ""),
+                "domains": meta.get("domains", []),
                 "suggested_capabilities": meta.get("suggested_capabilities", []),
                 "created_at": meta.get("created_at", ""),
             })
@@ -106,7 +109,7 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
     except FileExistsError:
         raise HTTPException(status_code=409, detail=f"Vault already exists: {agent_id}")
 
-    # Override color in scaffolded agent.yaml
+    # Override color, domains, and other fields in scaffolded agent.yaml
     agent_yaml_path = vault_path / "agent.yaml"
     if agent_yaml_path.exists():
         with open(agent_yaml_path, encoding="utf-8") as f:
@@ -116,8 +119,18 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
             data["tagline"] = body.tagline
         if body.parent_id:
             data["parent_id"] = body.parent_id
+        if body.domains:
+            data.setdefault("guardrails", {}).setdefault("domains", {})["allowed_domains"] = body.domains
         with open(agent_yaml_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+    # Write custom instructions if the requesting agent provided a system prompt.
+    # All operational instructions (vault usage, action protocol, team building,
+    # recruitment) are injected dynamically by _build_messages — instructions.md
+    # only needs the role-specific content.
+    if body.system_prompt:
+        instructions_path = vault_path / "instructions.md"
+        instructions_path.write_text(body.system_prompt, encoding="utf-8")
 
     # Hot-load the agent into the registry
     try:
@@ -190,12 +203,11 @@ async def decline_recruitment(org_id: str, task_path: str, body: DeclineRequest)
         raise HTTPException(status_code=404, detail="No shared vault")
 
     try:
-        content = org.shared_vault.read_file(task_path)
-        meta = content.get("metadata", {})
+        meta, body_text = org.shared_vault.read_file(task_path)
         meta["status"] = "declined"
         if body.reason:
             meta["decline_reason"] = body.reason
-        org.shared_vault.write_file(task_path, meta, content.get("body", ""))
+        org.shared_vault.write_file(task_path, meta, body_text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

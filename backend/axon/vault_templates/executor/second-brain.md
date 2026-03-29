@@ -1,6 +1,11 @@
 # {{AGENT_NAME}} — {{AGENT_TITLE}}
 
-Root node for {{AGENT_NAME}}'s memory. Read this at conversation start.
+Root node for {{AGENT_NAME}}'s active knowledge. Read this at conversation start.
+
+## Memory
+
+Active memory — short-term working context and long-term validated knowledge.
+- [[memory/memory-index]]
 
 ## Branches
 

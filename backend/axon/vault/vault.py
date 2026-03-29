@@ -36,6 +36,10 @@ class VaultManager:
         self._watcher: VaultWatcher | None = None
         self._on_change_callbacks: list = []
 
+        # Run vault migrations on load (idempotent)
+        from axon.vault.migration import migrate_vault
+        migrate_vault(self.vault_path)
+
     def on_change(self, callback) -> None:
         """Register a callback invoked after any file write/create/remove.
 

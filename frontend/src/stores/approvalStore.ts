@@ -21,10 +21,17 @@ export interface Approval {
   priority: string;
   created_at: string;
   updated_at: string;
-  // Comms-specific fields (present when type === "comms_outbound")
   type?: string;
+  // Comms-specific fields (present when type === "comms_outbound")
   channel?: string;
   comms_payload?: string; // JSON string of CommsPayload
+  // Recruitment-specific fields (present when type === "recruitment")
+  role?: string;
+  reason?: string;
+  requested_by?: string;
+  system_prompt?: string;
+  domains?: string[];
+  suggested_capabilities?: string[];
 }
 
 export interface ApprovalHistoryItem {
@@ -94,8 +101,11 @@ export const useApprovalStore = create<ApprovalStore>((set, get) => ({
         await get().fetchPending();
         return true;
       }
+      const err = await res.json().catch(() => ({}));
+      console.error("Approve failed:", res.status, err);
       return false;
-    } catch {
+    } catch (e) {
+      console.error("Approve error:", e);
       return false;
     }
   },

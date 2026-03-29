@@ -280,3 +280,47 @@ async def create_org_link(org_id: str, agent_id: str, body: LinkRequest):
         raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
     agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
     return await _create_link(agent, body)
+
+
+# ── Deep Memory Review ────────────────────────────────────────────
+
+
+class DeepReviewAction(BaseModel):
+    """Request body for acting on a deep memory."""
+
+    action: str  # "reinvigorate" or "delete"
+
+
+@org_router.get("/{agent_id}/memory/deep-review")
+async def list_deep_memories(org_id: str, agent_id: str):
+    """List deep memories available for user review."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    if not agent.memory_manager:
+        raise HTTPException(status_code=400, detail="Memory not enabled for this agent")
+    return {"memories": agent.memory_manager.list_deep_for_review()}
+
+
+@org_router.post("/{agent_id}/memory/deep-review/{file_path:path}")
+async def act_on_deep_memory(org_id: str, agent_id: str, file_path: str, body: DeepReviewAction):
+    """Reinvigorate or permanently delete a deep memory."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    if not agent.memory_manager:
+        raise HTTPException(status_code=400, detail="Memory not enabled for this agent")
+
+    if body.action == "reinvigorate":
+        new_path = agent.memory_manager.reinvigorate(file_path)
+        if new_path:
+            return {"status": "reinvigorated", "new_path": new_path}
+        raise HTTPException(status_code=500, detail="Failed to reinvigorate memory")
+    elif body.action == "delete":
+        if agent.memory_manager.delete_deep_memory(file_path):
+            return {"status": "deleted"}
+        raise HTTPException(status_code=500, detail="Failed to delete memory")
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {body.action}")

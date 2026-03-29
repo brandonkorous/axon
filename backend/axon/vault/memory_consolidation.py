@@ -100,18 +100,20 @@ async def deep_consolidate(
 def _load_active_entries(
     vault: VaultManager,
 ) -> list[tuple[str, dict[str, Any], str]]:
-    """Load all active learnings as (path, metadata, body) tuples."""
+    """Load all active memory entries (long-term) for consolidation review."""
     entries: list[tuple[str, dict[str, Any], str]] = []
-    for item in vault.list_branch("learnings"):
-        path = item.get("path", "")
-        if not path:
-            continue
-        try:
-            metadata, body = vault.read_file(path)
-            if metadata.get("status", "active") == "active":
-                entries.append((path, metadata, body))
-        except Exception:
-            continue
+    # Search new tiered structure first, fall back to old learnings/
+    for branch in ["memory/long-term", "learnings"]:
+        for item in vault.list_branch(branch):
+            path = item.get("path", "")
+            if not path:
+                continue
+            try:
+                metadata, body = vault.read_file(path)
+                if metadata.get("status", "active") == "active":
+                    entries.append((path, metadata, body))
+            except Exception:
+                continue
     return entries
 
 
@@ -226,7 +228,11 @@ async def _adopt_orphans(
     report: ConsolidationReport,
 ) -> None:
     """Find orphan files and ask the LLM where to reattach them."""
-    orphans = vault.find_orphans()
+    all_orphans = vault.find_orphans()
+    # Exclude files under independent roots — they're not orphans
+    orphans = [o for o in all_orphans if not any(
+        o["path"].startswith(p) for p in ("deep/", "conversations/", "deep.md", "conversations.md")
+    )]
     if not orphans:
         return
 

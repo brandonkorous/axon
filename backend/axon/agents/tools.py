@@ -215,25 +215,32 @@ RECRUITMENT_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "request_agent",
-            "description": "Request a new agent to be added to the team. The user will approve or deny.",
+            "description": (
+                "Request a new agent to be added to the team. The user will approve or deny. "
+                "Describe what you need — the system will automatically craft a detailed "
+                "persona and instructions for the new agent based on your brief."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "role": {
                         "type": "string",
-                        "description": "The role/title for the new agent (e.g., 'Financial Analyst')",
+                        "description": "The role/title for the new agent (e.g., 'Design Lead')",
                     },
                     "reason": {
                         "type": "string",
                         "description": "Why this agent is needed",
                     },
-                    "suggested_capabilities": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Key capabilities the agent should have",
+                    "description": {
+                        "type": "string",
+                        "description": (
+                            "Describe what this agent should do — their focus areas, "
+                            "what kind of work they'll handle, and who they should "
+                            "coordinate with. Be as specific as you can about the need."
+                        ),
                     },
                 },
-                "required": ["role", "reason"],
+                "required": ["role", "reason", "description"],
             },
         },
     },
@@ -727,45 +734,147 @@ class ToolExecutor:
             await self._stream_callback(chunk)
 
     async def _request_agent(self, args: dict) -> str:
+        role = args["role"]
+        reason = args["reason"]
+        description = args.get("description", "")
+
+        # Build team roster context so the refinement LLM knows who exists
+        roster_lines = []
+        if self._org_id:
+            import axon.registry as _reg
+            org = _reg.get_org(self._org_id)
+            if org:
+                for aid, agent in org.agent_registry.items():
+                    if hasattr(agent, "config"):
+                        cfg = agent.config
+                        domains = cfg.guardrails.domains.allowed_domains if cfg.guardrails.has_domain_boundaries else []
+                        domain_str = f" — domains: {', '.join(domains)}" if domains else ""
+                        roster_lines.append(f"- {cfg.name} (`{aid}`): {cfg.title}{domain_str}")
+
+        roster_context = "\n".join(roster_lines) if roster_lines else "No existing agents."
+
+        # Refine the brief into a full persona via LLM
+        system_prompt, domains = await self._refine_recruitment_prompt(
+            role=role,
+            reason=reason,
+            description=description,
+            requested_by=self.agent_id,
+            team_roster=roster_context,
+        )
+
         # Store in-memory for the current response
         self._pending_recruitment = {
             "requested_by": self.agent_id,
-            "role": args["role"],
-            "reason": args["reason"],
-            "suggested_capabilities": args.get("suggested_capabilities", []),
+            "role": role,
+            "reason": reason,
+            "system_prompt": system_prompt,
+            "domains": domains,
+            "suggested_capabilities": [],
         }
 
         # Persist to shared vault so it survives restarts and is visible to the API
         if self._shared_executor:
             from axon.agents.shared_tools import _slugify
             today_str = str(date.today())
-            slug = _slugify(args["role"][:60])
+            slug = _slugify(role[:60])
             task_path = f"tasks/{today_str}-recruit-{slug}.md"
-            capabilities = ", ".join(args.get("suggested_capabilities", []))
+            domain_str = ", ".join(domains)
             meta = {
-                "name": f"Recruit: {args['role']}",
+                "name": f"Recruit: {role}",
                 "type": "recruitment",
                 "status": "awaiting_approval",
                 "priority": "p2",
                 "requested_by": self.agent_id,
-                "role": args["role"],
-                "reason": args["reason"],
-                "suggested_capabilities": args.get("suggested_capabilities", []),
+                "role": role,
+                "reason": reason,
+                "system_prompt": system_prompt,
+                "domains": domains,
+                "suggested_capabilities": [],
                 "created_at": datetime.utcnow().isoformat() + "Z",
             }
             body = (
-                f"# Recruitment Request: {args['role']}\n\n"
+                f"# Recruitment Request: {role}\n\n"
                 f"**Requested by:** {self.agent_id}\n"
-                f"**Reason:** {args['reason']}\n"
+                f"**Reason:** {reason}\n"
             )
-            if capabilities:
-                body += f"**Capabilities:** {capabilities}\n"
+            if domain_str:
+                body += f"**Domains:** {domain_str}\n"
+            body += f"\n## System Prompt\n\n{system_prompt}\n"
             self._shared_executor.vault.write_file(task_path, meta, body)
 
         return (
-            f"Agent recruitment request submitted: {args['role']}. "
+            f"Agent recruitment request submitted: {role}. "
             f"The user will be asked to approve or deny this request."
         )
+
+    async def _refine_recruitment_prompt(
+        self,
+        role: str,
+        reason: str,
+        description: str,
+        requested_by: str,
+        team_roster: str,
+    ) -> tuple[str, list[str]]:
+        """Use an LLM to refine a recruitment brief into a full agent persona."""
+        from axon.agents.provider import complete
+        from axon.config import settings
+        import json as _json
+
+        refinement_system = (
+            "You are an agent architect. Your job is to take a rough hiring brief and "
+            "produce a polished, detailed agent persona.\n\n"
+            "You will receive:\n"
+            "- The requested role and why it's needed\n"
+            "- A brief description from the requesting agent\n"
+            "- The current team roster (so you know who exists and can reference them)\n\n"
+            "Produce a JSON object with exactly two keys:\n"
+            '- "system_prompt": A well-structured persona prompt (string) that includes:\n'
+            "  1. A clear identity statement — who they are and their role\n"
+            "  2. Core responsibilities (5-8 bullet points, specific to the role)\n"
+            "  3. How they operate — principles, approach, what makes them effective\n"
+            "  4. Coordination points — which existing team members they work with and on what\n"
+            "  Write it in second person (\"You are...\"). Be specific, not generic. "
+            "  A Design Lead needs different instructions than a Data Analyst. "
+            "  Do NOT include instructions about vault usage, tool usage, or team building — "
+            "  those are injected automatically by the system.\n"
+            '- "domains": An array of 3-6 advisory domain strings that define this agent\'s '
+            "  area of expertise (e.g., [\"UI/UX design\", \"design systems\", \"visual branding\"])\n\n"
+            "Return ONLY the JSON object, no markdown fencing or extra text."
+        )
+
+        user_message = (
+            f"## Hiring Brief\n\n"
+            f"**Role:** {role}\n"
+            f"**Reason:** {reason}\n"
+            f"**Description:** {description}\n"
+            f"**Requested by:** {requested_by}\n\n"
+            f"## Current Team\n\n{team_roster}"
+        )
+
+        try:
+            response = await complete(
+                model=settings.default_model,
+                messages=[
+                    {"role": "system", "content": refinement_system},
+                    {"role": "user", "content": user_message},
+                ],
+                max_tokens=2048,
+                temperature=0.7,
+            )
+            content = response.get("content", "")
+            # Strip markdown code fencing if present
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                content = content.strip()
+            parsed = _json.loads(content)
+            return parsed.get("system_prompt", description), parsed.get("domains", [])
+        except Exception as e:
+            # Fallback: use the raw description if refinement fails
+            import logging
+            logging.getLogger(__name__).warning("Recruitment prompt refinement failed: %s", e)
+            return description, []
 
     async def _find_agents(self, args: dict) -> str:
         """Search the org agent registry with optional filters."""

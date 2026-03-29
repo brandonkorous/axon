@@ -48,6 +48,10 @@ async def init_agent_db(vault_path: str) -> async_sessionmaker[AsyncSession]:
     async with engine.begin() as conn:
         await conn.run_sync(AgentBase.metadata.create_all)
 
+    # Migrate existing tables — add columns that may not exist yet
+    async with engine.begin() as conn:
+        await conn.run_sync(_migrate_agent_schema)
+
     # Create FTS5 virtual table (not managed by SQLAlchemy)
     from axon.db.agent_fts import create_fts_tables
 
@@ -64,6 +68,25 @@ def get_agent_session_factory(vault_path: str) -> async_sessionmaker[AsyncSessio
     vault_path = str(Path(vault_path).resolve())
     pair = _agent_engines.get(vault_path)
     return pair[1] if pair else None
+
+
+def _migrate_agent_schema(connection) -> None:
+    """Add columns to existing tables that may predate schema changes.
+
+    Each ALTER is wrapped in try/except because SQLite raises
+    OperationalError if the column already exists.
+    """
+    from sqlalchemy import text
+
+    migrations = [
+        "ALTER TABLE vault_entry ADD COLUMN memory_tier VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE vault_entry ADD COLUMN conversation_id VARCHAR(100) DEFAULT ''",
+    ]
+    for sql in migrations:
+        try:
+            connection.execute(text(sql))
+        except Exception:
+            pass  # Column already exists
 
 
 async def shutdown_agent_db(vault_path: str) -> None:

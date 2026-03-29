@@ -89,9 +89,47 @@ Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define �
 
 ---
 
+## System Requirements
+
+| | Cloud LLMs (API) | Local LLMs (Ollama) |
+|---|---|---|
+| **Docker** | Required | Required |
+| **RAM** | 4 GB minimum | 16 GB minimum, 32 GB+ recommended |
+| **Disk** | 2 GB | 10–50 GB (depends on models) |
+| **GPU** | Not needed | Optional — CUDA GPU with 8 GB+ VRAM strongly recommended |
+| **API Key** | Anthropic or OpenAI | Not needed |
+
+### Local LLM Model Sizing Guide
+
+| Your Hardware | Recommended Models | Approx. Download |
+|---|---|---|
+| 8 GB RAM, no GPU | `llama3:8b`, `phi4-mini:3.8b` | 3–5 GB |
+| 16 GB RAM or 6 GB+ VRAM | `qwen2.5:7b`, `mistral:7b` | 4–5 GB |
+| 32 GB RAM or 8 GB+ VRAM | `qwen2.5:14b`, `mistral-small:22b` | 9–13 GB |
+| 48 GB+ RAM or 12 GB+ VRAM | `qwen2.5:32b`, `llama3.1:70b` | 20–40 GB |
+
+> **Not sure what your system can handle?** Run `axon doctor` after installing — it detects your hardware and recommends models automatically.
+
+---
+
 ## Quick Start
 
-Get Axon running in under two minutes.
+### Option A: Axon CLI (recommended)
+
+The CLI detects your system, walks you through LLM provider setup, and recommends models based on your hardware.
+
+```bash
+# 1. Install the CLI
+curl -sS https://get.useaxon.dev | sh
+
+# 2. Create a workspace (interactive — detects hardware, picks models)
+axon init my-workspace
+
+# 3. Launch
+cd my-workspace && axon start
+```
+
+### Option B: Manual setup
 
 ```bash
 # 1. Clone the repository
