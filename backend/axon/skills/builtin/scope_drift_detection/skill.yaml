@@ -1,0 +1,44 @@
+name: scope_drift_detection
+version: "1.0"
+category: analysis
+description: >
+  Compares what was requested against what actually changed.
+  Detects scope creep (unrelated additions) and missing requirements
+  (stated goals not addressed). Produces an alignment score.
+
+triggers:
+  - scope
+  - drift
+  - creep
+  - compare requirements
+  - scope check
+  - what changed
+  - alignment
+
+inputs:
+  - name: original_request
+    type: string
+    required: true
+    description: The original requirements, task description, or stated intent
+  - name: actual_changes
+    type: string
+    required: true
+    description: What was actually implemented — diff, file list, or description of changes
+
+outputs:
+  - name: drift_detected
+    type: boolean
+    required: true
+    description: Whether any scope drift was detected
+  - name: scope_creep
+    type: list
+    description: Changes that go beyond the original request
+  - name: missing_requirements
+    type: list
+    description: Requirements from the original request not addressed in changes
+  - name: alignment_score
+    type: rating
+    required: true
+    description: How well changes align with stated intent (1-10)
+
+methodology_file: methodology.md

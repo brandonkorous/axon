@@ -1,0 +1,6 @@
+name: blast_radius
+display_name: "Blast Radius"
+attribution: ""
+roles: [cto]
+description: "Assess worst-case impact and affected systems before making changes"
+tags: [risk-management, architecture, operations]

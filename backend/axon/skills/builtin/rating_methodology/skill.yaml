@@ -1,0 +1,46 @@
+name: rating_methodology
+version: "1.0"
+category: analysis
+description: >
+  Generic 0-10 evaluation framework. For any domain, identifies
+  relevant dimensions, rates each 0-10, explains what a 10 looks like,
+  proposes improvements, then re-rates. Iterates until satisfactory.
+
+triggers:
+  - rate
+  - evaluate
+  - score
+  - assess
+  - grade
+  - benchmark
+  - how good
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: What to evaluate — a plan, design, codebase, strategy, document, etc.
+  - name: dimensions
+    type: list
+    required: false
+    description: Specific dimensions to evaluate (auto-identified if omitted)
+  - name: target_score
+    type: integer
+    required: false
+    default: 8
+    description: Minimum acceptable score per dimension
+
+outputs:
+  - name: dimensions
+    type: list
+    required: true
+    description: Evaluated dimensions with initial scores, target descriptions, and final scores
+  - name: overall_score
+    type: number
+    required: true
+    description: Weighted average across all dimensions (0-10)
+  - name: improvement_plan
+    type: markdown
+    description: Specific actions to improve the lowest-scoring dimensions
+
+methodology_file: methodology.md

@@ -1,0 +1,45 @@
+name: product_diagnostic
+version: "1.0"
+category: analysis
+description: >
+  YC-style product validation using Six Forcing Questions. Routes
+  different questions based on product stage (pre-product, has users,
+  has revenue). Designed to cut through optimism and surface real
+  product-market fit signals.
+
+triggers:
+  - product
+  - market fit
+  - PMF
+  - validation
+  - startup
+  - diagnostic
+  - product-market
+
+inputs:
+  - name: product
+    type: string
+    required: true
+    description: Description of the product, service, or initiative being evaluated
+  - name: stage
+    type: string
+    required: false
+    description: "Product stage: pre-product, has-users, has-revenue (auto-detected if omitted)"
+
+outputs:
+  - name: forcing_questions
+    type: list
+    required: true
+    description: Answered forcing questions with evidence and red flags
+  - name: stage_assessment
+    type: string
+    required: true
+    description: Detected product stage and confidence in the assessment
+  - name: critical_gaps
+    type: list
+    description: The most dangerous unknowns or weaknesses
+  - name: recommendation
+    type: markdown
+    description: What to do next — specific, actionable, time-bound
+
+methodology_file: methodology.md

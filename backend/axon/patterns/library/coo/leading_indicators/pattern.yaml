@@ -1,0 +1,6 @@
+name: leading_indicators
+display_name: "Leading Indicators"
+attribution: "Operations Management"
+roles: [coo]
+description: "Measure what predicts outcomes, not just what already happened"
+tags: [metrics, prediction, measurement, operations]

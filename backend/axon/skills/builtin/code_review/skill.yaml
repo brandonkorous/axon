@@ -33,6 +33,9 @@ outputs:
   - name: findings
     type: list
     description: Prioritized list of issues with severity, category, and suggested fixes
+  - name: fix_classifications
+    type: list
+    description: Each finding classified as AUTO-FIX or ASK with rationale
   - name: summary
     type: string
     description: Overall assessment and recommendation (approve, request changes, block)

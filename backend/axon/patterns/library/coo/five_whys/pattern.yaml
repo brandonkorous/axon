@@ -1,0 +1,6 @@
+name: five_whys
+display_name: "Five Whys"
+attribution: "Toyota Production System"
+roles: [coo]
+description: "Ask 'why' repeatedly to drill past symptoms to the root cause"
+tags: [root-cause, debugging, analysis, lean]

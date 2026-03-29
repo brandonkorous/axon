@@ -15,6 +15,7 @@ class NodeType(str, Enum):
     EVIDENCE = "evidence"
     DECISION = "decision"
     ASSUMPTION = "assumption"
+    EUREKA = "eureka"  # first-principles insight that contradicts conventional wisdom
 
 
 class EdgeType(str, Enum):

@@ -14,7 +14,8 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-venv \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python
 
 # Install uv (replaces pip — 10-100x faster installs)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \

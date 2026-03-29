@@ -1,0 +1,6 @@
+name: unix_philosophy
+display_name: "Unix Philosophy"
+attribution: "Ken Thompson / Doug McIlroy"
+roles: [engineer]
+description: "Do one thing well, then compose small tools into powerful pipelines"
+tags: [modularity, composition, simplicity, architecture]

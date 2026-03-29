@@ -1,0 +1,6 @@
+name: make_change_easy
+display_name: "Make the Change Easy"
+attribution: "Kent Beck"
+roles: [cto]
+description: "First make the change easy through refactoring, then make the easy change"
+tags: [engineering, refactoring, delivery]

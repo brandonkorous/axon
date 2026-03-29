@@ -1,0 +1,44 @@
+name: first_principles_thinking
+version: "1.0"
+category: analysis
+description: >
+  Three-layer epistemological framework for reasoning from
+  fundamentals. Separates conventional wisdom (Layer 1) from
+  current best practices (Layer 2) from first-principles reasoning
+  (Layer 3). Tracks Eureka Moments when Layer 3 contradicts
+  the other layers.
+
+triggers:
+  - first principles
+  - from scratch
+  - fundamental
+  - rethink
+  - ground truth
+  - eureka
+  - why do we
+  - challenge assumptions
+
+inputs:
+  - name: question
+    type: string
+    required: true
+    description: The question or problem to analyze from first principles
+  - name: domain
+    type: string
+    required: false
+    description: The domain or field this question belongs to (for Layer 1/2 context)
+
+outputs:
+  - name: layers
+    type: list
+    required: true
+    description: Analysis for each of the three layers with key findings
+  - name: eureka_moments
+    type: list
+    description: Insights where first-principles reasoning contradicts conventional wisdom
+  - name: recommendation
+    type: markdown
+    required: true
+    description: Final recommendation synthesizing all three layers
+
+methodology_file: methodology.md

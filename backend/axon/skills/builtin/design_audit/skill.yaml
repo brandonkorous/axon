@@ -1,0 +1,50 @@
+name: design_audit
+version: "1.0"
+category: engineering
+description: >
+  Comprehensive design quality audit combining AI slop detection,
+  audit health scoring (accessibility, performance, theming, responsive,
+  anti-patterns), Nielsen heuristic evaluation, cognitive load assessment,
+  and persona-based testing. Based on the impeccable framework.
+
+triggers:
+  - design audit
+  - design review
+  - AI slop
+  - design quality
+  - UI audit
+  - UX audit
+  - accessibility audit
+  - ui review
+  - ux review
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The UI/design to audit — code, screenshots, component descriptions, or URLs
+  - name: mode
+    type: string
+    required: false
+    description: "audit (technical, 0-20 score) or critique (UX heuristics, 0-40 score) or full (both)"
+    default: full
+
+outputs:
+  - name: audit_health_score
+    type: number
+    description: Technical audit score (0-20, 5 dimensions x 0-4)
+  - name: design_health_score
+    type: number
+    description: UX heuristic score (0-40, Nielsen's 10 x 0-4)
+  - name: anti_pattern_count
+    type: number
+    required: true
+    description: Number of AI slop indicators detected
+  - name: issues_by_severity
+    type: list
+    description: All findings grouped by P0-P3 severity
+  - name: cognitive_load_score
+    type: string
+    description: "Cognitive load level: low (0-1 failures), moderate (2-3), critical (4+)"
+
+methodology_file: methodology.md

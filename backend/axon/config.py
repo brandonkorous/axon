@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings
 
 from axon.comms.config import CommsConfig  # noqa: E402 — no circular import risk
 from axon.guardrails import ConfidenceConfig, GuardrailsConfig  # noqa: E402
+from axon.self_regulation import SelfRegulationConfig  # noqa: E402
 from axon.integrations.config import IntegrationConfig  # noqa: E402
 from axon.plugins.config import PluginsConfig  # noqa: E402
 from axon.skills.config import SkillsConfig  # noqa: E402
@@ -185,6 +186,8 @@ class PersonaConfig(BaseModel):
     media: MediaConfig = MediaConfig()
     guardrails: GuardrailsConfig = GuardrailsConfig()
     confidence: ConfidenceConfig = ConfidenceConfig()
+    self_regulation: SelfRegulationConfig = SelfRegulationConfig()
+    cognitive_patterns: list[str] = []  # explicit pattern overrides (empty = auto by title)
     ui: UIConfig = UIConfig()
     system_prompt: str = ""
 

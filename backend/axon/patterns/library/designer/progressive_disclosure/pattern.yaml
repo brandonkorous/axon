@@ -1,0 +1,6 @@
+name: progressive_disclosure
+display_name: "Progressive Disclosure"
+attribution: "JM Keller"
+roles: [designer]
+description: "Reveal complexity only when the user needs it, not before"
+tags: [simplicity, complexity-management, onboarding, ux]

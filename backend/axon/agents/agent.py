@@ -219,6 +219,12 @@ class Agent:
         # Org principles (injected from shared vault principles.md)
         self._org_principles: str = ""
 
+        # Self-regulation tracker (prevents agent spiraling)
+        self._regulation_tracker = None
+        if config.self_regulation.enabled:
+            from axon.self_regulation import SelfRegulationTracker
+            self._regulation_tracker = SelfRegulationTracker(config.self_regulation)
+
         # System prompt (loaded from file or inline)
         self._system_prompt: str | None = None
 
@@ -774,6 +780,14 @@ class Agent:
             if skill_prompt:
                 prompt += f"\n\n{skill_prompt}"
 
+        # Inject cognitive patterns based on agent role/title
+        from axon.patterns.resolver import resolve_patterns_for_agent, build_pattern_prompt
+        explicit = getattr(self.config, "cognitive_patterns", None) or []
+        patterns = resolve_patterns_for_agent(self.config.title, explicit or None)
+        pattern_prompt = build_pattern_prompt(patterns)
+        if pattern_prompt:
+            prompt += f"\n\n{pattern_prompt}"
+
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": prompt},
         ]
@@ -968,6 +982,21 @@ class Agent:
                 "tool_call_id": tc_data["id"],
                 "content": result,
             })
+
+            # Self-regulation: check cumulative risk after each tool call
+            if self._regulation_tracker and self._regulation_tracker.record_action():
+                yield StreamChunk(
+                    agent_id=self.id,
+                    type="text",
+                    content=(
+                        "\n\n**[Self-regulation triggered]** "
+                        f"I've executed {self._regulation_tracker.action_count} actions "
+                        f"with cumulative risk {self._regulation_tracker.cumulative_risk:.0%}. "
+                        "Pausing to check in — should I continue?"
+                    ),
+                )
+                self._regulation_tracker.reset()
+                return
 
         # Continue conversation with tool results — handle chained tool calls
         continuation_text = ""

@@ -1,0 +1,6 @@
+name: premature_optimization
+display_name: "Premature Optimization"
+attribution: "Donald Knuth"
+roles: [engineer]
+description: "Premature optimization is the root of all evil — profile before you optimize"
+tags: [performance, discipline, profiling, simplicity]

@@ -201,7 +201,38 @@ class ReasoningEngine:
         )
         self.graph.add_trace(trace)
 
+        # Detect eureka moments for first-principles decisions
+        if strategy == "first_principles":
+            self._detect_eureka(trace, result.get("claims", []))
+
         return trace
+
+    def _detect_eureka(
+        self, trace: "DecisionTrace", claims: list[dict],
+    ) -> None:
+        """Create EUREKA nodes when first-principles reasoning contradicts convention."""
+        for claim_data in claims:
+            if claim_data.get("type") != "eureka":
+                continue
+            eureka_node = ReasoningNode(
+                id=str(uuid4())[:8],
+                node_type=NodeType.EUREKA,
+                content=claim_data.get("content", ""),
+                confidence=claim_data.get("confidence", 0.7),
+                source=f"trace:{trace.id}",
+                tags=["eureka", "first_principles"],
+            )
+            self.graph.add_node(eureka_node)
+            # Link eureka to the decision
+            decision_node = self.graph.get_node(trace.id)
+            if decision_node:
+                self.graph.add_edge(ReasoningEdge(
+                    source_id=eureka_node.id,
+                    target_id=decision_node.id,
+                    edge_type=EdgeType.CONTRADICTS,
+                    reasoning="First-principles insight contradicts conventional approach",
+                ))
+            logger.info("[%s] Eureka moment: %s", self.agent_id, eureka_node.content[:80])
 
     async def resolve_contradiction(
         self,

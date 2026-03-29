@@ -129,6 +129,15 @@ class PipelineEngine:
                 )
                 return
 
+            if result.status == "needs_user_input":
+                run.status = "stalled"
+                yield PipelineEvent(
+                    type="pipeline_complete",
+                    content=result.content,
+                    metadata={"run": run.model_dump(), "stalled_at": step.id},
+                )
+                return
+
             # Move to next step
             current_step_id = step.next_step
 
@@ -328,11 +337,21 @@ class PipelineEngine:
         self, step: PipelineStep, results: list[StepResult],
     ) -> StepResult:
         """Resolve multiple parallel results into a single result."""
+        from axon.decisions import classify_decision, DecisionClass
+
         if step.auto_resolve == AutoResolve.FIRST_RESPONSE:
             return results[0]
 
         if step.auto_resolve == AutoResolve.HIGHEST_CONFIDENCE:
-            return max(results, key=lambda r: r.confidence)
+            winner = max(results, key=lambda r: r.confidence)
+            decision_class = classify_decision(winner.content[:500])
+            if decision_class == DecisionClass.USER_CHALLENGE:
+                winner.status = "needs_user_input"
+                winner.content = (
+                    "**This decision requires your input.**\n\n"
+                    + winner.content
+                )
+            return winner
 
         # CONSENSUS: merge all responses
         combined = "\n\n---\n\n".join(
@@ -340,9 +359,24 @@ class PipelineEngine:
             for r in results
         )
         avg_confidence = sum(r.confidence for r in results) / len(results)
+
+        # Classify the merged decision
+        decision_class = classify_decision(combined[:500])
+        status = "completed"
+        if decision_class == DecisionClass.USER_CHALLENGE:
+            status = "needs_user_input"
+            combined = "**This decision requires your input.**\n\n" + combined
+        elif decision_class == DecisionClass.TASTE:
+            combined += (
+                "\n\n---\n*Decisions made (for your review): "
+                "The above was auto-resolved by consensus. "
+                "Review the positions if you'd like to override.*"
+            )
+
         return StepResult(
             step_id=step.id,
             agent_id=",".join(r.agent_id for r in results),
             content=combined,
             confidence=avg_confidence,
+            status=status,
         )

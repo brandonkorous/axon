@@ -71,6 +71,39 @@ Every finding must have:
 - **Location**: File and line number or code snippet.
 - **Suggestion**: A concrete fix or alternative approach.
 
+## Step 7: Fix Classification (Fix-First Heuristic)
+
+For every finding, classify whether you should fix it directly or ask the author:
+
+### AUTO-FIX (fix without asking)
+Apply this classification when a senior engineer would fix it without discussion:
+- Dead code removal
+- Import ordering and cleanup
+- N+1 query optimization (when the fix is obvious)
+- Stale or misleading comments
+- Magic numbers → named constants
+- Missing type annotations (when types are unambiguous)
+- Formatting and whitespace issues
+- Version mismatches in configs
+- Unused variable removal
+- Obvious null/undefined checks
+
+### ASK (needs human judgment)
+Always ask when:
+- The fix involves **security trade-offs** (convenience vs. safety)
+- The fix changes **API contracts** or public interfaces
+- The fix involves **architecture decisions** (where to put things, how to structure)
+- The change is **larger than 20 lines** (risk of unintended side effects)
+- The fix **removes functionality** (even if it looks unused)
+- There are **multiple valid approaches** and it's not clear which is better
+- The fix touches **business logic** (correctness depends on domain knowledge)
+- The change affects **race conditions or concurrency** (subtle bugs)
+
+### Classification rule
+"If the fix is mechanical and any senior engineer would apply it without discussion, it's AUTO-FIX. If you hesitate, it's ASK."
+
+For each finding, append the classification: `[AUTO-FIX]` or `[ASK: reason]`.
+
 ## Output Format
 
 Structure your review as:
@@ -79,7 +112,8 @@ Structure your review as:
 2. **Blockers** (if any): Issues that must be resolved.
 3. **Warnings**: Issues that should be addressed.
 4. **Nitpicks**: Optional improvements.
-5. **Positive notes**: Call out things done well. Good reviews are not only about problems.
+5. **Auto-fixable items**: Issues classified as AUTO-FIX that can be applied immediately.
+6. **Positive notes**: Call out things done well. Good reviews are not only about problems.
 
 ## Review Principles
 

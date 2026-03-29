@@ -1,0 +1,6 @@
+name: eisenhower_matrix
+display_name: "Eisenhower Matrix"
+attribution: "Dwight D. Eisenhower"
+roles: [coo]
+description: "Classify tasks by urgency and importance to focus on what truly matters"
+tags: [prioritization, time-management, decision-making, focus]

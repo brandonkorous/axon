@@ -1,0 +1,6 @@
+name: yagni
+display_name: "YAGNI"
+attribution: "Ron Jeffries / Extreme Programming"
+roles: [engineer]
+description: "You Ain't Gonna Need It — don't build it until you actually need it"
+tags: [simplicity, discipline, scope, pragmatism]

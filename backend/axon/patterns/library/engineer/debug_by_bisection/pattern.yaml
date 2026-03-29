@@ -1,0 +1,6 @@
+name: debug_by_bisection
+display_name: "Debug by Bisection"
+attribution: "Computer Science"
+roles: [engineer]
+description: "Use binary search to find the root cause — halve the problem space each step"
+tags: [debugging, binary-search, root-cause, efficiency]

@@ -1,0 +1,6 @@
+name: process_mapping
+display_name: "Process Mapping"
+attribution: "Industrial Engineering"
+roles: [coo]
+description: "Visualize the current process end-to-end before attempting to optimize it"
+tags: [operations, visualization, workflow, optimization]

@@ -1,0 +1,6 @@
+name: build_vs_buy
+display_name: "Build vs Buy"
+attribution: ""
+roles: [cto]
+description: "Evaluate total cost of ownership — not just initial effort — when choosing to build or buy"
+tags: [strategy, decision-making, engineering]

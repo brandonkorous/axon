@@ -1,0 +1,6 @@
+name: technical_debt_quadrant
+display_name: "Technical Debt Quadrant"
+attribution: "Martin Fowler"
+roles: [cto]
+description: "Classify technical debt on two axes — reckless/prudent and deliberate/inadvertent"
+tags: [engineering, decision-making, technical-debt]

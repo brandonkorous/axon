@@ -1,0 +1,6 @@
+name: rule_of_three
+display_name: "Rule of Three"
+attribution: "Martin Fowler"
+roles: [engineer]
+description: "Don't abstract until you have three concrete instances of the same pattern"
+tags: [abstraction, refactoring, duplication, pragmatism]

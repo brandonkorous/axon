@@ -1,0 +1,40 @@
+name: completeness_analysis
+version: "1.0"
+category: analysis
+description: >
+  Reframes "should we do the complete thing?" decisions by comparing
+  human-only effort vs. AI-assisted effort. Produces compression
+  tables that change the calculus of thoroughness.
+
+triggers:
+  - completeness
+  - effort comparison
+  - full implementation
+  - comprehensive vs minimal
+  - should we do all
+  - how thorough
+
+inputs:
+  - name: task
+    type: string
+    required: true
+    description: The task or set of recommendations being evaluated for completeness
+  - name: options
+    type: list
+    required: false
+    description: Specific completeness levels to compare (e.g., minimal, standard, comprehensive)
+
+outputs:
+  - name: effort_comparison
+    type: list
+    required: true
+    description: Comparison table with human-hours, AI-assisted hours, and compression ratio per item
+  - name: recommendation
+    type: string
+    required: true
+    description: Which completeness level to target and why
+  - name: compression_ratio
+    type: number
+    description: Overall effort compression ratio (human / AI-assisted)
+
+methodology_file: methodology.md

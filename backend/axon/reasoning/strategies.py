@@ -126,9 +126,43 @@ def build_evaluation_prompt(
     )
 
 
+def build_first_principles_prompt(
+    question: str,
+    evidence: list[ReasoningNode],
+    options: list[str] | None = None,
+) -> str:
+    """First principles: three-layer epistemological analysis."""
+    prefix = (
+        "Strategy: FIRST PRINCIPLES (Three Layers of Knowledge)\n\n"
+        "Analyze this question through three distinct layers:\n\n"
+        "**Layer 1 — Tried and True:** What does conventional wisdom say? "
+        "What are the standard patterns and established approaches? "
+        "List them explicitly.\n\n"
+        "**Layer 2 — New and Popular:** What are the current best practices? "
+        "What's trending? What would a well-read practitioner recommend today? "
+        "Note where Layer 2 updates or contradicts Layer 1.\n\n"
+        "**Layer 3 — First Principles:** Forget Layers 1 and 2 entirely. "
+        "If you were solving this problem for the first time with no prior art, "
+        "no conventions, and no trends — just the raw constraints and goals — "
+        "what would you do? Reason from fundamentals.\n\n"
+        "**Eureka Check:** Does your Layer 3 conclusion contradict Layers 1 or 2? "
+        "If yes, this is an EUREKA MOMENT — a first-principles insight that "
+        "challenges conventional wisdom. Flag it prominently and explain why "
+        "the conventional approach is wrong for THIS specific case.\n\n"
+        "In your response JSON, include a `claims` entry with type 'eureka' "
+        "for any Eureka Moments detected.\n\n"
+    )
+    return prefix + MAKE_DECISION_PROMPT.format(
+        question=question,
+        options=_format_options(options),
+        evidence=_format_evidence(evidence),
+    )
+
+
 STRATEGIES: dict[str, StrategyFn] = {
     "weighted_evidence": build_weighted_evidence_prompt,
     "adversarial": build_adversarial_prompt,
     "consensus": build_consensus_prompt,
     "cost_benefit": build_cost_benefit_prompt,
+    "first_principles": build_first_principles_prompt,
 }

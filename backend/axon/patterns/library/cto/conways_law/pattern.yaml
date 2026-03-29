@@ -1,0 +1,6 @@
+name: conways_law
+display_name: "Conway's Law"
+attribution: "Melvin Conway"
+roles: [cto]
+description: "Systems inevitably mirror the communication structure of the organization that builds them"
+tags: [architecture, organization, systems-thinking]

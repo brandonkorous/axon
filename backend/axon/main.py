@@ -251,6 +251,9 @@ def init_orgs() -> None:
     from axon.skills.registry import discover_skills
     discover_skills()
 
+    from axon.patterns.registry import discover_patterns
+    discover_patterns()
+
     orgs_dir = settings.axon_orgs_dir
     orgs_path = Path(orgs_dir)
 

@@ -1,0 +1,6 @@
+name: seeing_the_system
+display_name: "Seeing the System"
+attribution: "Systems Design"
+roles: [designer]
+description: "Understand the system by examining it before, after, and when things break"
+tags: [systems-thinking, edge-cases, resilience, holistic]

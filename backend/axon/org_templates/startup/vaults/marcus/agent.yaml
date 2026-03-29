@@ -35,6 +35,11 @@ confidence:
   mode: high
   tag_confidence: true
 
+skills:
+  enabled_skills:
+    - product_diagnostic
+    - completeness_analysis
+
 ui:
   color: "#EF4444"
   avatar: ""

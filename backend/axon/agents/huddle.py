@@ -631,7 +631,14 @@ class Huddle:
                     "advisor perspectives in a huddle session. Provide a concise "
                     "synthesis (3-5 sentences): where do they agree? Where's the "
                     "tension? What's the recommended path forward? Be direct and "
-                    "actionable. Do not repeat what each advisor said — synthesize."
+                    "actionable. Do not repeat what each advisor said — synthesize.\n\n"
+                    "## Decision Classification\n"
+                    "For each decision or recommendation in your synthesis, classify it:\n"
+                    "- **[MECHANICAL]**: Obvious, uncontroversial — auto-apply silently.\n"
+                    "- **[TASTE]**: Reasonable people could disagree — auto-apply but flag for review.\n"
+                    "- **[USER CHALLENGE]**: High-stakes, irreversible, or strategic — "
+                    "present options but NEVER decide for the user.\n"
+                    "Tag each recommendation with its classification."
                 ),
             },
             {

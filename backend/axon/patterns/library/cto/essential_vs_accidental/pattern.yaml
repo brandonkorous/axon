@@ -1,0 +1,6 @@
+name: essential_vs_accidental
+display_name: "Essential vs Accidental Complexity"
+attribution: "Fred Brooks"
+roles: [cto]
+description: "Distinguish inherent problem complexity from self-inflicted implementation complexity"
+tags: [architecture, complexity, engineering]

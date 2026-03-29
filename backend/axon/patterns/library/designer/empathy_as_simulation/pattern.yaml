@@ -1,0 +1,6 @@
+name: empathy_as_simulation
+display_name: "Empathy as Simulation"
+attribution: "Design Practice"
+roles: [designer]
+description: "Experience your product under real-world constraints — bad signal, one hand, boss watching"
+tags: [empathy, testing, accessibility, real-world]

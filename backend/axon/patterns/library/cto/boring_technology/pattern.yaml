@@ -1,0 +1,6 @@
+name: boring_technology
+display_name: "Boring Technology"
+attribution: "Dan McKinley"
+roles: [cto]
+description: "Limit innovation tokens to three — use proven tech everywhere else"
+tags: [architecture, risk-management, strategy]

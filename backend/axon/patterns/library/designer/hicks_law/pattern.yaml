@@ -1,0 +1,6 @@
+name: hicks_law
+display_name: "Hick's Law"
+attribution: "William Edmund Hick"
+roles: [designer]
+description: "Decision time increases logarithmically with the number of choices"
+tags: [decision-making, simplicity, cognitive-load, ux]

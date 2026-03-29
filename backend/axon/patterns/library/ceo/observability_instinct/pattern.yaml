@@ -1,0 +1,6 @@
+name: observability_instinct
+display_name: "Observability Instinct"
+attribution: "Engineering Operations Practice"
+roles: [ceo]
+description: "For every system or process, ask: if this fails at 3am, how do we know?"
+tags: [operations, risk, reliability]

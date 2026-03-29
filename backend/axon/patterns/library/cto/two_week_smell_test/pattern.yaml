@@ -1,0 +1,6 @@
+name: two_week_smell_test
+display_name: "Two-Week Smell Test"
+attribution: ""
+roles: [cto]
+description: "If a task cannot ship in two weeks, it signals a decomposition or onboarding problem"
+tags: [engineering, planning, delivery]

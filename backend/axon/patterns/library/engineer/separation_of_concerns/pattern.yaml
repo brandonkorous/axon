@@ -1,0 +1,6 @@
+name: separation_of_concerns
+display_name: "Separation of Concerns"
+attribution: "Edsger Dijkstra"
+roles: [engineer]
+description: "Each module should own exactly one responsibility and encapsulate it fully"
+tags: [modularity, architecture, encapsulation, maintainability]

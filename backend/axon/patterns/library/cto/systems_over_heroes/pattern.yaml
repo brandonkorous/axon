@@ -1,0 +1,6 @@
+name: systems_over_heroes
+display_name: "Systems Over Heroes"
+attribution: ""
+roles: [cto]
+description: "Design processes and systems for tired humans at 3am, not heroic individuals"
+tags: [operations, engineering, reliability]

@@ -1,0 +1,6 @@
+name: theory_of_constraints
+display_name: "Theory of Constraints"
+attribution: "Eliyahu Goldratt"
+roles: [coo]
+description: "Find the bottleneck — the whole system is limited by its weakest link"
+tags: [operations, bottleneck, throughput, systems]

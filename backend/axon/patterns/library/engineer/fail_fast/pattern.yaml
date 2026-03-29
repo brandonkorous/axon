@@ -1,0 +1,6 @@
+name: fail_fast
+display_name: "Fail Fast"
+attribution: "Jim Shore"
+roles: [engineer]
+description: "Surface errors immediately at the point of failure instead of propagating silently"
+tags: [error-handling, debugging, reliability, defensive]

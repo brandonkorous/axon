@@ -34,6 +34,14 @@ confidence:
   mode: exploration
   tag_confidence: true
 
+skills:
+  enabled_skills:
+    - first_principles_thinking
+    - design_audit
+
+self_regulation:
+  enabled: true
+
 ui:
   color: "#3B82F6"
   avatar: ""

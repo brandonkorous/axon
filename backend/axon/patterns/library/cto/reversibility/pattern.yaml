@@ -1,0 +1,6 @@
+name: reversibility
+display_name: "Reversibility"
+attribution: ""
+roles: [cto]
+description: "Design changes to be reversible through feature flags, A/B tests, and incremental rollouts"
+tags: [engineering, risk-management, deployment]
