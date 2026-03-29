@@ -21,6 +21,13 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [budgeting, savings, financial planning, household expenses]
+    boundary_prompt: "You are not a financial advisor. Recommend consulting a professional for investment decisions."
+confidence:
+  mode: high
+  tag_confidence: true
 ui:
   color: "#F59E0B"
   avatar: ""

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
 from axon.comms.config import CommsConfig  # noqa: E402 — no circular import risk
+from axon.guardrails import ConfidenceConfig, GuardrailsConfig  # noqa: E402
 from axon.integrations.config import IntegrationConfig  # noqa: E402
 from axon.plugins.config import PluginsConfig  # noqa: E402
 from axon.skills.config import SkillsConfig  # noqa: E402
@@ -43,6 +44,16 @@ class Settings(BaseSettings):
     axon_log_level: str = "INFO"  # Logging level (DEBUG, INFO, WARNING, ERROR)
     database_url: str = ""  # Empty → auto-derive SQLite from axon_orgs_dir
     db_encryption_key: str = ""  # Fernet key for encrypting credentials at rest
+    resend_api_key: str = ""  # Resend API key for transactional email
+
+    # Sandbox provider settings
+    sandbox_provider: str = "docker"  # "docker" or "kubernetes"
+    sandbox_image_source: str = "local"  # "registry" (production) or "local" (dev)
+    sandbox_image_registry: str = "ghcr.io/brandonkorous/axon"  # Container registry for production images
+    sandbox_k8s_namespace: str = "axon-sandboxes"  # K8s namespace for sandbox pods
+    sandbox_k8s_kubeconfig: str = ""  # Path to kubeconfig (empty = in-cluster)
+    sandbox_k8s_storage_class: str = "standard"  # K8s StorageClass for PVCs
+    sandbox_k8s_service_account: str = "axon-sandbox"  # K8s ServiceAccount for pods
 
     class Config:
         # Look for .env in project root (one level up from backend/)
@@ -172,6 +183,8 @@ class PersonaConfig(BaseModel):
     skills: SkillsConfig = SkillsConfig()
     browser: BrowserConfig = BrowserConfig()
     media: MediaConfig = MediaConfig()
+    guardrails: GuardrailsConfig = GuardrailsConfig()
+    confidence: ConfidenceConfig = ConfidenceConfig()
     ui: UIConfig = UIConfig()
     system_prompt: str = ""
 

@@ -43,6 +43,15 @@ _MESSAGING_TOOLS: list[dict[str, Any]] = [
                         "type": "string",
                         "description": "CC recipient email address (optional)",
                     },
+                    "attachments": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "List of vault file paths to attach to the email "
+                            "(e.g. ['research/2026-03-28-report.md']). "
+                            "Paths are relative to your vault root."
+                        ),
+                    },
                 },
                 "required": ["to", "subject", "body"],
             },

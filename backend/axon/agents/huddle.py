@@ -62,7 +62,7 @@ class HuddleChunk:
 
     speaker: str | None  # advisor id, "table", or None (control)
     target: str | None  # For "marcus → raj" style messages
-    type: str  # "text", "thinking", "speaker_done", "done"
+    type: str  # "text", "thinking", "speaker_done", "disagreement", "done"
     content: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -166,6 +166,9 @@ class Huddle:
         self._usage_tracker = usage_tracker
         self._shared_vault = shared_vault
         self._org_id = org_id
+
+        # Org principles (injected from shared vault principles.md)
+        self._org_principles: str = ""
 
         # Vault access — huddle vault + read-only advisor vaults
         self.vault = VaultManager(config.vault.path, config.vault.root_file)
@@ -302,6 +305,12 @@ class Huddle:
                     speaker="table", target=None, type="speaker_done",
                 ))
 
+            # Disagreement analysis for TABLE_MODES
+            if mode in TABLE_MODES and len(advisor_responses) > 1:
+                asyncio.create_task(
+                    self._analyze_disagreements(conv_id, full_message, advisor_responses)
+                )
+
             # Fire-and-forget: extract actions (vault saves, tasks)
             if advisor_responses:
                 asyncio.create_task(
@@ -428,6 +437,8 @@ class Huddle:
         }.get(mode, "")
 
         parts = [huddle_rules]
+        if self._org_principles:
+            parts.append(f"## Organization Principles\n{self._org_principles}\n")
         if mode_instruction:
             parts.append(f"## Mode\n{mode_instruction}\n")
         if base_prompt:
@@ -631,6 +642,45 @@ class Huddle:
                 ),
             },
         ]
+
+    async def _analyze_disagreements(
+        self,
+        conv_id: str,
+        user_message: str,
+        advisor_responses: dict[str, str],
+    ) -> None:
+        """Analyze advisor disagreements and push structured report."""
+        from axon.agents.disagreement import (
+            build_disagreement_prompt,
+            parse_disagreement_response,
+        )
+
+        advisor_names = {
+            aid: cfg.name for aid, cfg in self.advisor_configs.items()
+        }
+        messages = build_disagreement_prompt(
+            user_message, advisor_responses, advisor_names,
+        )
+
+        try:
+            response = await complete(
+                model=self.config.model.reasoning,
+                messages=messages,
+                max_tokens=800,
+                temperature=0.3,
+            )
+            raw = response.get("content", "")
+
+            report = parse_disagreement_response(raw, user_message)
+            if report:
+                await self._push(conv_id, HuddleChunk(
+                    speaker="table",
+                    target=None,
+                    type="disagreement",
+                    content=json.dumps(report.model_dump()),
+                ))
+        except Exception as e:
+            logger.debug("Disagreement analysis failed (non-critical): %s", e)
 
     async def _extract_and_execute_actions(
         self,

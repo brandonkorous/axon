@@ -67,6 +67,68 @@ async def list_pending_approvals(org_id: str):
     return pending
 
 
+@org_router.get("/history")
+async def list_approval_history(
+    org_id: str,
+    status: str = "",
+    channel: str = "",
+    limit: int = 50,
+):
+    """Return past approvals (approved, declined, send_failed).
+
+    Optional filters: ?status=approved&channel=email&limit=20
+    """
+    org = _get_shared_vault(org_id)
+    vault = org.shared_vault
+
+    tasks_dir = Path(vault.vault_path) / "tasks"
+    if not tasks_dir.exists():
+        return []
+
+    terminal_statuses = {"approved", "declined", "send_failed"}
+    results: list[dict[str, Any]] = []
+
+    for md_file in sorted(tasks_dir.glob("*.md"), reverse=True):
+        if md_file.name.endswith("-index.md"):
+            continue
+        if len(results) >= limit:
+            break
+        try:
+            metadata, body = vault.read_file(f"tasks/{md_file.name}")
+        except Exception:
+            continue
+
+        file_status = metadata.get("status", "")
+        if file_status not in terminal_statuses:
+            continue
+        if status and file_status != status:
+            continue
+        if channel and metadata.get("channel", "") != channel:
+            continue
+
+        item: dict[str, Any] = {
+            "task_path": f"tasks/{md_file.name}",
+            "title": metadata.get("name", ""),
+            "status": file_status,
+            "created_by": metadata.get("created_by", ""),
+            "created_at": metadata.get("created_at", ""),
+            "updated_at": metadata.get("updated_at", ""),
+        }
+        if metadata.get("type") == "comms_outbound":
+            item["type"] = "comms_outbound"
+            item["channel"] = metadata.get("channel", "")
+            item["comms_payload"] = metadata.get("comms_payload", "")
+            item["send_result"] = metadata.get("send_result", "")
+        if file_status == "approved":
+            item["approved_at"] = metadata.get("approved_at", "")
+        if file_status == "declined":
+            item["decline_reason"] = metadata.get("decline_reason", "")
+
+        results.append(item)
+
+    return results
+
+
 @org_router.post("/{task_path:path}/approve")
 async def approve_task(org_id: str, task_path: str):
     """Approve a task plan. Sets status to 'approved'.

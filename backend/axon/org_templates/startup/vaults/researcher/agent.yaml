@@ -30,6 +30,13 @@ behavior:
 web:
   enabled: true
 
+guardrails:
+  domains:
+    allowed_domains: [research, analysis, competitive intelligence, market data, deep investigation]
+confidence:
+  mode: exploration
+  tag_confidence: true
+
 ui:
   color: "#06B6D4"
   avatar: ""

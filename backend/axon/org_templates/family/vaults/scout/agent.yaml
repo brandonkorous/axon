@@ -21,6 +21,12 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [research, comparison shopping, reviews, recommendations, fact-finding]
+confidence:
+  mode: exploration
+  tag_confidence: true
 ui:
   color: "#6366F1"
   avatar: ""

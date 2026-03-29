@@ -1,56 +1,66 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { AchievementsView } from "./components/Achievements/AchievementsView";
-import { AuditLogView } from "./components/AuditLog/AuditLogView";
-import { AxonView } from "./components/AxonView/AxonView";
-import { HuddleView } from "./components/Huddle/HuddleView";
-import { AgentView } from "./components/Conversation/AgentView";
-import { DashboardView } from "./components/Dashboard/DashboardView";
-import { IssueListView } from "./components/Issues/IssueListView";
-import { MindView } from "./components/Mind/MindView";
-import { OrgChartView } from "./components/OrgChart/OrgChartView";
-import { TaskBoardView } from "./components/Tasks/TaskBoardView";
-import { UsageView } from "./components/Usage/UsageView";
-import { ApprovalsView } from "./components/Approvals/ApprovalsView";
-import { InboxView } from "./components/Inbox/InboxView";
-import { WorkerListView } from "./components/Workers/WorkerListView";
-import { WorkerDetailView } from "./components/Workers/WorkerDetailView";
-import { WorkerSetupView } from "./components/Workers/WorkerSetupView";
-import { DocumentView } from "./components/Documents/DocumentView";
-import { PluginBrowser } from "./components/Plugins/PluginBrowser";
-import { PluginCreateView } from "./components/Plugins/PluginCreateView";
-import { SkillBrowser } from "./components/Skills/SkillBrowser";
-import { SkillCreateView } from "./components/Skills/SkillCreateView";
-import { ArtifactViewer } from "./components/Artifacts/ArtifactViewer";
+
+const AchievementsView = lazy(() => import("./components/Achievements/AchievementsView").then(m => ({ default: m.AchievementsView })));
+const AuditLogView = lazy(() => import("./components/AuditLog/AuditLogView").then(m => ({ default: m.AuditLogView })));
+const AxonView = lazy(() => import("./components/AxonView/AxonView").then(m => ({ default: m.AxonView })));
+const HuddleView = lazy(() => import("./components/Huddle/HuddleView").then(m => ({ default: m.HuddleView })));
+const AgentView = lazy(() => import("./components/Conversation/AgentView").then(m => ({ default: m.AgentView })));
+const DashboardView = lazy(() => import("./components/Dashboard/DashboardView").then(m => ({ default: m.DashboardView })));
+const IssueListView = lazy(() => import("./components/Issues/IssueListView").then(m => ({ default: m.IssueListView })));
+const MindView = lazy(() => import("./components/Mind/MindView").then(m => ({ default: m.MindView })));
+const OrgChartView = lazy(() => import("./components/OrgChart/OrgChartView").then(m => ({ default: m.OrgChartView })));
+const TaskBoardView = lazy(() => import("./components/Tasks/TaskBoardView").then(m => ({ default: m.TaskBoardView })));
+const UsageView = lazy(() => import("./components/Usage/UsageView").then(m => ({ default: m.UsageView })));
+const ApprovalsView = lazy(() => import("./components/Approvals/ApprovalsView").then(m => ({ default: m.ApprovalsView })));
+const InboxView = lazy(() => import("./components/Inbox/InboxView").then(m => ({ default: m.InboxView })));
+const WorkerListView = lazy(() => import("./components/Workers/WorkerListView").then(m => ({ default: m.WorkerListView })));
+const WorkerDetailView = lazy(() => import("./components/Workers/WorkerDetailView").then(m => ({ default: m.WorkerDetailView })));
+const WorkerSetupView = lazy(() => import("./components/Workers/WorkerSetupView").then(m => ({ default: m.WorkerSetupView })));
+const DocumentView = lazy(() => import("./components/Documents/DocumentView").then(m => ({ default: m.DocumentView })));
+const PluginBrowser = lazy(() => import("./components/Plugins/PluginBrowser").then(m => ({ default: m.PluginBrowser })));
+const PluginCreateView = lazy(() => import("./components/Plugins/PluginCreateView").then(m => ({ default: m.PluginCreateView })));
+const SkillBrowser = lazy(() => import("./components/Skills/SkillBrowser").then(m => ({ default: m.SkillBrowser })));
+const SkillCreateView = lazy(() => import("./components/Skills/SkillCreateView").then(m => ({ default: m.SkillCreateView })));
+const ArtifactViewer = lazy(() => import("./components/Artifacts/ArtifactViewer").then(m => ({ default: m.ArtifactViewer })));
+const SandboxImagesView = lazy(() => import("./components/Sandbox/SandboxImagesView").then(m => ({ default: m.SandboxImagesView })));
+const GitRepoList = lazy(() => import("./components/GitRepos/GitRepoList").then(m => ({ default: m.GitRepoList })));
+const AnalyticsView = lazy(() => import("./components/Analytics/AnalyticsView").then(m => ({ default: m.AnalyticsView })));
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<AxonView />} />
-        <Route path="/huddle" element={<HuddleView />} />
-        <Route path="/agent/:agentId" element={<AgentView />} />
-        <Route path="/dashboard" element={<DashboardView />} />
-        <Route path="/tasks" element={<TaskBoardView />} />
-        <Route path="/inbox" element={<InboxView />} />
-        <Route path="/approvals" element={<ApprovalsView />} />
-        <Route path="/issues" element={<IssueListView />} />
-        <Route path="/achievements" element={<AchievementsView />} />
-        <Route path="/org-chart" element={<OrgChartView />} />
-        <Route path="/audit" element={<AuditLogView />} />
-        <Route path="/usage" element={<UsageView />} />
-        <Route path="/mind/:agentId?" element={<MindView />} />
-        <Route path="/memory/:agentId?" element={<MindView />} />
-        <Route path="/plugins" element={<PluginBrowser />} />
-        <Route path="/plugins/new" element={<PluginCreateView />} />
-        <Route path="/skills" element={<SkillBrowser />} />
-        <Route path="/skills/new" element={<SkillCreateView />} />
-        <Route path="/artifacts" element={<ArtifactViewer />} />
-        <Route path="/workers" element={<WorkerListView />} />
-        <Route path="/workers/new" element={<WorkerSetupView />} />
-        <Route path="/workers/:agentId" element={<WorkerDetailView />} />
-        <Route path="/docs/:vaultId/*" element={<DocumentView />} />
-      </Route>
-    </Routes>
+    <Suspense>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<AxonView />} />
+          <Route path="/huddle" element={<HuddleView />} />
+          <Route path="/agent/:agentId" element={<AgentView />} />
+          <Route path="/dashboard" element={<DashboardView />} />
+          <Route path="/tasks" element={<TaskBoardView />} />
+          <Route path="/inbox" element={<InboxView />} />
+          <Route path="/approvals" element={<ApprovalsView />} />
+          <Route path="/issues" element={<IssueListView />} />
+          <Route path="/achievements" element={<AchievementsView />} />
+          <Route path="/org-chart" element={<OrgChartView />} />
+          <Route path="/audit" element={<AuditLogView />} />
+          <Route path="/usage" element={<UsageView />} />
+          <Route path="/mind/:agentId?" element={<MindView />} />
+          <Route path="/memory/:agentId?" element={<MindView />} />
+          <Route path="/plugins" element={<PluginBrowser />} />
+          <Route path="/plugins/new" element={<PluginCreateView />} />
+          <Route path="/skills" element={<SkillBrowser />} />
+          <Route path="/skills/new" element={<SkillCreateView />} />
+          <Route path="/sandboxes" element={<SandboxImagesView />} />
+          <Route path="/repos" element={<GitRepoList />} />
+          <Route path="/artifacts" element={<ArtifactViewer />} />
+          <Route path="/workers" element={<WorkerListView />} />
+          <Route path="/workers/new" element={<WorkerSetupView />} />
+          <Route path="/workers/:agentId" element={<WorkerDetailView />} />
+          <Route path="/analytics" element={<AnalyticsView />} />
+          <Route path="/docs/:vaultId/*" element={<DocumentView />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

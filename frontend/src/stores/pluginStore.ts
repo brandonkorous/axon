@@ -14,12 +14,14 @@ export interface PluginInfo {
   required_credentials: string[];
   is_builtin: boolean;
   source: string;
+  sandbox_type: string;
 }
 
 export interface PluginDetail extends Omit<PluginInfo, "tools"> {
   tools: { name: string; description: string }[];
   python_deps: string[];
   agents_using: string[];
+  sandbox_type: string;
 }
 
 export interface PluginCreatePayload {

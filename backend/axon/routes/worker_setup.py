@@ -11,6 +11,13 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 import axon.registry as registry
+from axon.code_specialists import (
+    CodeSpecialist,
+    SPECIALIST_COLORS,
+    SPECIALIST_LABELS,
+    detect_specialist,
+    get_specialist_instructions,
+)
 from axon.config import AgentType, PersonaConfig, _load_agent_yaml, settings
 from axon.runner_manager import RunnerManager, runner_manager
 from axon.runner_scaffold import scaffold_runner
@@ -29,6 +36,7 @@ class SandboxCreateConfig(BaseModel):
     cpu_count: float = 2.0
     memory_mb: int = 2048
     network_enabled: bool = True
+    extra_mounts: list[str] = []
 
 
 class WorkerCreateRequest(BaseModel):
@@ -36,6 +44,7 @@ class WorkerCreateRequest(BaseModel):
     agent_id: str = ""
     codebase_path: str = ""
     worker_type: str = WorkerType.CODE
+    specialist: str = ""  # CodeSpecialist value, empty = general
     accepts_from: list[str] = ["axon"]
     color: str = "#10B981"
     type_config: dict = {}
@@ -63,6 +72,7 @@ def _worker_info(aid: str, agent, org_id: str) -> dict:
     accepts_from: list[str] = []
     color = "#10B981"
     worker_type = WorkerType.CODE
+    specialist = ""
     agent_yaml = Path(agent.config.vault.path) / "agent.yaml"
     if agent_yaml.exists():
         with open(agent_yaml, encoding="utf-8") as f:
@@ -70,6 +80,7 @@ def _worker_info(aid: str, agent, org_id: str) -> dict:
         worker_cfg = data.get("worker", {})
         codebase_path = worker_cfg.get("codebase_path", "")
         worker_type = worker_cfg.get("worker_type", WorkerType.CODE)
+        specialist = worker_cfg.get("specialist", "")
         accepts_from = data.get("delegation", {}).get("accepts_from", [])
         color = data.get("ui", {}).get("color", "#10B981")
 
@@ -84,11 +95,45 @@ def _worker_info(aid: str, agent, org_id: str) -> dict:
         "last_seen": last_seen,
         "codebase_path": codebase_path,
         "worker_type": worker_type,
+        "specialist": specialist,
         "accepts_from": accepts_from,
         "color": color,
         "process_state": runner_manager.status(org_id, aid),
         "activity": activity,
         "sandboxed": sandboxed,
+    }
+
+
+@org_router.get("/specialists")
+async def list_specialists():
+    """List available code specialist profiles."""
+    return {
+        "specialists": [
+            {
+                "id": s.value,
+                "label": SPECIALIST_LABELS[s],
+                "color": SPECIALIST_COLORS[s],
+            }
+            for s in CodeSpecialist
+        ],
+    }
+
+
+class DetectSpecialistRequest(BaseModel):
+    codebase_path: str
+
+
+@org_router.post("/specialists/detect")
+async def detect_specialist_endpoint(body: DetectSpecialistRequest):
+    """Auto-detect the best specialist for a codebase path."""
+    if not body.codebase_path:
+        return {"specialist": CodeSpecialist.GENERAL.value, "scores": {}}
+
+    specialist, scores = detect_specialist(body.codebase_path)
+    return {
+        "specialist": specialist.value,
+        "label": SPECIALIST_LABELS[specialist],
+        "scores": scores,
     }
 
 
@@ -148,6 +193,25 @@ async def create_worker(org_id: str, body: WorkerCreateRequest, request: Request
     except FileExistsError:
         raise HTTPException(409, f"Vault already exists: {agent_id}")
 
+    # Resolve specialist for code workers
+    specialist = CodeSpecialist.GENERAL
+    if body.worker_type == WorkerType.CODE and body.specialist:
+        try:
+            specialist = CodeSpecialist(body.specialist)
+        except ValueError:
+            raise HTTPException(400, f"Invalid specialist: {body.specialist}")
+
+    # Write specialist instructions into the vault
+    if body.worker_type == WorkerType.CODE:
+        instructions = get_specialist_instructions(specialist)
+        if instructions:
+            # Apply placeholder substitution
+            instructions = instructions.replace("{{AGENT_NAME}}", body.name)
+            instructions = instructions.replace("{{AGENT_TITLE}}", body.name)
+            instructions = instructions.replace("{{AGENT_TAGLINE}}", tagline)
+            instructions_path = vault_path / "instructions.md"
+            instructions_path.write_text(instructions, encoding="utf-8")
+
     # Customize agent.yaml with worker-specific config
     agent_yaml_path = vault_path / "agent.yaml"
     if agent_yaml_path.exists():
@@ -158,6 +222,7 @@ async def create_worker(org_id: str, body: WorkerCreateRequest, request: Request
         data["worker"] = {
             "codebase_path": body.codebase_path,
             "worker_type": body.worker_type,
+            **({"specialist": specialist.value} if specialist != CodeSpecialist.GENERAL else {}),
         }
         with open(agent_yaml_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
@@ -169,6 +234,15 @@ async def create_worker(org_id: str, body: WorkerCreateRequest, request: Request
     # Build sandbox config for runner
     sandbox_config = None
     if body.sandbox.enabled:
+        # Validate extra mounts before proceeding
+        if body.sandbox.extra_mounts:
+            from axon.sandbox.mount_validation import validate_mount_spec
+            axon_dirs = [settings.axon_orgs_dir]
+            for spec in body.sandbox.extra_mounts:
+                valid, error = validate_mount_spec(spec, axon_dirs)
+                if not valid:
+                    raise HTTPException(400, f"Invalid mount: {error}")
+
         sandbox_config = {
             "enabled": True,
             "resources": {
@@ -176,6 +250,7 @@ async def create_worker(org_id: str, body: WorkerCreateRequest, request: Request
                 "memory_mb": body.sandbox.memory_mb,
             },
             "network": {"enabled": body.sandbox.network_enabled},
+            "extra_mounts": body.sandbox.extra_mounts,
         }
 
     try:
@@ -223,6 +298,7 @@ async def create_worker(org_id: str, body: WorkerCreateRequest, request: Request
         "agent_id": agent_id,
         "name": body.name,
         "worker_type": body.worker_type,
+        "specialist": specialist.value if specialist != CodeSpecialist.GENERAL else "",
         "vault_path": str(vault_path),
     }
 

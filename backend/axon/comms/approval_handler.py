@@ -56,6 +56,7 @@ async def handle_comms_approval(
             from_name=from_name,
             signature=org.config.comms.email_signature,
             agent_display_name=agent_display_name,
+            attachments=payload.get("attachments"),
         )
     elif channel == "discord":
         from axon.comms.senders import send_discord_message

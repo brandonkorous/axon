@@ -21,6 +21,12 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [career strategy, industry trends, networking, career transitions, professional development]
+confidence:
+  mode: balanced
+  tag_confidence: true
 ui:
   color: "#14B8A6"
   avatar: ""

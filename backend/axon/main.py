@@ -51,12 +51,17 @@ from axon.routes import worker_control as worker_control_routes
 from axon.routes import worker_setup as worker_setup_routes
 from axon.routes import credentials as credentials_routes
 from axon.routes import sandbox as sandbox_routes
+from axon.routes import sandbox_images as sandbox_images_routes
 from axon.routes import plugins as plugins_routes
 from axon.routes import skills as skills_routes
 from axon.routes import user_prefs as user_prefs_routes
 from axon.routes import teams_webhook as teams_webhook_routes
 from axon.routes import zoom_webhook as zoom_webhook_routes
 from axon.routes import push as push_routes
+from axon.routes import git_repos as git_repos_routes
+from axon.routes import pipelines as pipelines_routes
+from axon.routes import performance as performance_routes
+from axon.routes import analytics as analytics_routes
 
 
 logger = logging.getLogger(__name__)
@@ -207,6 +212,26 @@ def _init_org_agents(
     for agent_id, agent in org.agent_registry.items():
         if hasattr(agent, "build_roster") and not isinstance(agent, AxonAgent):
             agent.build_roster(agents)
+
+    # Load org principles from shared vault and inject into all agents + huddle
+    principles_text = ""
+    if shared_vault:
+        principles_file = org_config.principles_file or "principles.md"
+        principles_path = shared_vault_path / principles_file
+        if principles_path.exists():
+            principles_text = principles_path.read_text(encoding="utf-8").strip()
+            logger.info("[%s] Loaded org principles from %s (%d chars)", org_config.id, principles_file, len(principles_text))
+
+    if principles_text:
+        for agent in org.agent_registry.values():
+            if hasattr(agent, "_org_principles"):
+                agent._org_principles = principles_text
+        if org.huddle:
+            org.huddle._org_principles = principles_text
+
+    # Load pipeline definitions
+    from axon.pipelines.loader import load_org_pipelines
+    load_org_pipelines(org_dir, org_config.id)
 
     return org
 
@@ -450,11 +475,16 @@ app.include_router(approvals_routes.org_router, prefix="/api/orgs/{org_id}/appro
 app.include_router(recruitment_routes.org_router, prefix="/api/orgs/{org_id}/recruitment", tags=["recruitment"])
 app.include_router(worker_setup_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(worker_control_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
+app.include_router(sandbox_images_routes.org_router, prefix="/api/orgs/{org_id}/sandbox/images", tags=["sandbox-images"])
 app.include_router(sandbox_routes.org_router, prefix="/api/orgs/{org_id}/sandbox", tags=["sandbox"])
 app.include_router(plugins_routes.org_router, prefix="/api/orgs/{org_id}/plugins", tags=["plugins"])
 app.include_router(skills_routes.org_router, prefix="/api/orgs/{org_id}/skills", tags=["skills"])
 app.include_router(usage_routes.org_router, prefix="/api/orgs/{org_id}/usage", tags=["usage"])
 app.include_router(credentials_routes.org_router, prefix="/api/orgs/{org_id}/credentials", tags=["credentials"])
+app.include_router(git_repos_routes.org_router, prefix="/api/orgs/{org_id}/git-repos", tags=["git-repos"])
+app.include_router(pipelines_routes.org_router, prefix="/api/orgs/{org_id}/pipelines", tags=["pipelines"])
+app.include_router(performance_routes.org_router, prefix="/api/orgs/{org_id}", tags=["performance"])
+app.include_router(analytics_routes.org_router, prefix="/api/orgs/{org_id}/analytics", tags=["analytics"])
 
 # ── Global routes (not org-scoped) ─────────────────────────────────
 app.include_router(user_prefs_routes.router, prefix="/api/preferences", tags=["preferences"])
@@ -476,6 +506,7 @@ app.include_router(achievements_routes.router, prefix="/api/achievements", tags=
 app.include_router(org_chart_routes.router, prefix="/api/org-chart", tags=["org-chart"])
 app.include_router(voices_routes.router, prefix="/api/voices", tags=["voices"])
 app.include_router(usage_routes.router, prefix="/api/usage", tags=["usage"])
+app.include_router(analytics_routes.router, prefix="/api/analytics", tags=["analytics"])
 
 
 @app.get("/api/version")

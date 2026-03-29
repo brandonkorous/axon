@@ -85,10 +85,13 @@ class RunnerManager:
         sandbox_cfg = SandboxConfig(**config_data.get("sandbox", {}))
         workspace = config_data.get("codebase", str(runner_dir))
 
+        # Use the provider's backend URL (Docker uses host.docker.internal,
+        # k8s uses the in-cluster service DNS name).
+        default_url = sandbox_manager.provider.backend_url()
         env = {
             "AXON_RUNNER_DIR": "/runner",
             "AXON_WORKSPACE": "/workspace",
-            "AXON_URL": config_data.get("axon_url", "http://host.docker.internal:8000"),
+            "AXON_URL": config_data.get("axon_url", default_url),
             "AXON_ORG_ID": org_id,
             "AXON_AGENT_ID": agent_id,
         }

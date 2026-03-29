@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from axon.structured_output import InputField, OutputField
+
 
 class SkillDefinition(BaseModel):
     """Metadata for a cognitive skill — loaded from skill.yaml."""
@@ -16,3 +18,5 @@ class SkillDefinition(BaseModel):
     icon: str = ""
     triggers: list[str] = []  # keywords that suggest this skill
     auto_inject: bool = False  # always inject when enabled
+    inputs: list[InputField] = []  # expected input parameters
+    outputs: list[OutputField] = []  # structured output schema

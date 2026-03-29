@@ -16,6 +16,8 @@ services:
       - AXON_ORGS_DIR=/orgs
       - AXON_LOG_LEVEL=${AXON_LOG_LEVEL:-INFO}
       - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY:-}
+      - AXON_SANDBOX_IMAGE_SOURCE=local  # Dev: build from local Dockerfiles
+      - AXON_SANDBOX_PROVIDER=${AXON_SANDBOX_PROVIDER:-docker}
     depends_on:
       ollama:
         condition: service_started

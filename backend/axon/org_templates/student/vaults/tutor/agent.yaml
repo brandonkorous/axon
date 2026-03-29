@@ -21,6 +21,11 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [academics, subject tutoring, homework help, concept explanation, study techniques]
+confidence:
+  mode: balanced
 ui:
   color: "#818CF8"
   avatar: ""

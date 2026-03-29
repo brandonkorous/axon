@@ -21,6 +21,11 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [resume, cover letters, portfolio, personal branding, LinkedIn]
+confidence:
+  mode: high
 ui:
   color: "#EF4444"
   avatar: ""

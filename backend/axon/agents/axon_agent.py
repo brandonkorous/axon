@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from axon.agents.agent import Agent, StreamChunk
+from axon.agents.tools import PIPELINE_TOOLS
 from axon.config import PersonaConfig
 
 if TYPE_CHECKING:
@@ -136,9 +137,10 @@ class AxonAgent(Agent):
         self.system_prompt = f"{base_prompt}\n\n{routing_section}"
 
     def _build_tool_list(self) -> list:
-        """Add routing tools to the standard vault tools."""
+        """Add routing and pipeline tools to the standard vault tools."""
         tools = super()._build_tool_list()
         tools.extend(ROUTING_TOOLS)
+        tools.extend(PIPELINE_TOOLS)
         return tools
 
     async def _handle_tool_calls(
@@ -177,6 +179,81 @@ class AxonAgent(Agent):
                 )
                 return
 
+            if tc_data["function"] == "pipeline_run":
+                import json
+                args = json.loads(tc_data["arguments"])
+                async for chunk in self._run_pipeline(
+                    args["pipeline_name"], args["message"],
+                ):
+                    yield chunk
+                return
+
         # For non-routing tools, use the parent handler
         async for chunk in super()._handle_tool_calls(messages, tool_calls, response_so_far):
             yield chunk
+
+    async def _run_pipeline(
+        self, pipeline_name: str, message: str,
+    ) -> AsyncIterator[StreamChunk]:
+        """Execute a pipeline and yield results as StreamChunks."""
+        import axon.registry as registry
+        from axon.pipelines.engine import PipelineEngine
+        from axon.pipelines.loader import get_pipeline
+
+        org = registry.get_org(self._org_id)
+        if not org:
+            yield StreamChunk(
+                agent_id=self.id, type="text",
+                content=f"Error: Organization not found.",
+            )
+            return
+
+        defn = get_pipeline(self._org_id, pipeline_name)
+        if not defn:
+            yield StreamChunk(
+                agent_id=self.id, type="text",
+                content=f"Pipeline '{pipeline_name}' not found.",
+            )
+            return
+
+        engine = PipelineEngine(org)
+
+        yield StreamChunk(
+            agent_id=self.id, type="tool_use",
+            content=f"Running pipeline: {pipeline_name}",
+            metadata={"tool": "pipeline_run", "pipeline": pipeline_name},
+        )
+
+        final_content = ""
+        async for event in engine.run(defn, message):
+            if event.type == "step_start":
+                yield StreamChunk(
+                    agent_id=self.id, type="agent_activated",
+                    content=f"Pipeline step: {event.step_id}",
+                    metadata={
+                        "target_agent": event.agent_id,
+                        "step_id": event.step_id,
+                        "pipeline": pipeline_name,
+                    },
+                )
+            elif event.type == "step_complete":
+                yield StreamChunk(
+                    agent_id=self.id, type="agent_result",
+                    content=event.content[:500],
+                    metadata={
+                        "source_agent": event.agent_id,
+                        "step_id": event.step_id,
+                        "status": event.metadata.get("status", "") if event.metadata else "",
+                    },
+                )
+                final_content = event.content
+            elif event.type == "pipeline_complete":
+                yield StreamChunk(
+                    agent_id=self.id, type="text",
+                    content=final_content,
+                )
+            elif event.type == "pipeline_failed":
+                yield StreamChunk(
+                    agent_id=self.id, type="text",
+                    content=f"Pipeline failed: {event.content}",
+                )

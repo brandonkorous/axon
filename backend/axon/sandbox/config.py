@@ -1,8 +1,34 @@
-"""Sandbox configuration — resource limits, network policies, mounts."""
+"""Sandbox configuration — resource limits, network policies, mounts, provider selection."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from enum import Enum
+
+from pydantic import BaseModel, Field, model_validator
+
+
+class SandboxProviderType(str, Enum):
+    """Container runtime provider."""
+
+    DOCKER = "docker"
+    KUBERNETES = "kubernetes"
+
+
+class ImageSource(str, Enum):
+    """Where sandbox images come from."""
+
+    REGISTRY = "registry"  # Pull pre-built images (production default)
+    LOCAL = "local"  # Build from local Dockerfiles (dev mode)
+
+
+class KubernetesConfig(BaseModel):
+    """Kubernetes-specific sandbox settings."""
+
+    namespace: str = Field(default="axon-sandboxes", description="K8s namespace for sandbox pods")
+    image_registry: str = Field(default="ghcr.io/brandonkorous/axon", description="Container image registry")
+    kubeconfig_path: str | None = Field(default=None, description="Path to kubeconfig (None = in-cluster)")
+    storage_class: str = Field(default="standard", description="StorageClass for PVCs")
+    service_account: str = Field(default="axon-sandbox", description="ServiceAccount for pods")
 
 
 class ResourceLimits(BaseModel):
@@ -37,6 +63,7 @@ class SandboxConfig(BaseModel):
 
     enabled: bool = Field(default=False, description="Run worker in sandbox")
     image: str = Field(default="axon-sandbox:latest", description="Docker image")
+    sandbox_type: str = Field(default="base", description="Sandbox image type")
     resources: ResourceLimits = Field(default_factory=ResourceLimits)
     network: NetworkPolicy = Field(default_factory=NetworkPolicy)
     auto_remove: bool = Field(default=True, description="Remove container on stop")
@@ -45,3 +72,10 @@ class SandboxConfig(BaseModel):
         default_factory=list,
         description="Additional host:container mount paths",
     )
+
+    @model_validator(mode="after")
+    def _set_image_from_type(self):
+        """Derive image name from sandbox_type when using default image."""
+        if self.image == "axon-sandbox:latest":
+            self.image = f"axon-sandbox-{self.sandbox_type}:latest"
+        return self

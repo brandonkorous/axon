@@ -105,6 +105,21 @@ class VapidKeys(Base, TimestampMixin):
     private_key_enc: Mapped[str] = mapped_column(Text)
 
 
+class GitRepository(Base, TimestampMixin):
+    """Git repository configuration for sandbox cloning."""
+
+    __tablename__ = "git_repositories"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    org_id: Mapped[str] = mapped_column(String(100), index=True)
+    url: Mapped[str] = mapped_column(String(500))
+    name: Mapped[str] = mapped_column(String(100))
+    default_branch: Mapped[str] = mapped_column(String(100), default="main")
+    auth_credential_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    clone_strategy: Mapped[str] = mapped_column(String(20), default="shallow")
+    sparse_paths_json: Mapped[str] = mapped_column(Text, default="[]")
+
+
 class PushSubscription(Base, TimestampMixin):
     """Browser push subscription endpoint."""
 

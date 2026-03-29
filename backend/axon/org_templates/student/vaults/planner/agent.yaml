@@ -21,6 +21,11 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [academic planning, scheduling, time management, study plans, deadlines]
+confidence:
+  mode: balanced
 ui:
   color: "#FB923C"
   avatar: ""

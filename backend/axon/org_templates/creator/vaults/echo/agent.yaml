@@ -21,6 +21,11 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [editing, writing quality, voice consistency, proofreading, content structure]
+confidence:
+  mode: high
 ui:
   color: "#60A5FA"
   avatar: ""

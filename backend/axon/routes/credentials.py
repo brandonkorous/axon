@@ -27,6 +27,7 @@ VALID_PROVIDERS = {
     "slack_bot_token", "slack_app_token",
     "teams_app_id", "teams_app_secret", "teams_organizer_id",
     "zoom_account_id", "zoom_client_id", "zoom_client_secret",
+    "git_pat", "git_ssh_key", "git_app",
 }
 
 

@@ -240,6 +240,31 @@ RECRUITMENT_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+PIPELINE_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "pipeline_run",
+            "description": "Run a named pipeline workflow. Pipelines chain multiple agents sequentially or in parallel, where each agent's output feeds the next.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pipeline_name": {
+                        "type": "string",
+                        "description": "Name of the pipeline to execute (e.g. 'feature_review', 'strategic_decision')",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The input message or question to run through the pipeline",
+                    },
+                },
+                "required": ["pipeline_name", "message"],
+            },
+        },
+    },
+]
+
+
 DISCOVERY_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -269,6 +294,43 @@ DISCOVERY_TOOLS: list[dict[str, Any]] = [
                     "delegatable": {
                         "type": "boolean",
                         "description": "If true, only return agents you are allowed to delegate work to",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+]
+
+PERFORMANCE_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "perf_get_metrics",
+            "description": "Get your own performance metrics for the current or specified period. Shows recommendations made, adoption rate, outcomes, and confidence.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "period": {
+                        "type": "string",
+                        "description": "Time period (e.g. '2026-W13' for week 13, or empty for current week)",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "perf_run_retro",
+            "description": "Generate a retrospective analysis of your own performance — insights, areas for improvement, and trend data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "period": {
+                        "type": "string",
+                        "description": "Time period to analyze (empty for current week)",
                     },
                 },
                 "required": [],
@@ -349,6 +411,12 @@ class ToolExecutor:
                 advisor_ids=advisor_ids or [],
             )
 
+        # Performance tracker for perf_* tools
+        self._perf_tracker: "PerformanceTracker | None" = None
+        if shared_vault:
+            from axon.performance.tracker import PerformanceTracker
+            self._perf_tracker = PerformanceTracker(shared_vault)
+
     _SHARED_TOOL_PREFIXES = ("task_", "issue_", "achievement_", "knowledge_")
 
     async def execute(self, tool_name: str, arguments: str) -> str:
@@ -398,6 +466,12 @@ class ToolExecutor:
         # Route shared vault tools to the shared executor
         if self._shared_executor and tool_name.startswith(self._SHARED_TOOL_PREFIXES):
             result = await self._shared_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route performance tools to the performance tracker
+        if self._perf_tracker and tool_name.startswith("perf_"):
+            result = await self._execute_perf_tool(tool_name, arguments)
             self._log_audit(tool_name, arguments, result)
             return result
 
@@ -744,3 +818,49 @@ class ToolExecutor:
         if not results:
             return "No agents found matching your criteria."
         return f"Found {len(results)} agent(s):\n\n" + "\n\n".join(results)
+
+    async def _execute_perf_tool(self, tool_name: str, arguments: str) -> str:
+        """Execute a performance tracking tool call."""
+        try:
+            args = json.loads(arguments) if arguments else {}
+        except json.JSONDecodeError:
+            args = {}
+
+        tracker = self._perf_tracker
+        if not tracker:
+            return "Error: Performance tracking is not available (no shared vault)."
+
+        period = args.get("period", "")
+
+        if tool_name == "perf_get_metrics":
+            metrics = tracker.get_metrics(self.agent_id, period)
+            return (
+                f"## Performance Metrics — {metrics.period}\n\n"
+                f"- Recommendations made: {metrics.recommendations_made}\n"
+                f"- Recommendations adopted: {metrics.recommendations_adopted}\n"
+                f"- Adoption rate: {metrics.adoption_rate:.0%}\n"
+                f"- Outcomes tracked: {metrics.outcomes_tracked}\n"
+                f"- Positive outcomes: {metrics.positive_outcomes}\n"
+                f"- Positive outcome rate: {metrics.positive_outcome_rate:.0%}\n"
+                f"- Average confidence: {metrics.avg_confidence:.2f}\n"
+                f"- Disagreement rate: {metrics.disagreement_rate:.2f}\n"
+                f"- Accuracy score: {metrics.accuracy_score:.2f}\n"
+            )
+
+        if tool_name == "perf_run_retro":
+            retro = tracker.generate_retro(self.agent_id, period=period)
+            lines = [f"## Retrospective — {retro.period}\n"]
+            lines.append(f"**Agent:** {retro.agent_id}\n")
+            if retro.insights:
+                lines.append("### Insights")
+                for insight in retro.insights:
+                    lines.append(f"- {insight}")
+            if retro.improvement_areas:
+                lines.append("\n### Areas for Improvement")
+                for area in retro.improvement_areas:
+                    lines.append(f"- {area}")
+            if not retro.insights and not retro.improvement_areas:
+                lines.append("No significant patterns detected yet — keep building history.")
+            return "\n".join(lines)
+
+        return f"Error: Unknown performance tool: {tool_name}"

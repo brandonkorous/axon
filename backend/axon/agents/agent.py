@@ -20,6 +20,7 @@ from axon.agents.tools import (
     DELEGATION_TOOLS,
     DISCOVERY_TOOLS,
     LEARNING_TOOLS,
+    PERFORMANCE_TOOLS,
     RECRUITMENT_TOOLS,
     VAULT_TOOLS,
     ToolExecutor,
@@ -214,6 +215,9 @@ class Agent:
 
         # Peer roster (injected after all agents are initialized)
         self._peer_roster: str = ""
+
+        # Org principles (injected from shared vault principles.md)
+        self._org_principles: str = ""
 
         # System prompt (loaded from file or inline)
         self._system_prompt: str | None = None
@@ -519,6 +523,25 @@ class Agent:
         if save_history and full_response:
             self.conversation.add_assistant_message(full_response, agent_id=self.id)
 
+        # 5b. Extract structured output if any active skill defines output fields
+        if full_response:
+            from axon.structured_output import extract_structured_output, StructuredResult
+            output_fields = self._get_active_output_fields(user_message)
+            structured_data = extract_structured_output(full_response, output_fields)
+            if structured_data:
+                result = StructuredResult(
+                    schema_name=self.id,
+                    data=structured_data,
+                    agent_id=self.id,
+                    confidence=structured_data.get("confidence", 0.5),
+                )
+                yield StreamChunk(
+                    agent_id=self.id,
+                    type="structured_output",
+                    content="",
+                    metadata=result.model_dump(),
+                )
+
         # 6. Fire async learning (local model extracts insights from this turn)
         if self.memory_manager and full_response:
             logger.debug("[%s] Firing async learning task", self.id)
@@ -586,6 +609,15 @@ class Agent:
                 continue
 
         return "\n".join(items)
+
+    def _get_active_output_fields(self, user_message: str) -> list | None:
+        """Get output fields from active skills for this message."""
+        if not hasattr(self.config, "skills") or not self.config.skills or not self.config.skills.enabled:
+            return None
+        from axon.skills.resolver import resolve_skills_for_message, get_active_output_fields
+        active = resolve_skills_for_message(user_message, self.config.skills.enabled)
+        fields = get_active_output_fields(active)
+        return fields if fields else None
 
     async def generate_greeting(self) -> AsyncIterator[StreamChunk]:
         """Generate the first-message greeting (reads vault, greets in character)."""
@@ -710,7 +742,27 @@ class Agent:
                 f"{delegate_note}\n"
             )
 
-        prompt = identity + org_context + comms_section + roster_section + self.system_prompt
+        # Org principles — shared values/culture injected for all agents
+        principles_section = ""
+        if self._org_principles:
+            principles_section = f"## Organization Principles\n{self._org_principles}\n\n"
+
+        # Agent guardrails — domain boundaries injected into prompt
+        guardrails_section = self.config.guardrails.build_boundary_prompt()
+
+        # Confidence gates — mode-specific instructions
+        confidence_section = self.config.confidence.build_confidence_prompt()
+
+        prompt = (
+            identity
+            + principles_section
+            + org_context
+            + guardrails_section
+            + confidence_section
+            + comms_section
+            + roster_section
+            + self.system_prompt
+        )
         if self.lifecycle.strategy_override:
             prompt += f"\n\n## Strategy Override (from user)\n{self.lifecycle.strategy_override}"
 
@@ -832,6 +884,14 @@ class Agent:
             tools.extend(ISSUE_TOOLS)
             tools.extend(ACHIEVEMENT_TOOLS)
             tools.extend(KNOWLEDGE_TOOLS)
+
+        # Performance tools when shared vault is available
+        if self.shared_vault:
+            tools.extend(PERFORMANCE_TOOLS)
+
+        # Apply guardrail tool restrictions (whitelist/blacklist/action gates)
+        if self.config.guardrails.has_tool_restrictions or not self.config.guardrails.actions.can_send:
+            tools = self.config.guardrails.filter_tools(tools)
 
         return tools
 

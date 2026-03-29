@@ -27,6 +27,9 @@ behavior:
   first_message: true
   proactive_checks: []
 
+confidence:
+  mode: balanced
+
 ui:
   color: "#8B5CF6"
   avatar: ""

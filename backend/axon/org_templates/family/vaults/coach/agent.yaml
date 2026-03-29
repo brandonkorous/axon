@@ -21,6 +21,11 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [organization, scheduling, household management, family coordination]
+confidence:
+  mode: high
 ui:
   color: "#22C55E"
   avatar: ""

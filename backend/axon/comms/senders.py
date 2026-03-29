@@ -2,11 +2,57 @@
 
 from __future__ import annotations
 
+import base64
 import logging
+import mimetypes
+from pathlib import Path
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB per file
+MAX_ATTACHMENTS = 5
+
+
+def resolve_vault_attachments(
+    vault_path: Path,
+    relative_paths: list[str],
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Resolve vault-relative paths to Resend attachment dicts.
+
+    Returns (attachments_list, errors_list).
+    Each attachment dict has 'filename' and 'content' (base64-encoded).
+    """
+    attachments: list[dict[str, str]] = []
+    errors: list[str] = []
+
+    if len(relative_paths) > MAX_ATTACHMENTS:
+        errors.append(f"Too many attachments (max {MAX_ATTACHMENTS}).")
+        return [], errors
+
+    for rel in relative_paths:
+        full = (vault_path / rel).resolve()
+        # Prevent path traversal outside vault
+        if not str(full).startswith(str(vault_path.resolve())):
+            errors.append(f"Path escapes vault: {rel}")
+            continue
+        if not full.exists():
+            errors.append(f"File not found: {rel}")
+            continue
+        if full.stat().st_size > MAX_ATTACHMENT_SIZE:
+            errors.append(f"File too large (>10 MB): {rel}")
+            continue
+
+        content_b64 = base64.b64encode(full.read_bytes()).decode("ascii")
+        mime = mimetypes.guess_type(str(full))[0] or "application/octet-stream"
+        attachments.append({
+            "filename": full.name,
+            "content": content_b64,
+            "type": mime,
+        })
+
+    return attachments, errors
 
 EMAIL_TEMPLATE = """\
 <!DOCTYPE html>
@@ -46,6 +92,7 @@ async def send_email(
     from_name: str = "",
     signature: str = "",
     agent_display_name: str = "",
+    attachments: list[dict[str, str]] | None = None,
 ) -> str:
     """Send an email via the Resend API.
 
@@ -75,6 +122,8 @@ async def send_email(
     }
     if cc:
         payload["cc"] = [cc]
+    if attachments:
+        payload["attachments"] = attachments
 
     try:
         async with httpx.AsyncClient() as client:

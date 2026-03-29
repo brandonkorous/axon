@@ -163,6 +163,7 @@ async def get_plugin_detail(org_id: str, plugin_name: str):
         ],
         "required_credentials": m.required_credentials,
         "python_deps": m.python_deps,
+        "sandbox_type": m.sandbox_type,
         "agents_using": _agents_using_plugin(org, plugin_name),
         "is_builtin": PLUGIN_SOURCE.get(plugin_name, "builtin") != "external",
         "source": PLUGIN_SOURCE.get(plugin_name, "builtin"),

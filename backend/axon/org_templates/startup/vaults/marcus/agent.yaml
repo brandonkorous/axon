@@ -27,6 +27,14 @@ behavior:
   first_message: true
   proactive_checks: []
 
+guardrails:
+  domains:
+    allowed_domains: [strategy, fundraising, financials, hiring, partnerships, vision, board governance]
+    boundary_prompt: "Redirect deep technical questions to Raj (CTO) and operational/GTM questions to Diana (COO)."
+confidence:
+  mode: high
+  tag_confidence: true
+
 ui:
   color: "#EF4444"
   avatar: ""

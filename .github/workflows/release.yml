@@ -110,8 +110,34 @@ jobs:
             ghcr.io/${{ github.repository }}-${{ matrix.component }}:${{ needs.version.outputs.version }}
             ghcr.io/${{ github.repository }}-${{ matrix.component }}:latest
 
+  publish-sandbox-images:
+    needs: version
+    if: needs.version.outputs.bumped == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sandbox: [base, browser, code, data, ml, documents, media, full]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./backend/axon/sandbox/images/${{ matrix.sandbox }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/axon-sandbox-${{ matrix.sandbox }}:${{ needs.version.outputs.version }}
+            ghcr.io/${{ github.repository }}/axon-sandbox-${{ matrix.sandbox }}:latest
+
   github-release:
-    needs: [version, publish-images]
+    needs: [version, publish-images, publish-sandbox-images]
     if: needs.version.outputs.bumped == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -152,4 +178,16 @@ jobs:
             ```
             ghcr.io/brandonkorous/axon-backend:${{ needs.version.outputs.version }}
             ghcr.io/brandonkorous/axon-frontend:${{ needs.version.outputs.version }}
+            ```
+
+            ## Sandbox Images
+            ```
+            ghcr.io/brandonkorous/axon/axon-sandbox-base:${{ needs.version.outputs.version }}
+            ghcr.io/brandonkorous/axon/axon-sandbox-browser:${{ needs.version.outputs.version }}
+            ghcr.io/brandonkorous/axon/axon-sandbox-code:${{ needs.version.outputs.version }}
+            ghcr.io/brandonkorous/axon/axon-sandbox-data:${{ needs.version.outputs.version }}
+            ghcr.io/brandonkorous/axon/axon-sandbox-ml:${{ needs.version.outputs.version }}
+            ghcr.io/brandonkorous/axon/axon-sandbox-documents:${{ needs.version.outputs.version }}
+            ghcr.io/brandonkorous/axon/axon-sandbox-media:${{ needs.version.outputs.version }}
+            ghcr.io/brandonkorous/axon/axon-sandbox-full:${{ needs.version.outputs.version }}
             ```

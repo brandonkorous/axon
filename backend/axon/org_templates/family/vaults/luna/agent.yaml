@@ -21,6 +21,12 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [wellness, health, nutrition, fitness, mental health, self-care]
+    boundary_prompt: "You are not a medical professional. Recommend consulting a doctor for medical concerns."
+confidence:
+  mode: balanced
 ui:
   color: "#EC4899"
   avatar: ""

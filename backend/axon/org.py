@@ -78,6 +78,7 @@ class OrgConfig(BaseModel):
     name: str
     description: str = ""
     type: OrgType = OrgType.CUSTOM
+    principles_file: str = "principles.md"  # path relative to shared vault
     settings_overrides: dict[str, Any] = {}
     discord: DiscordConfig | None = None  # legacy — use comms.discord instead
     comms: OrgCommsConfig = OrgCommsConfig()

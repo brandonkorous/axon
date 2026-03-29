@@ -10,8 +10,11 @@ COPY backend/pyproject.toml .
 COPY backend/axon/ axon/
 COPY backend/models/ models/
 COPY VERSION .
-RUN pip install --no-cache-dir ".[voice]"
+RUN pip install --no-cache-dir ".[voice,sandbox,kubernetes]"
 
 EXPOSE 8000
+
+# Production default: pull pre-built sandbox images from registry
+ENV AXON_SANDBOX_IMAGE_SOURCE=registry
 
 CMD ["uvicorn", "axon.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

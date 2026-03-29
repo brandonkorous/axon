@@ -9,6 +9,7 @@ deterministic search has low confidence.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,7 +70,7 @@ class MemoryNavigator:
         Returns formatted markdown string with the most relevant vault content,
         fitted within the token budget.
         """
-        result = self._search_and_rank(query, token_budget)
+        result = await asyncio.to_thread(self._search_and_rank, query, token_budget)
         return self._format_context(result)
 
     def _search_and_rank(self, query: str, token_budget: int) -> RetrievedContext:

@@ -11,6 +11,15 @@ export interface WorkerActivity {
   updated_at: string;
 }
 
+export type CodeSpecialist =
+  | "general"
+  | "python_backend"
+  | "fastify_backend"
+  | "nextjs"
+  | "vite_react"
+  | "dotnet_backend"
+  | "dotnet_frontend";
+
 export interface WorkerInfo {
   agent_id: string;
   name: string;
@@ -18,6 +27,7 @@ export interface WorkerInfo {
   last_seen: string | null;
   codebase_path: string;
   worker_type: WorkerType;
+  specialist: CodeSpecialist | "";
   accepts_from: string[];
   color: string;
   process_state: ProcessState;
@@ -30,12 +40,15 @@ interface SandboxCreateConfig {
   cpu_count?: number;
   memory_mb?: number;
   network_enabled?: boolean;
+  extra_mounts?: string[];
+  repo_ids?: string[];
 }
 
 interface WorkerCreateData {
   name: string;
   codebase_path: string;
   worker_type: WorkerType;
+  specialist?: CodeSpecialist;
   accepts_from: string[];
   color?: string;
   type_config?: Record<string, unknown>;

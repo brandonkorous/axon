@@ -10,6 +10,7 @@ Falls back to deterministic MemoryNavigator if the local model is unavailable.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -67,10 +68,10 @@ class MemoryManager:
             return result
         except TimeoutError:
             logger.warning("[%s] MemoryManager recall timed out — using fallback", self.agent_id)
-            return recall_fallback(self.vault, self.config, user_message)
+            return await asyncio.to_thread(recall_fallback, self.vault, self.config, user_message)
         except Exception as e:
             logger.warning("[%s] MemoryManager recall failed — using fallback: %s", self.agent_id, e)
-            return recall_fallback(self.vault, self.config, user_message)
+            return await asyncio.to_thread(recall_fallback, self.vault, self.config, user_message)
 
     async def process_turn(
         self,

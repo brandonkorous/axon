@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { useAgentStore } from "../stores/agentStore";
-import { useThinkingAgents } from "../stores/agentRuntimeStore";
 import { useOrgStore } from "../stores/orgStore";
-import { StatusBadge } from "./AgentControls/AgentControls";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { VoiceChatFAB } from "./VoiceChat/VoiceChatFAB";
 import { VoiceChatOverlay } from "./VoiceChat/VoiceChatOverlay";
@@ -11,7 +8,9 @@ import { SettingsModal } from "./Settings/SettingsModal";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useApprovalStore } from "../stores/approvalStore";
 import { useInboxStore } from "../stores/inboxStore";
+import { useAgentStore } from "../stores/agentStore";
 import { useWorkerStore } from "../stores/workerStore";
+import { StatusBar } from "./StatusBar/StatusBar";
 
 // Apply stored theme on load (GeneralTab manages it when settings are open)
 const storedTheme = localStorage.getItem("axon-theme");
@@ -22,8 +21,7 @@ if (storedTheme === "axon" || storedTheme === "axon-dark") {
 }
 
 export function Layout() {
-  const { agents, fetchAgents, loading } = useAgentStore();
-  const thinkingAgentIds = useThinkingAgents();
+  const fetchAgents = useAgentStore((s) => s.fetchAgents);
   const { fetchOrgs } = useOrgStore();
   const openSettings = useSettingsStore((s) => s.open);
   const approvalCount = useApprovalStore((s) => s.approvals.length);
@@ -32,7 +30,6 @@ export function Layout() {
     (s) => s.items.filter((i) => i.status === "pending").length
   );
   const fetchInbox = useInboxStore((s) => s.fetchAll);
-  const workers = useWorkerStore((s) => s.workers);
   const fetchWorkers = useWorkerStore((s) => s.fetchWorkers);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -69,7 +66,8 @@ export function Layout() {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen">
+    <div className="flex flex-col h-screen">
+      <div className="flex flex-1 overflow-hidden">
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
@@ -112,6 +110,11 @@ export function Layout() {
             <li>
               <NavLink to="/dashboard" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 Dashboard
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/analytics" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Analytics
               </NavLink>
             </li>
             <li>
@@ -165,90 +168,6 @@ export function Layout() {
               </NavLink>
             </li>
 
-            <li className="menu-title mt-4">Agents</li>
-            {!loading &&
-              agents
-                .filter((a) => a.id !== "axon" && a.type !== "external" && !a.parent_id)
-                .map((agent) => {
-                  const children = agents.filter((a) => a.parent_id === agent.id);
-                  return (
-                    <li key={agent.id}>
-                      <NavLink
-                        to={`/agent/${agent.id}`}
-                        className={({ isActive }) => isActive ? "menu-active" : ""}
-                      >
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={`w-2 h-2 rounded-full${thinkingAgentIds.includes(agent.id) ? " animate-pulse" : ""}`}
-                            style={{ backgroundColor: agent.ui.color }}
-                          />
-                          {agent.name}{agent.title_tag && ` - ${agent.title_tag}`}
-                          {agent.lifecycle && agent.lifecycle.status !== "active" && (
-                            <StatusBadge status={agent.lifecycle.status} />
-                          )}
-                        </span>
-                      </NavLink>
-                      {children.length > 0 && (
-                        <ul className="ml-2 border-l border-base-content/10">
-                          {children.map((child) => (
-                            <li key={child.id}>
-                              <NavLink
-                                to={`/agent/${child.id}`}
-                                className={({ isActive }) => isActive ? "menu-active" : ""}
-                              >
-                                <span className="flex items-center gap-2">
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full${thinkingAgentIds.includes(child.id) ? " animate-pulse" : ""}`}
-                                    style={{ backgroundColor: child.ui.color }}
-                                  />
-                                  <span className="text-xs">{child.name}{child.title_tag && ` - ${child.title_tag}`}</span>
-                                  {child.lifecycle && child.lifecycle.status !== "active" && (
-                                    <StatusBadge status={child.lifecycle.status} />
-                                  )}
-                                </span>
-                              </NavLink>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  );
-                })}
-
-            <li className="menu-title mt-4">
-              <span className="flex items-center justify-between w-full">
-                Workers
-                <NavLink
-                  to="/workers/new"
-                  className="btn btn-ghost btn-square"
-                  title="Add Worker"
-                >
-                  +
-                </NavLink>
-              </span>
-            </li>
-            <li>
-              <NavLink to="/workers" className={({ isActive }) => isActive ? "menu-active" : ""} end>
-                All Workers
-              </NavLink>
-            </li>
-            {workers.map((worker) => (
-              <li key={worker.agent_id}>
-                <NavLink
-                  to={`/workers/${worker.agent_id}`}
-                  className={({ isActive }) => isActive ? "menu-active" : ""}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      className={`w-2 h-2 rounded-full${worker.process_state === "running" ? " animate-pulse" : ""}`}
-                      style={{ backgroundColor: worker.color || "#609894" }}
-                    />
-                    {worker.name}
-                  </span>
-                </NavLink>
-              </li>
-            ))}
-
             <li className="menu-title mt-4">Extensions</li>
             <li>
               <NavLink to="/plugins" className={({ isActive }) => isActive ? "menu-active" : ""}>
@@ -258,6 +177,16 @@ export function Layout() {
             <li>
               <NavLink to="/skills" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 Skills
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/sandboxes" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Sandboxes
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/repos" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Repositories
               </NavLink>
             </li>
             <li>
@@ -300,6 +229,9 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+      </div>
+
+      <StatusBar />
 
       <VoiceChatFAB />
       <VoiceChatOverlay />

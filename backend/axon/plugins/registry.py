@@ -54,6 +54,7 @@ def list_plugins() -> list[dict[str, Any]]:
             "triggers": m.triggers,
             "tools": [t["function"]["name"] for t in instance.get_tools()],
             "required_credentials": m.required_credentials,
+            "sandbox_type": m.sandbox_type,
             "is_builtin": PLUGIN_SOURCE.get(name, "builtin") != "external",
             "source": PLUGIN_SOURCE.get(name, "builtin"),
         })

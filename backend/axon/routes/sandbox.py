@@ -5,62 +5,115 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 import axon.registry as registry
 from axon.sandbox.manager import sandbox_manager
+from axon.sandbox.types import resolve_sandbox_type
 
 logger = logging.getLogger(__name__)
 
 org_router = APIRouter()
 
 
+class MountValidateRequest(BaseModel):
+    path: str
+
+
+@org_router.post("/validate-mount")
+async def validate_mount(org_id: str, body: MountValidateRequest):
+    """Validate a host mount path for safety."""
+    from axon.sandbox.mount_validation import validate_mount_path
+    from axon.config import settings
+
+    axon_dirs = [settings.axon_orgs_dir]
+    valid, error = validate_mount_path(body.path, axon_dirs)
+    return {"valid": valid, "error": error if not valid else None}
+
+
 @org_router.get("/status")
 async def sandbox_availability():
-    """Check if Docker sandbox support is available."""
+    """Check if sandbox runtime is available."""
+    available = await sandbox_manager.check_available()
     return {
-        "available": sandbox_manager.available,
+        "available": available,
         "containers": len(sandbox_manager._containers),
     }
 
 
 @org_router.get("/{agent_id}")
-async def sandbox_status(org_id: str, agent_id: str):
+async def sandbox_status(org_id: str, agent_id: str, instance_id: str | None = None):
     """Get sandbox container status for a worker."""
     _validate_worker(org_id, agent_id)
-    return sandbox_manager.status(org_id, agent_id)
+    return sandbox_manager.status(org_id, agent_id, instance_id)
+
+
+@org_router.get("/{agent_id}/instances")
+async def list_sandbox_instances(org_id: str, agent_id: str):
+    """List all running sandbox instances for an agent."""
+    _validate_worker(org_id, agent_id)
+    return {"instances": sandbox_manager.list_instances(org_id, agent_id)}
+
+
+@org_router.get("/{agent_id}/resolved-type")
+async def resolved_sandbox_type(org_id: str, agent_id: str):
+    """Resolve the minimum sandbox type based on agent's enabled plugins."""
+    org = _validate_worker(org_id, agent_id)
+    agent = org.agent_registry[agent_id]
+
+    required_types: list[str] = []
+    if hasattr(agent, "config") and hasattr(agent.config, "plugins") and agent.config.plugins:
+        from axon.plugins.registry import PLUGIN_REGISTRY
+        for plugin_name in agent.config.plugins.enabled:
+            cls = PLUGIN_REGISTRY.get(plugin_name)
+            if cls:
+                instance = cls()
+                if instance.manifest.sandbox_type:
+                    required_types.append(instance.manifest.sandbox_type)
+
+    resolved = resolve_sandbox_type(required_types)
+    return {
+        "resolved_type": resolved.value,
+        "required_types": required_types,
+    }
 
 
 @org_router.get("/{agent_id}/logs")
-async def sandbox_logs(org_id: str, agent_id: str, tail: int = 100):
+async def sandbox_logs(
+    org_id: str, agent_id: str,
+    instance_id: str | None = None, tail: int = 100,
+):
     """Get sandbox container logs."""
     _validate_worker(org_id, agent_id)
-    return {"lines": sandbox_manager.logs(org_id, agent_id, tail)}
+    lines = await sandbox_manager.get_logs_async(org_id, agent_id, instance_id, tail)
+    return {"lines": lines}
 
 
 @org_router.post("/{agent_id}/restart")
-async def restart_sandbox(org_id: str, agent_id: str):
+async def restart_sandbox(org_id: str, agent_id: str, instance_id: str | None = None):
     """Restart a sandbox container (stop + start)."""
     _validate_worker(org_id, agent_id)
 
-    await sandbox_manager.stop(org_id, agent_id)
+    await sandbox_manager.stop(org_id, agent_id, instance_id)
 
     # Re-creation requires runner config — delegate to worker control
     return {"status": "stopped", "message": "Use worker start to recreate sandbox"}
 
 
 @org_router.delete("/{agent_id}")
-async def destroy_sandbox(org_id: str, agent_id: str):
+async def destroy_sandbox(org_id: str, agent_id: str, instance_id: str | None = None):
     """Force-remove a sandbox container."""
     _validate_worker(org_id, agent_id)
-    await sandbox_manager.destroy(org_id, agent_id)
+    await sandbox_manager.destroy(org_id, agent_id, instance_id)
     return {"status": "destroyed"}
 
 
-def _validate_worker(org_id: str, agent_id: str) -> None:
-    """Raise 404 if org or worker not found."""
+def _validate_worker(org_id: str, agent_id: str):
+    """Raise 404 if org or worker not found. Returns org instance."""
     org = registry.get_org(org_id)
     if not org:
         raise HTTPException(404, f"Org not found: {org_id}")
     agent = org.agent_registry.get(agent_id)
     if not agent or not getattr(agent, "is_external", False):
         raise HTTPException(404, f"Worker not found: {agent_id}")
+    return org

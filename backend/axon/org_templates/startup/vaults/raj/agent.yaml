@@ -27,6 +27,13 @@ behavior:
   first_message: true
   proactive_checks: []
 
+guardrails:
+  domains:
+    allowed_domains: [architecture, infrastructure, tech debt, vendors, security, performance, scaling]
+confidence:
+  mode: exploration
+  tag_confidence: true
+
 ui:
   color: "#3B82F6"
   avatar: ""

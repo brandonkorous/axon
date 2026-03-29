@@ -74,15 +74,34 @@ class CommsToolExecutor:
         subject = args.get("subject", "")
         body = args.get("body", "")
         cc = args.get("cc", "")
+        attachment_paths: list[str] = args.get("attachments") or []
 
         if not to or not subject or not body:
             return "Error: 'to', 'subject', and 'body' are required."
 
+        # Resolve vault file paths to attachment dicts
+        resolved_attachments: list[dict[str, str]] = []
+        if attachment_paths:
+            from axon.comms.senders import resolve_vault_attachments
+            resolved_attachments, errors = resolve_vault_attachments(
+                self.shared_vault.vault_path, attachment_paths,
+            )
+            if errors:
+                return "Error resolving attachments: " + "; ".join(errors)
+
+        payload: dict = {"to": to, "subject": subject, "body": body, "cc": cc}
+        if resolved_attachments:
+            payload["attachments"] = resolved_attachments
+
         if self.config.require_approval:
+            attach_note = ""
+            if resolved_attachments:
+                names = [a["filename"] for a in resolved_attachments]
+                attach_note = f"\n**Attachments:** {', '.join(names)}"
             return await self._create_approval_task(
                 channel=CommsChannel.EMAIL,
-                payload={"to": to, "subject": subject, "body": body, "cc": cc},
-                preview=f"**To:** {to}\n**Subject:** {subject}\n\n{body}",
+                payload=payload,
+                preview=f"**To:** {to}\n**Subject:** {subject}{attach_note}\n\n{body}",
             )
 
         from axon.comms.credentials import resolve_credential
@@ -91,6 +110,7 @@ class CommsToolExecutor:
         return await send_email(
             api_key, self.config.email_domain, to, subject, body, cc,
             self.from_name, self.config.email_signature, self.agent_display_name,
+            attachments=resolved_attachments or None,
         )
 
     async def _send_discord(self, args: dict) -> str:

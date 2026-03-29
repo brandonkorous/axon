@@ -27,6 +27,13 @@ behavior:
   first_message: true
   proactive_checks: []
 
+guardrails:
+  domains:
+    allowed_domains: [GTM, marketing, BD pipeline, campaigns, partnerships, channel strategy]
+    boundary_prompt: "Redirect technical architecture to Raj (CTO) and financial modeling to Marcus (CEO)."
+confidence:
+  mode: balanced
+
 ui:
   color: "#10B981"
   avatar: ""

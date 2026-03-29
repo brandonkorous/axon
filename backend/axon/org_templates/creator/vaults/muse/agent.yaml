@@ -21,6 +21,11 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [content strategy, ideation, creative direction, audience development]
+confidence:
+  mode: exploration
 ui:
   color: "#F472B6"
   avatar: ""

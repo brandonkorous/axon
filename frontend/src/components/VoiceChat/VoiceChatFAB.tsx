@@ -19,7 +19,7 @@ export function VoiceChatFAB() {
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           onClick={open}
-          className="fixed z-40 bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-primary to-primary/70 text-primary-content shadow-lg shadow-primary/25 hover:shadow-primary/40"
+          className="fixed z-40 bottom-12 right-6 w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-primary to-primary/70 text-primary-content shadow-lg shadow-primary/25 hover:shadow-primary/40"
           aria-label="Voice chat with Axon"
         >
           {/* Breathing glow ring */}

@@ -41,6 +41,9 @@ class PluginManifest(BaseModel):
         description="Keywords/phrases that activate this plugin on demand",
     )
 
+    # Sandbox
+    sandbox_type: str = Field(default="", description="Required sandbox type (base, code, browser, etc.)")
+
     # Categorization
     category: str = Field(default="general", description="Plugin category for UI grouping")
     icon: str = Field(default="", description="Icon name or emoji for UI display")

@@ -21,6 +21,13 @@ behavior:
   auto_save: true
   first_message: true
   proactive_checks: []
+guardrails:
+  domains:
+    allowed_domains: [business strategy, monetization, partnerships, brand deals, analytics]
+    boundary_prompt: "Redirect creative and editorial questions to Muse and Echo."
+confidence:
+  mode: balanced
+  tag_confidence: true
 ui:
   color: "#34D399"
   avatar: ""

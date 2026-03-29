@@ -10,6 +10,18 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          xyflow: ["@xyflow/react", "d3-force"],
+          markdown: ["react-markdown", "remark-gfm"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     proxy: {

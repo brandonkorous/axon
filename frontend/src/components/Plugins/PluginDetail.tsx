@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { usePluginStore } from "../../stores/pluginStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useSandboxStore, type SandboxImageInfo } from "../../stores/sandboxStore";
 import { TagInput } from "./TagInput";
+import { SandboxBuildConfirmDialog } from "./SandboxBuildConfirmDialog";
 
 const CATEGORIES = ["general", "research", "integration", "media", "browser"];
 
@@ -10,10 +12,13 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
     usePluginStore();
   const { agents } = useAgentStore();
 
+  const { images, fetchImages } = useSandboxStore();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sandboxBuildImage, setSandboxBuildImage] = useState<SandboxImageInfo | null>(null);
+  const [pendingEnableAgent, setPendingEnableAgent] = useState<string | null>(null);
 
   // Edit form state
   const [description, setDescription] = useState("");
@@ -29,7 +34,8 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
 
   useEffect(() => {
     fetchPluginDetail(pluginName);
-  }, [pluginName, fetchPluginDetail]);
+    fetchImages();
+  }, [pluginName, fetchPluginDetail, fetchImages]);
 
   // Sync edit form when selectedPlugin loads
   useEffect(() => {
@@ -59,9 +65,21 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
 
   const handleToggle = async (agentId: string) => {
     const isUsing = s.agents_using.includes(agentId);
-    const ok = isUsing
-      ? await disablePlugin(pluginName, agentId)
-      : await enablePlugin(pluginName, agentId);
+    if (isUsing) {
+      const ok = await disablePlugin(pluginName, agentId);
+      if (ok) fetchPluginDetail(pluginName);
+      return;
+    }
+    // Check if plugin needs a sandbox image that isn't built
+    if (s.sandbox_type) {
+      const img = images.find((i) => i.type === s.sandbox_type);
+      if (img && img.status !== "ready") {
+        setSandboxBuildImage(img);
+        setPendingEnableAgent(agentId);
+        return;
+      }
+    }
+    const ok = await enablePlugin(pluginName, agentId);
     if (ok) fetchPluginDetail(pluginName);
   };
 
@@ -203,6 +221,23 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
           )}
         </div>
       </div>
+
+      {sandboxBuildImage && pendingEnableAgent && (
+        <SandboxBuildConfirmDialog
+          image={sandboxBuildImage}
+          pluginName={pluginName}
+          onComplete={async () => {
+            setSandboxBuildImage(null);
+            const ok = await enablePlugin(pluginName, pendingEnableAgent);
+            if (ok) fetchPluginDetail(pluginName);
+            setPendingEnableAgent(null);
+          }}
+          onCancel={() => {
+            setSandboxBuildImage(null);
+            setPendingEnableAgent(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -290,6 +325,16 @@ function ViewMode({
             {s.required_credentials.map((c: string) => (
               <span key={c} className="badge badge-sm badge-warning badge-outline">{c}</span>
             ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Sandbox */}
+      {s.sandbox_type && (
+        <Section title="Sandbox">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-base-content/60">Required image:</span>
+            <code className="text-xs font-mono badge badge-sm badge-outline">{s.sandbox_type}</code>
           </div>
         </Section>
       )}

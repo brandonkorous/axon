@@ -1,56 +1,73 @@
-"""SandboxManager — create, start, stop, and destroy sandbox containers."""
+"""SandboxManager — provider-agnostic sandbox orchestration.
+
+Delegates all container/pod operations to a SandboxProvider (Docker or k8s).
+"""
 
 from __future__ import annotations
 
-import asyncio
 import logging
+import uuid
 from typing import Any
 
-from axon.sandbox.config import SandboxConfig
+from axon.sandbox.config import (
+    ImageSource,
+    KubernetesConfig,
+    SandboxConfig,
+    SandboxProviderType,
+)
+from axon.sandbox.provider import SandboxProvider
 
 logger = logging.getLogger(__name__)
 
-# Container label for identifying Axon sandbox containers
-LABEL_PREFIX = "axon.sandbox"
+
+def create_provider(
+    provider_type: SandboxProviderType = SandboxProviderType.DOCKER,
+    image_source: ImageSource = ImageSource.LOCAL,
+    k8s_config: KubernetesConfig | None = None,
+) -> SandboxProvider:
+    """Factory — instantiate the right provider based on config."""
+    if provider_type == SandboxProviderType.KUBERNETES:
+        from axon.sandbox.k8s_provider import KubernetesProvider
+        return KubernetesProvider(k8s_config)
+    from axon.sandbox.docker_provider import DockerProvider
+    return DockerProvider(image_source)
 
 
 class SandboxManager:
-    """Manages Docker sandbox containers for worker agents.
+    """Manages sandbox lifecycle via a pluggable provider.
 
-    Uses the Docker SDK (docker-py) to create isolated execution
-    environments. Falls back gracefully if Docker is unavailable.
+    Supports multiple parallel instances per agent via instance_id keying.
     """
 
     def __init__(self) -> None:
-        self._client: Any | None = None
-        self._containers: dict[str, str] = {}  # "org/agent" → container_id
-        self._available: bool | None = None
+        self._provider: SandboxProvider | None = None
+        self._containers: dict[str, str] = {}  # "org/agent/instance" -> sandbox_id
 
     @property
-    def client(self) -> Any:
-        """Lazy-init Docker client."""
-        if self._client is None:
-            try:
-                import docker
-                self._client = docker.from_env()
-                self._client.ping()
-                self._available = True
-                logger.info("Docker SDK connected")
-            except Exception as e:
-                self._available = False
-                logger.warning("Docker not available: %s", e)
-                raise RuntimeError("Docker is not available") from e
-        return self._client
+    def provider(self) -> SandboxProvider:
+        """Lazy-init provider from settings."""
+        if self._provider is None:
+            self._provider = _provider_from_settings()
+        return self._provider
 
     @property
     def available(self) -> bool:
-        """Check if Docker daemon is reachable."""
-        if self._available is None:
-            try:
-                self.client  # triggers lazy init
-            except RuntimeError:
-                pass
-        return self._available or False
+        """Sync check — returns False until is_available() is called."""
+        return self._provider is not None
+
+    async def check_available(self) -> bool:
+        """Async availability check against the runtime."""
+        try:
+            return await self.provider.is_available()
+        except Exception:
+            return False
+
+    async def resolve_and_ensure(self, required_types: list[str]) -> str:
+        """Resolve sandbox type from requirements and ensure the image exists."""
+        from axon.sandbox.types import resolve_sandbox_type
+        sandbox_type = resolve_sandbox_type(required_types)
+        await self.provider.ensure_image(sandbox_type)
+        return sandbox_type.value
 
     async def create(
         self,
@@ -60,142 +77,178 @@ class SandboxManager:
         workspace_dir: str,
         config: SandboxConfig,
         env: dict[str, str] | None = None,
+        instance_id: str | None = None,
+        git_repos: list[dict] | None = None,
+        git_credentials: dict[str, dict] | None = None,
     ) -> str:
-        """Create and start a sandbox container.
-
-        Returns the container ID.
-        """
-        key = f"{org_id}/{agent_id}"
+        """Create and start a sandbox. Returns the sandbox ID."""
+        instance_id = instance_id or uuid.uuid4().hex[:8]
+        key = f"{org_id}/{agent_id}/{instance_id}"
         if key in self._containers:
             raise RuntimeError(f"Sandbox already exists: {key}")
 
-        container = await asyncio.to_thread(
-            self._create_container,
-            key, runner_dir, workspace_dir, config, env or {},
+        # Ensure the image is available
+        from axon.sandbox.types import SandboxType
+        try:
+            await self.provider.ensure_image(SandboxType(config.sandbox_type))
+        except ValueError:
+            logger.warning("Unknown sandbox type: %s, skipping ensure", config.sandbox_type)
+
+        merged_env = dict(env or {})
+        init_script: str | None = None
+
+        if git_repos:
+            from axon.sandbox.git_init import CLONE_SCRIPT, build_clone_env
+            git_env = build_clone_env(git_repos, git_credentials or {})
+            merged_env.update(git_env)
+            init_script = CLONE_SCRIPT
+
+        sandbox_id = await self.provider.create_sandbox(
+            org_id, agent_id, instance_id,
+            runner_dir, workspace_dir, config, merged_env,
+            init_script=init_script,
         )
+        self._containers[key] = sandbox_id
+        logger.info("Sandbox created: %s (id=%s)", key, sandbox_id[:12])
+        return sandbox_id
 
-        self._containers[key] = container.id
-        logger.info("Sandbox created: %s (id=%s)", key, container.short_id)
-        return container.id
+    def list_instances(self, org_id: str, agent_id: str) -> list[dict[str, Any]]:
+        """List all running sandbox instances for an agent."""
+        prefix = f"{org_id}/{agent_id}/"
+        instances: list[dict[str, Any]] = []
+        for key, sandbox_id in self._containers.items():
+            if not key.startswith(prefix):
+                continue
+            iid = key.split("/", 2)[2]
+            instances.append({
+                "instance_id": iid,
+                "sandbox_id": sandbox_id[:12],
+                "status": "tracked",
+            })
+        return instances
 
-    def _create_container(
+    async def stop(
         self,
-        key: str,
-        runner_dir: str,
-        workspace_dir: str,
-        config: SandboxConfig,
-        env: dict[str, str],
-    ) -> Any:
-        """Synchronous container creation (runs in thread)."""
-        res = config.resources
-        mounts = _build_mounts(runner_dir, workspace_dir, config.extra_mounts)
+        org_id: str,
+        agent_id: str,
+        instance_id: str | None = None,
+        timeout: int = 10,
+    ) -> None:
+        """Stop sandbox(es)."""
+        for key in self._resolve_keys(org_id, agent_id, instance_id):
+            sid = self._containers.pop(key, None)
+            if not sid:
+                continue
+            try:
+                await self.provider.stop_sandbox(sid, timeout=timeout)
+                logger.info("Sandbox stopped: %s", key)
+            except Exception as e:
+                logger.warning("Failed to stop sandbox %s: %s", key, e)
 
-        labels = {
-            f"{LABEL_PREFIX}.key": key,
-            f"{LABEL_PREFIX}.managed": "true",
+    async def destroy(
+        self,
+        org_id: str,
+        agent_id: str,
+        instance_id: str | None = None,
+    ) -> None:
+        """Force-remove sandbox(es)."""
+        for key in self._resolve_keys(org_id, agent_id, instance_id):
+            sid = self._containers.pop(key, None)
+            if not sid:
+                continue
+            try:
+                await self.provider.destroy_sandbox(sid)
+                logger.info("Sandbox destroyed: %s", key)
+            except Exception as e:
+                logger.warning("Failed to destroy sandbox %s: %s", key, e)
+
+    def status(
+        self,
+        org_id: str,
+        agent_id: str,
+        instance_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Get sandbox status (sync wrapper for route compat)."""
+        keys = self._resolve_keys(org_id, agent_id, instance_id)
+        if not keys:
+            return {"running": False, "container_id": None}
+        sid = self._containers.get(keys[0])
+        if not sid:
+            return {"running": False, "container_id": None}
+        return {
+            "running": True,
+            "container_id": sid[:12],
+            "instance_id": keys[0].split("/", 2)[2],
         }
 
-        container = self.client.containers.create(
-            image=config.image,
-            name=f"axon-sandbox-{key.replace('/', '-')}",
-            labels=labels,
-            environment=env,
-            volumes=mounts,
-            nano_cpus=int(res.cpu_count * 1e9),
-            mem_limit=f"{res.memory_mb}m",
-            pids_limit=res.pids_limit,
-            network_mode="bridge" if config.network.enabled else "none",
-            auto_remove=config.auto_remove,
-            detach=True,
-        )
-        container.start()
-        return container
+    def logs(
+        self,
+        org_id: str,
+        agent_id: str,
+        instance_id: str | None = None,
+        tail: int = 100,
+    ) -> list[str]:
+        """Get logs — sync stub; use async get_logs for full support."""
+        return []
 
-    async def stop(self, org_id: str, agent_id: str, timeout: int = 10) -> None:
-        """Stop and remove a sandbox container."""
-        key = f"{org_id}/{agent_id}"
-        container_id = self._containers.pop(key, None)
-        if not container_id:
-            return
-
-        try:
-            container = self.client.containers.get(container_id)
-            await asyncio.to_thread(container.stop, timeout=timeout)
-            logger.info("Sandbox stopped: %s", key)
-        except Exception as e:
-            logger.warning("Failed to stop sandbox %s: %s", key, e)
-
-    async def destroy(self, org_id: str, agent_id: str) -> None:
-        """Force-remove a sandbox container."""
-        key = f"{org_id}/{agent_id}"
-        container_id = self._containers.pop(key, None)
-        if not container_id:
-            return
-
-        try:
-            container = self.client.containers.get(container_id)
-            await asyncio.to_thread(container.remove, force=True)
-            logger.info("Sandbox destroyed: %s", key)
-        except Exception as e:
-            logger.warning("Failed to destroy sandbox %s: %s", key, e)
-
-    def status(self, org_id: str, agent_id: str) -> dict[str, Any]:
-        """Get sandbox container status."""
-        key = f"{org_id}/{agent_id}"
-        container_id = self._containers.get(key)
-        if not container_id:
-            return {"running": False, "container_id": None}
-
-        try:
-            container = self.client.containers.get(container_id)
-            return {
-                "running": container.status == "running",
-                "container_id": container.short_id,
-                "status": container.status,
-                "image": container.image.tags[0] if container.image.tags else "unknown",
-            }
-        except Exception:
-            self._containers.pop(key, None)
-            return {"running": False, "container_id": None}
-
-    def logs(self, org_id: str, agent_id: str, tail: int = 100) -> list[str]:
-        """Get recent container logs."""
-        key = f"{org_id}/{agent_id}"
-        container_id = self._containers.get(key)
-        if not container_id:
+    async def get_logs_async(
+        self,
+        org_id: str,
+        agent_id: str,
+        instance_id: str | None = None,
+        tail: int = 100,
+    ) -> list[str]:
+        """Get recent sandbox logs."""
+        keys = self._resolve_keys(org_id, agent_id, instance_id)
+        if not keys:
             return []
-
-        try:
-            container = self.client.containers.get(container_id)
-            raw = container.logs(tail=tail, timestamps=False).decode("utf-8", errors="replace")
-            return raw.splitlines()
-        except Exception:
+        sid = self._containers.get(keys[0])
+        if not sid:
             return []
+        return await self.provider.get_logs(sid, tail=tail)
+
+    def _resolve_keys(
+        self,
+        org_id: str,
+        agent_id: str,
+        instance_id: str | None,
+    ) -> list[str]:
+        if instance_id:
+            key = f"{org_id}/{agent_id}/{instance_id}"
+            return [key] if key in self._containers else []
+        prefix = f"{org_id}/{agent_id}/"
+        return [k for k in self._containers if k.startswith(prefix)]
 
     async def shutdown_all(self) -> None:
-        """Stop all managed sandbox containers."""
-        keys = list(self._containers.keys())
-        for key in keys:
-            org_id, agent_id = key.split("/", 1)
-            await self.stop(org_id, agent_id)
+        """Stop all managed sandboxes."""
+        for key in list(self._containers.keys()):
+            parts = key.split("/", 2)
+            await self.stop(parts[0], parts[1], parts[2])
         logger.info("All sandboxes shut down")
 
 
-def _build_mounts(
-    runner_dir: str,
-    workspace_dir: str,
-    extra: list[str],
-) -> dict[str, dict[str, str]]:
-    """Build Docker volume mount spec."""
-    mounts: dict[str, dict[str, str]] = {
-        runner_dir: {"bind": "/runner", "mode": "rw"},
-        workspace_dir: {"bind": "/workspace", "mode": "rw"},
-    }
-    for mount_spec in extra:
-        parts = mount_spec.split(":", 1)
-        if len(parts) == 2:
-            mounts[parts[0]] = {"bind": parts[1], "mode": "rw"}
-    return mounts
+def _provider_from_settings() -> SandboxProvider:
+    """Read global settings and create the appropriate provider."""
+    from axon.config import settings
+
+    provider_type = SandboxProviderType(
+        getattr(settings, "sandbox_provider", "docker"),
+    )
+    image_source = ImageSource(
+        getattr(settings, "sandbox_image_source", "local"),
+    )
+
+    k8s_config = None
+    if provider_type == SandboxProviderType.KUBERNETES:
+        k8s_config = KubernetesConfig(
+            namespace=getattr(settings, "sandbox_k8s_namespace", "axon-sandboxes"),
+            image_registry=getattr(settings, "sandbox_image_registry", "ghcr.io/axon-ai"),
+            kubeconfig_path=getattr(settings, "sandbox_k8s_kubeconfig", None) or None,
+            storage_class=getattr(settings, "sandbox_k8s_storage_class", "standard"),
+            service_account=getattr(settings, "sandbox_k8s_service_account", "axon-sandbox"),
+        )
+
+    return create_provider(provider_type, image_source, k8s_config)
 
 
 # Singleton

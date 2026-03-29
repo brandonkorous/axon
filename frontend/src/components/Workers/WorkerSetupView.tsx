@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useWorkerStore, type ProcessState, type WorkerType } from "../../stores/workerStore";
+import { useWorkerStore, type ProcessState, type WorkerType, type CodeSpecialist } from "../../stores/workerStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { WorkerTypeSelector } from "./WorkerTypeSelector";
 import { WorkerTypeConfig } from "./WorkerTypeConfig";
+import { SpecialistSelector } from "./SpecialistSelector";
+import { MountPathInput } from "./MountPathInput";
+import { WorkerRepoSelect } from "./WorkerRepoSelect";
 
 type Step = "form" | "connect";
 
@@ -17,10 +20,13 @@ export function WorkerSetupView() {
 
   const [name, setName] = useState("");
   const [workerType, setWorkerType] = useState<WorkerType>("code");
+  const [specialist, setSpecialist] = useState<CodeSpecialist>("general");
   const [codebasePath, setCodebasePath] = useState("");
   const [typeConfig, setTypeConfig] = useState<Record<string, string>>({});
   const [acceptsFrom, setAcceptsFrom] = useState<string[]>(["axon"]);
   const [sandboxEnabled, setSandboxEnabled] = useState(false);
+  const [extraMounts, setExtraMounts] = useState<{ hostPath: string; containerPath: string }[]>([]);
+  const [repoIds, setRepoIds] = useState<string[]>([]);
 
   useEffect(() => {
     reset();
@@ -48,10 +54,19 @@ export function WorkerSetupView() {
     const ok = await createWorker({
       name,
       worker_type: workerType,
+      specialist: workerType === "code" ? specialist : undefined,
       codebase_path: codebasePath,
       accepts_from: acceptsFrom,
       type_config: Object.keys(typeConfig).length > 0 ? typeConfig : undefined,
-      sandbox: { enabled: sandboxEnabled },
+      sandbox: {
+        enabled: sandboxEnabled,
+        extra_mounts: sandboxEnabled
+          ? extraMounts
+              .filter((m) => m.hostPath && m.containerPath)
+              .map((m) => `${m.hostPath}:${m.containerPath}`)
+          : undefined,
+        repo_ids: sandboxEnabled && repoIds.length > 0 ? repoIds : undefined,
+      },
     });
     if (ok) {
       fetchAgents();
@@ -88,6 +103,7 @@ export function WorkerSetupView() {
             <SetupForm
               name={name}
               workerType={workerType}
+              specialist={specialist}
               codebasePath={codebasePath}
               typeConfig={typeConfig}
               acceptsFrom={acceptsFrom}
@@ -96,10 +112,15 @@ export function WorkerSetupView() {
               creating={creating}
               onNameChange={setName}
               onWorkerTypeChange={setWorkerType}
+              onSpecialistChange={setSpecialist}
               onCodebaseChange={setCodebasePath}
               onTypeConfigChange={handleTypeConfigChange}
               onToggleAgent={toggleAgent}
               onSandboxChange={setSandboxEnabled}
+              extraMounts={extraMounts}
+              onExtraMountsChange={setExtraMounts}
+              repoIds={repoIds}
+              onRepoIdsChange={setRepoIds}
               onSubmit={handleCreate}
             />
           )}
@@ -118,23 +139,30 @@ export function WorkerSetupView() {
 }
 
 function SetupForm({
-  name, workerType, codebasePath, typeConfig, acceptsFrom, sandboxEnabled, delegators, creating,
-  onNameChange, onWorkerTypeChange, onCodebaseChange, onTypeConfigChange, onToggleAgent, onSandboxChange, onSubmit,
+  name, workerType, specialist, codebasePath, typeConfig, acceptsFrom, sandboxEnabled, delegators, creating,
+  extraMounts, repoIds, onNameChange, onWorkerTypeChange, onSpecialistChange, onCodebaseChange, onTypeConfigChange,
+  onToggleAgent, onSandboxChange, onExtraMountsChange, onRepoIdsChange, onSubmit,
 }: {
   name: string;
   workerType: WorkerType;
+  specialist: CodeSpecialist;
   codebasePath: string;
   typeConfig: Record<string, string>;
   acceptsFrom: string[];
   sandboxEnabled: boolean;
   delegators: { id: string; name: string }[];
   creating: boolean;
+  extraMounts: { hostPath: string; containerPath: string }[];
+  repoIds: string[];
   onNameChange: (v: string) => void;
   onWorkerTypeChange: (v: WorkerType) => void;
+  onSpecialistChange: (v: CodeSpecialist) => void;
   onCodebaseChange: (v: string) => void;
   onTypeConfigChange: (key: string, value: string) => void;
   onToggleAgent: (id: string) => void;
   onSandboxChange: (v: boolean) => void;
+  onExtraMountsChange: (v: { hostPath: string; containerPath: string }[]) => void;
+  onRepoIdsChange: (v: string[]) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
@@ -159,6 +187,14 @@ function SetupForm({
         onCodebaseChange={onCodebaseChange}
         onTypeConfigChange={onTypeConfigChange}
       />
+
+      {workerType === "code" && (
+        <SpecialistSelector
+          selected={specialist}
+          codebasePath={codebasePath}
+          onChange={onSpecialistChange}
+        />
+      )}
 
       <div>
         <label className="label text-sm font-medium">Accepts Tasks From</label>
@@ -198,6 +234,26 @@ function SetupForm({
           </div>
         </label>
       </div>
+
+      {sandboxEnabled && (
+        <div>
+          <label className="label text-sm font-medium">Host Mounts</label>
+          <p className="text-xs text-base-content/60 mb-2">
+            Map host directories into the sandbox container
+          </p>
+          <MountPathInput mounts={extraMounts} onChange={onExtraMountsChange} />
+        </div>
+      )}
+
+      {sandboxEnabled && (
+        <div>
+          <label className="label text-sm font-medium">Repositories</label>
+          <p className="text-xs text-base-content/60 mb-2">
+            Git repositories to clone into the sandbox on start
+          </p>
+          <WorkerRepoSelect selectedRepoIds={repoIds} onChange={onRepoIdsChange} />
+        </div>
+      )}
 
       <button
         type="submit"
