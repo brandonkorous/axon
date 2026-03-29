@@ -8,6 +8,7 @@ const STATUSES = [
   { key: "blocked", label: "Blocked" },
   { key: "done", label: "Done" },
   { key: "failed", label: "Failed" },
+  { key: "closed", label: "Closed" },
 ] as const;
 
 const PRIORITIES = ["p0", "p1", "p2", "p3"] as const;

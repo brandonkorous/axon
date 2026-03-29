@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useTaskStore, Task } from "../../stores/taskStore";
+import { useAgentStore } from "../../stores/agentStore";
 import { PRIORITY_BADGE } from "../../constants/badges";
 import { TaskEditModal } from "./TaskEditModal";
 import { CreateTaskModal } from "./CreateTaskModal";
+import { TaskFilterBar, TaskFilters, SortKey } from "./TaskFilterBar";
 
 const COLUMNS: { key: Task["status"]; label: string; color: string }[] = [
   { key: "pending", label: "Pending", color: "border-neutral-content/30" },
@@ -10,6 +12,8 @@ const COLUMNS: { key: Task["status"]; label: string; color: string }[] = [
   { key: "blocked", label: "Blocked", color: "border-error" },
   { key: "done", label: "Done", color: "border-success" },
 ];
+
+const CLOSEABLE_STATUSES = new Set(["done", "failed"]);
 
 
 function TaskCard({
@@ -98,6 +102,18 @@ function TaskCard({
               {col.label}
             </button>
           ))}
+          {CLOSEABLE_STATUSES.has(task.status) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(task.path, "closed");
+              }}
+              className="btn btn-ghost btn-xs text-[10px] ml-auto text-base-content/40 hover:text-base-content"
+              title="Close — remove from board"
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -167,15 +183,162 @@ function KanbanColumn({
   );
 }
 
+function ClosedTasksList({
+  tasks,
+  agents,
+  expanded,
+  onToggle,
+  onReopen,
+  onEdit,
+}: {
+  tasks: Task[];
+  agents: { id: string; name: string }[];
+  expanded: boolean;
+  onToggle: () => void;
+  onReopen: (path: string) => void;
+  onEdit: (task: Task) => void;
+}) {
+  const agentName = (id: string) =>
+    agents.find((a) => a.id === id)?.name || id || "Unassigned";
+
+  return (
+    <div className="border-t border-neutral px-6 py-3">
+      <button
+        onClick={onToggle}
+        className="flex items-center gap-2 text-sm font-semibold text-base-content/60 hover:text-base-content transition-colors w-full"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className={`size-3 transition-transform ${expanded ? "rotate-90" : ""}`}
+        >
+          <path
+            fillRule="evenodd"
+            d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+        Closed
+        <span className="badge badge-ghost badge-xs">{tasks.length}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-1">
+          {tasks.map((task) => (
+            <div
+              key={task.path}
+              className="group flex items-center gap-3 py-1.5 px-2 rounded hover:bg-base-300 transition-colors"
+            >
+              <button
+                onClick={() => onEdit(task)}
+                className="text-sm text-base-content/60 hover:text-primary truncate flex-1 text-left transition-colors"
+              >
+                {task.name}
+              </button>
+              <span className="text-xs text-base-content/40 shrink-0">
+                {agentName(task.assignee)}
+              </span>
+              <span
+                className={`badge badge-soft badge-xs uppercase font-bold shrink-0 ${
+                  PRIORITY_BADGE[task.priority] || "badge-info"
+                }`}
+              >
+                {task.priority}
+              </span>
+              {task.responses?.length > 0 && (
+                <span className="badge badge-ghost badge-xs shrink-0">
+                  {task.responses.length} reply
+                </span>
+              )}
+              <button
+                onClick={() => onReopen(task.path)}
+                className="btn btn-ghost btn-xs text-[10px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                title="Reopen task"
+              >
+                Reopen
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PRIORITY_ORDER: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 };
+
+function sortTasks(tasks: Task[], sort: SortKey): Task[] {
+  const sorted = [...tasks];
+  switch (sort) {
+    case "oldest":
+      return sorted.sort(
+        (a, b) => (a.created_at || "").localeCompare(b.created_at || "")
+      );
+    case "priority":
+      return sorted.sort(
+        (a, b) =>
+          (PRIORITY_ORDER[a.priority] ?? 9) -
+          (PRIORITY_ORDER[b.priority] ?? 9)
+      );
+    case "due_date":
+      return sorted.sort((a, b) => {
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return a.due_date.localeCompare(b.due_date);
+      });
+    case "newest":
+    default:
+      return sorted.sort(
+        (a, b) => (b.created_at || "").localeCompare(a.created_at || "")
+      );
+  }
+}
+
 export function TaskBoardView() {
   const { tasks, loading, error, fetchTasks, updateTask, createTask } =
     useTaskStore();
+  const { agents } = useAgentStore();
   const [showCreate, setShowCreate] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [showClosed, setShowClosed] = useState(false);
+  const [filters, setFilters] = useState<TaskFilters>({
+    search: "",
+    assignee: "",
+    priority: "",
+    sort: "newest",
+  });
 
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  const { activeTasks, closedTasks, filtered } = useMemo(() => {
+    const active = tasks.filter((t) => t.status !== "closed");
+    const closed = tasks.filter((t) => t.status === "closed");
+
+    let result = active;
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      result = result.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.body?.toLowerCase().includes(q) ||
+          t.labels?.some((l) => l.toLowerCase().includes(q))
+      );
+    }
+    if (filters.assignee) {
+      result = result.filter((t) => t.assignee === filters.assignee);
+    }
+    if (filters.priority) {
+      result = result.filter((t) => t.priority === filters.priority);
+    }
+    return {
+      activeTasks: active,
+      closedTasks: sortTasks(closed, "newest"),
+      filtered: sortTasks(result, filters.sort),
+    };
+  }, [tasks, filters]);
 
   const handleStatusChange = (path: string, status: string) => {
     updateTask(path, { status });
@@ -187,7 +350,7 @@ export function TaskBoardView() {
 
   const grouped = COLUMNS.map((col) => ({
     ...col,
-    tasks: tasks.filter((t) => t.status === col.key),
+    tasks: filtered.filter((t) => t.status === col.key),
   }));
 
   return (
@@ -195,9 +358,10 @@ export function TaskBoardView() {
       <div className="flex items-center justify-between px-6 py-4 border-b border-neutral">
         <div>
           <h1 className="text-xl font-bold text-base-content">Tasks</h1>
-          {tasks.length > 0 && (
+          {activeTasks.length > 0 && (
             <p className="text-xs text-base-content/60 mt-0.5">
-              {tasks.length} task{tasks.length !== 1 ? "s" : ""} — drag cards between columns
+              {activeTasks.length} active task{activeTasks.length !== 1 ? "s" : ""}
+              {closedTasks.length > 0 && ` · ${closedTasks.length} closed`}
             </p>
           )}
         </div>
@@ -205,6 +369,13 @@ export function TaskBoardView() {
           + New Task
         </button>
       </div>
+
+      <TaskFilterBar
+        filters={filters}
+        onChange={setFilters}
+        taskCount={activeTasks.length}
+        filteredCount={filtered.length}
+      />
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
@@ -220,19 +391,32 @@ export function TaskBoardView() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-x-auto p-4">
-          <div className="flex gap-4 h-full min-w-max">
-            {grouped.map((col) => (
-              <KanbanColumn
-                key={col.key}
-                column={col}
-                tasks={col.tasks}
-                onDrop={handleDrop}
-                onStatusChange={handleStatusChange}
-                onEdit={setEditingTask}
-              />
-            ))}
+        <div className="flex-1 overflow-y-auto">
+          <div className="overflow-x-auto p-4">
+            <div className="flex gap-4 min-h-[300px] min-w-max">
+              {grouped.map((col) => (
+                <KanbanColumn
+                  key={col.key}
+                  column={col}
+                  tasks={col.tasks}
+                  onDrop={handleDrop}
+                  onStatusChange={handleStatusChange}
+                  onEdit={setEditingTask}
+                />
+              ))}
+            </div>
           </div>
+
+          {closedTasks.length > 0 && (
+            <ClosedTasksList
+              tasks={closedTasks}
+              agents={agents}
+              expanded={showClosed}
+              onToggle={() => setShowClosed(!showClosed)}
+              onReopen={(path) => updateTask(path, { status: "pending" })}
+              onEdit={setEditingTask}
+            />
+          )}
         </div>
       )}
 

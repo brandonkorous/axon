@@ -312,15 +312,21 @@ jobs:
                     --arg title "Axon v${VERSION} Released" \
                     --arg url "https://github.com/brandonkorous/axon/releases/tag/v${VERSION}" \
                     --arg description "${TRUNCATED_NOTES}" \
-                    --arg install "\`\`\`bash\ncurl -sS https://get.useaxon.dev | sh\naxon update\n\`\`\`" \
                     --arg footer "Axon — Self-hosted AI Command Center" \
                     --argjson color 6330516 \
                     '{
                       embeds: [{
                         title: $title,
                         url: $url,
-                        description: ($description + "\n\n**Install / Update**\n" + $install),
+                        description: $description,
                         color: $color,
+                        fields: [
+                          {
+                            name: "Install / Update",
+                            value: "```bash\ncurl -sS https://get.useaxon.dev | sh\naxon update\n```",
+                            inline: false
+                          }
+                        ],
                         footer: { text: $footer },
                         timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
                       }]

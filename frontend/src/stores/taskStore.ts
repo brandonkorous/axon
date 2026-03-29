@@ -15,7 +15,7 @@ export interface Task {
   type: string;
   assignee: string;
   owner: string;
-  status: "pending" | "in_progress" | "done" | "blocked" | "failed";
+  status: "pending" | "in_progress" | "done" | "blocked" | "failed" | "closed";
   priority: "p0" | "p1" | "p2" | "p3";
   due_date: string;
   start_date: string;
