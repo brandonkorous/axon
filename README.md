@@ -68,7 +68,9 @@ Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define �
 
 |               | Feature                   | Description                                                                       |
 | ------------- | ------------------------- | --------------------------------------------------------------------------------- |
-| **Runner**    | Autonomous Runners        | Agent-spawned worker processes via Claude CLI with Docker sandbox, lifecycle management, and real-time monitoring |
+| **Runner**    | Autonomous Runners        | Agent-spawned worker processes with sandboxed execution, lifecycle management, and real-time monitoring |
+| **Specialist**| Code Specialists          | Expert worker profiles for Python, Fastify, Next.js, Vite+React, .NET backend, and .NET frontend — auto-detected from your codebase |
+| **Sandbox**   | Isolated Sandboxes        | 8 sandbox image types (base, browser, code, data, ML, documents, media, full) with dependency chains and resource limits |
 | **Schedule**  | Proactive Scheduling      | Background heartbeat for inbox checks, task execution, and knowledge review at configurable intervals |
 | **Research**  | Deep Research             | Two-tier LLM strategy (local compression + reasoning analysis), web scraping, YouTube transcript extraction, multi-source synthesis |
 | **Media**     | Media Processing          | YouTube transcript extraction and analysis with two-tier compression for cost-effective processing |
@@ -78,10 +80,11 @@ Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define �
 |               | Feature                   | Description                                                                       |
 | ------------- | ------------------------- | --------------------------------------------------------------------------------- |
 | **Models**    | Multi-LLM Support         | Anthropic Claude, OpenAI, or fully local via Ollama — no API keys required for local operation |
+| **K8s**       | Kubernetes Support        | Run sandboxes as Docker containers (local) or Kubernetes pods (production) — provider abstraction with pre-built images from ghcr.io |
 | **Orgs**      | Multi-Organization        | Isolated vaults, agents, and settings per organization with pre-built templates (Startup, Student, Job Hunt, Family, Creator) |
 | **Shield**    | Full Audit Trail          | Append-only, immutable audit logs filterable by date, agent, action, or tool — complete transparency |
 | **Extend**    | Plugins & Skills          | Plugin architecture with registry and 10 built-in skills (brainstorming, code review, debugging, decision analysis, etc.) |
-| **Secure**    | Encryption & Isolation    | AES encryption for stored credentials, Docker sandboxing for workers, network isolation |
+| **Secure**    | Encryption & Isolation    | AES encryption for stored credentials, container sandboxing for workers, network isolation via Docker or Kubernetes NetworkPolicies |
 | **Work**      | Task & Issue Management   | Tasks (P0-P3 priority), issues, threaded comments, approval workflows, and achievement tracking |
 
 ---
@@ -125,18 +128,19 @@ Axon runs three services via Docker Compose:
 │      FastAPI · SQLAlchemy · LiteLLM          │
 │        SQLite (default) or Postgres          │
 │                 :8000                        │
-└──────────┬───────────────────┬──────────────┘
-           │                   │
-   ┌───────▼───────┐   ┌──────▼──────┐
-   │  LLM Providers │   │   Ollama    │
-   │ Claude, OpenAI │   │ Local LLMs  │
-   └───────────────┘   │   :11434    │
-                        └─────────────┘
+└──────┬───────────────┬──────────────┬───────┘
+       │               │              │
+┌──────▼──────┐ ┌──────▼──────┐ ┌────▼────────────┐
+│ LLM Providers│ │   Ollama    │ │    Sandboxes     │
+│Claude, OpenAI│ │ Local LLMs  │ │ Docker or K8s    │
+└─────────────┘ │   :11434    │ │ ghcr.io registry │
+                └─────────────┘ └─────────────────┘
 ```
 
 - **Frontend** — React SPA with real-time agent activity, boardroom view, and vault management
 - **Backend** — FastAPI server handling agent orchestration, memory persistence, and multi-provider LLM routing via LiteLLM
 - **Ollama** (optional) — Run models like `llama3`, `qwen2.5`, and others entirely on your hardware
+- **Sandboxes** — Isolated execution environments (Docker containers or Kubernetes pods) with pre-built images for code, browser, data science, ML, and more
 
 ---
 
@@ -230,6 +234,9 @@ Supported local models include `llama3`, `qwen2.5`, `mistral`, `codellama`, and 
 - [x] Organization templates (Startup, Student, Job Hunt, Family, Creator)
 - [x] Task, issue, and approval management
 - [x] Google Calendar and Linear integrations
+- [x] Specialist code workers with auto-detection (Python, Fastify, Next.js, Vite+React, .NET)
+- [x] Kubernetes sandbox support with provider abstraction (Docker + K8s)
+- [x] Pre-built sandbox images via GitHub Container Registry
 - [ ] RAG over uploaded documents and codebases
 - [ ] Mobile companion app
 - [ ] Multi-user collaboration with role-based access
