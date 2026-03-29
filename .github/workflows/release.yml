@@ -320,13 +320,6 @@ jobs:
                         url: $url,
                         description: $description,
                         color: $color,
-                        fields: [
-                          {
-                            name: "Install / Update",
-                            value: "```bash\ncurl -sS https://get.useaxon.dev | sh\naxon update\n```",
-                            inline: false
-                          }
-                        ],
                         footer: { text: $footer },
                         timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
                       }]
