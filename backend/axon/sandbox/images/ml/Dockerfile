@@ -10,9 +10,9 @@ FROM ${BASE_IMAGE}
 
 USER root
 
-RUN uv pip install --system \
+RUN uv pip install \
     torch --index-url https://download.pytorch.org/whl/cpu \
-    && uv pip install --system \
+    && uv pip install \
     scikit-learn \
     transformers \
     onnxruntime

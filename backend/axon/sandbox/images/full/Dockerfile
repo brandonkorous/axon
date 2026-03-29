@@ -45,19 +45,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN bunx playwright install chromium --with-deps 2>/dev/null || true
 
 # --- Data science + ML Python packages ---
-RUN uv pip install --system \
+ENV VIRTUAL_ENV=/opt/venv
+RUN uv venv $VIRTUAL_ENV
+
+RUN uv pip install \
     pandas \
     numpy \
     matplotlib \
     scipy \
     jupyterlab
 
-RUN uv pip install --system \
+RUN uv pip install \
     torch --index-url https://download.pytorch.org/whl/cpu \
-    && uv pip install --system \
+    && uv pip install \
     scikit-learn \
     transformers \
     onnxruntime
+
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # --- Document tools ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
