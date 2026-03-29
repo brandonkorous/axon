@@ -1,0 +1,28 @@
+name: ref_ux_writing
+version: "1.0"
+category: reference
+description: >
+  UX writing reference guide. Covers action-oriented language, error
+  messaging formula, tone matching, conciseness rules, accessibility
+  in copy, terminology consistency, and common rewrites.
+
+triggers:
+  - ux writing reference
+  - error messaging
+  - microcopy reference
+  - tone guide
+  - ux writing guide
+
+inputs:
+  - name: context
+    type: string
+    required: false
+    description: Specific UX writing question to address
+
+outputs:
+  - name: guidance
+    type: string
+    required: true
+    description: Relevant UX writing guidance
+
+methodology_file: methodology.md

@@ -28,6 +28,8 @@ class TaskCreate(BaseModel):
     owner: str = ""
     priority: str = "p2"
     due_date: str = ""
+    start_date: str = ""
+    estimated_hours: float | None = None
     labels: list[str] = []
     parent_task: str = ""
     conversation_id: str = ""
@@ -40,6 +42,8 @@ class TaskUpdate(BaseModel):
     priority: str | None = None
     name: str | None = None
     due_date: str | None = None
+    start_date: str | None = None
+    estimated_hours: float | None = None
     labels: list[str] | None = None
     body: str | None = None
 
@@ -134,6 +138,8 @@ def _create_task(org_id: str, data: TaskCreate):
         "status": "pending",
         "priority": data.priority,
         "due_date": data.due_date,
+        "start_date": data.start_date,
+        "estimated_hours": data.estimated_hours,
         "parent_task": data.parent_task,
         "labels": data.labels,
         "conversation_id": data.conversation_id,
@@ -168,6 +174,10 @@ def _update_task(org_id: str, task_path: str, data: TaskUpdate):
         metadata["name"] = data.name
     if data.due_date is not None:
         metadata["due_date"] = data.due_date
+    if data.start_date is not None:
+        metadata["start_date"] = data.start_date
+    if data.estimated_hours is not None:
+        metadata["estimated_hours"] = data.estimated_hours
     if data.labels is not None:
         metadata["labels"] = data.labels
     if data.body is not None:

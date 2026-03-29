@@ -1,0 +1,46 @@
+name: retrospective
+version: "1.0"
+category: analysis
+description: >
+  Engineering retrospective and analytics. Produces metrics dashboards,
+  per-author analysis, time patterns, commit categorization, hotspot
+  identification, PR size distribution, and historical trend tracking.
+
+triggers:
+  - retrospective
+  - retro
+  - commit analytics
+  - shipping streaks
+  - hotspot
+  - team velocity
+  - engineering metrics
+
+inputs:
+  - name: time_range
+    type: string
+    required: false
+    description: Analysis period — "last week", "last month", or "last quarter"
+  - name: scope
+    type: string
+    required: false
+    description: Analysis scope — repo, team, or author name
+
+outputs:
+  - name: metrics_summary
+    type: string
+    required: true
+    description: High-level metrics dashboard with key numbers
+  - name: author_analysis
+    type: list
+    description: Per-author contribution breakdown and patterns
+  - name: hotspots
+    type: list
+    description: Files with high churn, coupling, or bug-fix ratios
+  - name: trends
+    type: string
+    description: Week-over-week deltas and velocity direction
+  - name: recommendations
+    type: list
+    description: Actionable suggestions based on the data
+
+methodology_file: methodology.md

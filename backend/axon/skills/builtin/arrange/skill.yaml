@@ -1,0 +1,41 @@
+name: arrange
+version: "1.0"
+category: design
+description: >
+  Layout and spacing optimization. Assesses spacing consistency, visual
+  hierarchy, grid structure, rhythm and variety, and density matching.
+  Space is the most underused design tool — it creates hierarchy, groups,
+  and breathing room for free.
+
+triggers:
+  - arrange
+  - layout
+  - spacing
+  - grid
+  - visual rhythm
+  - density
+  - whitespace
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or layout to assess and optimize
+  - name: density_preference
+    type: string
+    required: false
+    description: "Target density: compact, comfortable, or spacious"
+    default: comfortable
+
+outputs:
+  - name: spacing_audit
+    type: list
+    description: Current spacing issues and inconsistencies found
+  - name: layout_recommendations
+    type: list
+    description: Specific layout improvements with implementation details
+  - name: token_definitions
+    type: list
+    description: Recommended spacing tokens with values and usage
+
+methodology_file: methodology.md

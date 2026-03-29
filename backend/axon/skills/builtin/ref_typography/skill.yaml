@@ -1,0 +1,28 @@
+name: ref_typography
+version: "1.0"
+category: reference
+description: >
+  Typography reference guide. Covers vertical rhythm, 5-tier hierarchy,
+  readability rules, font pairing, fluid typography, web font
+  optimization, and distinctive font choices.
+
+triggers:
+  - typography reference
+  - font pairing
+  - type system
+  - typography guide
+  - vertical rhythm
+
+inputs:
+  - name: context
+    type: string
+    required: false
+    description: Specific typography question to address
+
+outputs:
+  - name: guidance
+    type: string
+    required: true
+    description: Relevant typography guidance
+
+methodology_file: methodology.md

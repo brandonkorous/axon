@@ -1,0 +1,38 @@
+name: extract_components
+version: "1.0"
+category: design
+description: >
+  Component reuse and design system enrichment. 4-phase methodology: discovery
+  (find patterns, repeated elements, hard-coded values), planning (prioritization
+  roadmap), extraction (build generalized versions), migration (document and
+  replace instances).
+
+triggers:
+  - extract component
+  - design system enrichment
+  - component reuse
+  - refactor components
+  - extract pattern
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The codebase, interface, or component set to analyze for extraction opportunities
+  - name: existing_system
+    type: string
+    required: false
+    description: Current design system or component library to align with
+
+outputs:
+  - name: discovered_patterns
+    type: list
+    description: All reusable patterns found with instance count and locations
+  - name: extraction_plan
+    type: list
+    description: Prioritized plan for extracting each pattern into a reusable component
+  - name: migration_steps
+    type: list
+    description: Step-by-step plan for replacing instances with the extracted component
+
+methodology_file: methodology.md

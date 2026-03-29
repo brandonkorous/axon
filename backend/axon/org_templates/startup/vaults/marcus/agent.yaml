@@ -39,6 +39,8 @@ skills:
   enabled_skills:
     - product_diagnostic
     - completeness_analysis
+    - office_hours
+    - strategic_scope_review
 
 ui:
   color: "#EF4444"

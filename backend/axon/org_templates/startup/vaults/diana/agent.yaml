@@ -38,6 +38,8 @@ skills:
   enabled_skills:
     - scope_drift_detection
     - rating_methodology
+    - retrospective
+    - documentation_sync
 
 ui:
   color: "#10B981"

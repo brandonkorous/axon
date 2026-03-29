@@ -1,0 +1,43 @@
+name: typeset
+version: "1.0"
+category: design
+description: >
+  Typography assessment and improvement across five key areas: font choices,
+  hierarchy, sizing and scale, readability, and consistency. Distinctive
+  typographic choices over safe defaults. Typography carries 80% of a design's
+  personality.
+
+triggers:
+  - typeset
+  - typography
+  - font
+  - type hierarchy
+  - type scale
+  - readability
+  - font choice
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or design to assess typographically
+  - name: brand_personality
+    type: string
+    required: false
+    description: Brand personality to guide font recommendations (warm, technical, playful, elegant, bold)
+
+outputs:
+  - name: current_assessment
+    type: list
+    description: Assessment of current typography across all five areas
+  - name: font_recommendations
+    type: list
+    description: Specific font recommendations with rationale and pairings
+  - name: hierarchy_spec
+    type: list
+    description: Complete type hierarchy specification with sizes, weights, and usage
+  - name: implementation_guide
+    type: string
+    description: Technical implementation guidance including CSS and font loading
+
+methodology_file: methodology.md

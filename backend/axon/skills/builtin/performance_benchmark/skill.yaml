@@ -1,0 +1,48 @@
+name: performance_benchmark
+version: "1.0"
+category: engineering
+description: >
+  Performance regression detection and baseline tracking. Collects Core Web
+  Vitals, resource analysis, and network summaries. Supports baseline capture,
+  quick checks, branch diffs, and historical trending with performance budgets.
+
+triggers:
+  - benchmark
+  - performance regression
+  - web vitals
+  - performance baseline
+  - performance budget
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The application or URL to benchmark
+  - name: mode
+    type: string
+    required: false
+    description: Benchmark mode — baseline, quick, diff, or trend
+  - name: baseline_data
+    type: string
+    required: false
+    description: Previous baseline metrics for comparison
+
+outputs:
+  - name: metrics
+    type: list
+    required: true
+    description: Collected performance metrics with values and thresholds
+  - name: regressions
+    type: list
+    required: true
+    description: Detected regressions with severity and root cause analysis
+  - name: budget_status
+    type: list
+    required: true
+    description: Performance budget compliance status per metric
+  - name: trend_analysis
+    type: string
+    required: true
+    description: Historical trend analysis identifying gradual degradation patterns
+
+methodology_file: methodology.md

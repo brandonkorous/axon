@@ -1,0 +1,49 @@
+name: office_hours
+version: "1.0"
+category: product
+description: >
+  YC-style product validation framework. Six forcing questions to stress-test
+  product assumptions before building. Stage-aware routing adapts questions to
+  pre-product, has-users, or has-revenue phases. Supports startup and builder modes.
+
+triggers:
+  - office hours
+  - product validation
+  - yc
+  - forcing questions
+  - demand reality
+  - validate product
+
+inputs:
+  - name: product_description
+    type: string
+    required: true
+    description: Description of the product or idea to validate
+  - name: stage
+    type: string
+    required: false
+    description: Current stage — pre-product, has-users, or has-revenue
+  - name: mode
+    type: string
+    required: false
+    description: Validation mode — startup (full rigor) or builder (lighter, skip fundraising)
+
+outputs:
+  - name: forcing_questions
+    type: list
+    required: true
+    description: Stage-appropriate forcing question analyses with evidence assessments
+  - name: stage_assessment
+    type: string
+    required: true
+    description: Assessment of current stage and readiness to proceed
+  - name: critical_gaps
+    type: list
+    required: true
+    description: Gaps in product thinking that must be addressed before building
+  - name: recommendation
+    type: string
+    required: true
+    description: Go/no-go recommendation with specific next actions
+
+methodology_file: methodology.md

@@ -1,0 +1,48 @@
+name: deploy_verification
+version: "1.0"
+category: engineering
+description: >
+  Merge and production verification methodology. Validates pre-merge
+  safety, performs merge operations, monitors deployment, runs production
+  verification checks, and provides rollback capability.
+
+triggers:
+  - deploy
+  - land
+  - deploy verification
+  - staging
+  - rollback
+  - production verification
+  - merge and deploy
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The subject to deploy — PR number, branch name, or feature description
+  - name: target
+    type: string
+    required: false
+    description: Deployment target environment — staging or production
+  - name: strategy
+    type: string
+    required: false
+    description: Merge strategy — squash, rebase, or merge
+
+outputs:
+  - name: pre_merge_checks
+    type: list
+    required: true
+    description: Results of all pre-merge safety validations
+  - name: deploy_status
+    type: string
+    required: true
+    description: Current deployment status and outcome
+  - name: verification_results
+    type: list
+    description: Production verification check results across all critical paths
+  - name: rollback_plan
+    type: string
+    description: Documented rollback procedure if verification fails
+
+methodology_file: methodology.md

@@ -1,0 +1,37 @@
+name: colorize
+version: "1.0"
+category: design
+description: >
+  Strategic color introduction for monochromatic or visually dull designs.
+  Assessment, strategy (2-4 colors max beyond neutrals), 60-30-10 distribution,
+  OKLCH color space for perceptual uniformity, and anti-pattern avoidance.
+
+triggers:
+  - colorize
+  - color palette
+  - color strategy
+  - add color
+  - color design
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or design to add color to — code, screenshots, or descriptions
+  - name: brand_colors
+    type: string
+    required: false
+    description: Existing brand hex values to incorporate (e.g. "#609894, #c4704b")
+
+outputs:
+  - name: palette
+    type: list
+    description: Complete color palette with hex, OKLCH, and semantic role for each color
+  - name: distribution_map
+    type: string
+    description: 60-30-10 distribution plan showing where each color is applied
+  - name: contrast_checks
+    type: list
+    description: WCAG contrast verification for all color combinations used
+
+methodology_file: methodology.md

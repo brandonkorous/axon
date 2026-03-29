@@ -1,0 +1,38 @@
+name: normalize
+version: "1.0"
+category: design
+description: >
+  Design system consistency enforcement across 8 dimensions: typography tokens,
+  color/theme tokens, spacing scale, component patterns, motion tokens, responsive
+  behavior, accessibility standards, and information hierarchy. Root cause analysis
+  of deviations and consolidation of reusable components.
+
+triggers:
+  - normalize
+  - design system consistency
+  - design system audit
+  - token audit
+  - normalize design
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The code, component, or interface to normalize against the design system
+  - name: design_system
+    type: string
+    required: false
+    description: Reference design system, token file, or component library to normalize against
+
+outputs:
+  - name: deviations
+    type: list
+    description: All deviations from the design system with exact locations and values
+  - name: root_causes
+    type: list
+    description: Root cause analysis for each category of deviation
+  - name: normalization_plan
+    type: list
+    description: Ordered plan to bring the interface into design system compliance
+
+methodology_file: methodology.md

@@ -1,0 +1,29 @@
+name: ref_color_contrast
+version: "1.0"
+category: reference
+description: >
+  Color and contrast reference guide. Covers OKLCH color space,
+  palette building, 60-30-10 distribution, WCAG contrast standards,
+  and dark mode strategy.
+
+triggers:
+  - color contrast
+  - WCAG
+  - OKLCH
+  - palette building
+  - dark mode colors
+  - color reference
+
+inputs:
+  - name: context
+    type: string
+    required: false
+    description: Specific color or contrast question to address
+
+outputs:
+  - name: guidance
+    type: string
+    required: true
+    description: Relevant color and contrast guidance
+
+methodology_file: methodology.md

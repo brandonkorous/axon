@@ -19,6 +19,7 @@ frontend/dist/
 
 # Data
 data/
+!backend/axon/sandbox/images/data/
 *.db
 *.sqlite
 

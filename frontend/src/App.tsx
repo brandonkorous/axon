@@ -27,6 +27,7 @@ const ArtifactViewer = lazy(() => import("./components/Artifacts/ArtifactViewer"
 const SandboxImagesView = lazy(() => import("./components/Sandbox/SandboxImagesView").then(m => ({ default: m.SandboxImagesView })));
 const GitRepoList = lazy(() => import("./components/GitRepos/GitRepoList").then(m => ({ default: m.GitRepoList })));
 const AnalyticsView = lazy(() => import("./components/Analytics/AnalyticsView").then(m => ({ default: m.AnalyticsView })));
+const CalendarView = lazy(() => import("./components/Calendar/CalendarView").then(m => ({ default: m.CalendarView })));
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/agent/:agentId" element={<AgentView />} />
           <Route path="/dashboard" element={<DashboardView />} />
           <Route path="/tasks" element={<TaskBoardView />} />
+          <Route path="/calendar" element={<CalendarView />} />
           <Route path="/inbox" element={<InboxView />} />
           <Route path="/approvals" element={<ApprovalsView />} />
           <Route path="/issues" element={<IssueListView />} />

@@ -1,0 +1,37 @@
+name: reduce_design
+version: "1.0"
+category: design
+description: >
+  Tone down overly bold or aggressive designs to achieve refined sophistication.
+  Addresses color saturation, visual weight, animation excess, scale hierarchy,
+  and decorative elements. Quiet design is confident design — it doesn't need
+  to shout.
+
+triggers:
+  - quieter
+  - reduce
+  - tone down
+  - less visual
+  - calm down
+  - more subtle
+  - too loud
+  - overwhelming
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or design to tone down
+
+outputs:
+  - name: reduction_plan
+    type: list
+    description: Specific reduction recommendations with implementation details
+  - name: before_after_comparison
+    type: string
+    description: Summary of the transformation from loud to refined
+  - name: retained_personality
+    type: string
+    description: What design personality is preserved after reduction
+
+methodology_file: methodology.md

@@ -1,0 +1,45 @@
+name: design_exploration
+version: "1.0"
+category: design
+description: >
+  Multi-variant design exploration generating 2-4 distinct visual directions
+  for side-by-side comparison. Captures feedback per variant and supports
+  iterative refinement and taste memory.
+
+triggers:
+  - design exploration
+  - design variants
+  - multi-variant
+  - design directions
+  - explore designs
+  - design options
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: What to explore designs for — a page, component, feature, or product
+  - name: num_variants
+    type: string
+    required: false
+    description: Number of variants to generate (2-4, default 3)
+  - name: constraints
+    type: string
+    required: false
+    description: Design constraints — existing brand, platform, accessibility requirements
+
+outputs:
+  - name: variants
+    type: list
+    required: true
+    description: List of distinct design variants with name, characteristics, and rationale
+  - name: comparison_matrix
+    type: string
+    required: true
+    description: Side-by-side comparison across key design dimensions
+  - name: recommended_direction
+    type: string
+    required: true
+    description: Recommended direction with rationale based on context and constraints
+
+methodology_file: methodology.md

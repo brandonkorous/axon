@@ -9,6 +9,8 @@ export interface Task {
   status: "pending" | "in_progress" | "done" | "blocked";
   priority: "p0" | "p1" | "p2" | "p3";
   due_date: string;
+  start_date: string;
+  estimated_hours: number | null;
   parent_task: string;
   labels: string[];
   created_by: string;
@@ -32,6 +34,8 @@ interface TaskStore {
     assignee?: string;
     priority?: string;
     due_date?: string;
+    start_date?: string;
+    estimated_hours?: number | null;
     labels?: string[];
   }) => Promise<Task>;
   updateTask: (
@@ -42,6 +46,8 @@ interface TaskStore {
       priority?: string;
       name?: string;
       due_date?: string;
+      start_date?: string;
+      estimated_hours?: number | null;
       labels?: string[];
       body?: string;
     }

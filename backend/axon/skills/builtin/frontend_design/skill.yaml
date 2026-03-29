@@ -1,0 +1,46 @@
+name: frontend_design
+version: "1.0"
+category: design
+description: >
+  Production-grade interface creation with high design quality. Pick a bold
+  aesthetic direction with clear purpose, tone, and differentiation. Explicitly
+  avoid AI fingerprints and generic patterns. If you said AI made this, would
+  they believe immediately? If yes, that's the problem.
+
+triggers:
+  - frontend design
+  - build interface
+  - create ui
+  - build page
+  - production ui
+  - design interface
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface, page, or component to design and build
+  - name: aesthetic
+    type: string
+    required: false
+    description: Aesthetic direction or mood for the design
+  - name: constraints
+    type: string
+    required: false
+    description: Technical or design constraints to work within
+
+outputs:
+  - name: design_direction
+    type: string
+    description: The chosen aesthetic direction with rationale
+  - name: component_specs
+    type: list
+    description: Detailed specifications for each component in the interface
+  - name: implementation_notes
+    type: list
+    description: Technical implementation guidance and modern CSS techniques
+  - name: anti_pattern_check
+    type: list
+    description: AI fingerprints and generic patterns explicitly avoided
+
+methodology_file: methodology.md

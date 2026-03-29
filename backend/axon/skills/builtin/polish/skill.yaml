@@ -1,0 +1,38 @@
+name: polish
+version: "1.0"
+category: design
+description: >
+  Final pre-deployment quality pass across 8 dimensions: pixel-perfect alignment,
+  typography hierarchy, color/contrast compliance, interaction states, micro-interactions,
+  content quality, edge cases, and code cleanliness. Focuses on the little things
+  that separate good from great.
+
+triggers:
+  - polish
+  - pre-deploy
+  - quality pass
+  - pixel perfect
+  - final pass
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The feature or interface to polish — code, screenshots, or component descriptions
+  - name: scope
+    type: string
+    required: false
+    description: Specific areas to focus on (e.g. "alignment and spacing" or "interaction states")
+
+outputs:
+  - name: issues_found
+    type: list
+    description: All polish issues discovered, categorized by dimension
+  - name: fixes_applied
+    type: list
+    description: Specific fixes recommended or applied for each issue
+  - name: polish_score
+    type: number
+    description: Overall polish score (0-10) reflecting pre-deployment readiness
+
+methodology_file: methodology.md

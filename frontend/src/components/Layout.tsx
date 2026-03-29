@@ -133,6 +133,11 @@ export function Layout() {
               </NavLink>
             </li>
             <li>
+              <NavLink to="/calendar" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Calendar
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/approvals" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 <span className="flex items-center justify-between w-full">
                   Approvals

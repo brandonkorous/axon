@@ -1,0 +1,43 @@
+name: onboard
+version: "1.0"
+category: design
+description: >
+  Onboarding and first-time user experience design. Evaluates and designs
+  welcome flows, empty states, contextual tooltips, feature tours, and
+  interactive tutorials. Show don't tell, optional participation,
+  progressive disclosure, contextual learning.
+
+triggers:
+  - onboard
+  - onboarding
+  - first-time
+  - empty state
+  - walkthrough
+  - tooltip tour
+  - welcome flow
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The product, feature, or flow to design onboarding for
+  - name: user_type
+    type: string
+    required: false
+    description: Technical level of the target user (beginner, intermediate, technical, mixed)
+
+outputs:
+  - name: aha_moment
+    type: string
+    description: The moment the user first experiences the product's core value
+  - name: onboarding_flow
+    type: list
+    description: Step-by-step onboarding sequence with rationale for each step
+  - name: empty_states
+    type: list
+    description: Empty state designs for key views with copy and actions
+  - name: tour_steps
+    type: list
+    description: Feature tour steps (3-7) with triggers, content, and placement
+
+methodology_file: methodology.md

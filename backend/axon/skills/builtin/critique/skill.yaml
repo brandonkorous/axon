@@ -1,0 +1,41 @@
+name: critique
+version: "1.0"
+category: design
+description: >
+  10-dimension UX evaluation framework combining visual hierarchy, typography,
+  spacing, color/contrast, interaction states, responsive design, content quality,
+  AI slop detection, motion, and performance feel scoring. Includes Nielsen's 10
+  heuristics (0-40) and persona-based testing across 5 archetypes.
+
+triggers:
+  - critique
+  - ux evaluation
+  - ux critique
+  - heuristic evaluation
+  - nielsen
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The UI/design to critique — code, screenshots, component descriptions, or URLs
+  - name: focus
+    type: string
+    required: false
+    description: Specific dimensions to emphasize (e.g. "typography, spacing" or "mobile responsive")
+
+outputs:
+  - name: dimension_scores
+    type: list
+    description: Scores for each of the 10 UX dimensions (0-4 each, total 0-40)
+  - name: nielsen_score
+    type: number
+    description: Nielsen's 10 heuristics total score (0-40)
+  - name: persona_findings
+    type: list
+    description: Red flags and observations from each tested persona archetype
+  - name: priority_issues
+    type: list
+    description: Top issues ranked by impact with what/why/fix for each
+
+methodology_file: methodology.md

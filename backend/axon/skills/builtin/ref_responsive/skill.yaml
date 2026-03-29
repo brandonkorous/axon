@@ -1,0 +1,27 @@
+name: ref_responsive
+version: "1.0"
+category: reference
+description: >
+  Responsive design reference guide. Covers mobile-first strategy,
+  content-driven breakpoints, capability queries, fluid design,
+  touch targets, safe area handling, and device testing.
+
+triggers:
+  - responsive reference
+  - breakpoint strategy
+  - mobile-first reference
+  - responsive guide
+
+inputs:
+  - name: context
+    type: string
+    required: false
+    description: Specific responsive design question to address
+
+outputs:
+  - name: guidance
+    type: string
+    required: true
+    description: Relevant responsive design guidance
+
+methodology_file: methodology.md

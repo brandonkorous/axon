@@ -1,0 +1,49 @@
+name: qa_testing
+version: "1.0"
+category: engineering
+description: >
+  Automated QA methodology with five testing modes: quick, standard, exhaustive,
+  regression, and diff-aware. Documents bugs with severity, reproducibility steps,
+  and source code locations. Produces health scores across eight categories.
+
+triggers:
+  - qa
+  - qa testing
+  - test methodology
+  - bug testing
+  - smoke test
+  - regression test
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The application, page, or feature to test
+  - name: mode
+    type: string
+    required: false
+    description: Testing mode — quick, standard, exhaustive, regression, or diff-aware
+  - name: baseline
+    type: string
+    required: false
+    description: Previous test results for regression comparison
+
+outputs:
+  - name: health_score
+    type: number
+    required: true
+    description: Overall health score (0-100)
+  - name: issues
+    type: list
+    required: true
+    description: Documented issues with severity, steps, and evidence
+  - name: fixes_applied
+    type: list
+    required: true
+    description: Fixes applied during testing with before/after evidence
+  - name: baseline_comparison
+    type: string
+    required: true
+    description: Comparison against baseline showing fixed and new issues
+
+methodology_file: methodology.md

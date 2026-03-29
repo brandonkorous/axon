@@ -1,0 +1,28 @@
+name: ref_motion_design
+version: "1.0"
+category: reference
+description: >
+  Motion design reference guide. Covers timing rules, easing strategy,
+  GPU acceleration, reduced motion accessibility, stagger caps, and
+  the 80ms instant-feel threshold.
+
+triggers:
+  - motion reference
+  - animation timing
+  - easing
+  - reduced motion
+  - animation guide
+
+inputs:
+  - name: context
+    type: string
+    required: false
+    description: Specific motion design question to address
+
+outputs:
+  - name: guidance
+    type: string
+    required: true
+    description: Relevant motion design guidance
+
+methodology_file: methodology.md

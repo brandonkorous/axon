@@ -62,6 +62,7 @@ from axon.routes import git_repos as git_repos_routes
 from axon.routes import pipelines as pipelines_routes
 from axon.routes import performance as performance_routes
 from axon.routes import analytics as analytics_routes
+from axon.routes import calendar as calendar_routes
 
 
 logger = logging.getLogger(__name__)
@@ -488,6 +489,7 @@ app.include_router(git_repos_routes.org_router, prefix="/api/orgs/{org_id}/git-r
 app.include_router(pipelines_routes.org_router, prefix="/api/orgs/{org_id}/pipelines", tags=["pipelines"])
 app.include_router(performance_routes.org_router, prefix="/api/orgs/{org_id}", tags=["performance"])
 app.include_router(analytics_routes.org_router, prefix="/api/orgs/{org_id}/analytics", tags=["analytics"])
+app.include_router(calendar_routes.org_router, prefix="/api/orgs/{org_id}/calendar", tags=["calendar"])
 
 # ── Global routes (not org-scoped) ─────────────────────────────────
 app.include_router(user_prefs_routes.router, prefix="/api/preferences", tags=["preferences"])
@@ -510,6 +512,7 @@ app.include_router(org_chart_routes.router, prefix="/api/org-chart", tags=["org-
 app.include_router(voices_routes.router, prefix="/api/voices", tags=["voices"])
 app.include_router(usage_routes.router, prefix="/api/usage", tags=["usage"])
 app.include_router(analytics_routes.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(calendar_routes.router, prefix="/api/calendar", tags=["calendar"])
 
 
 @app.get("/api/version")

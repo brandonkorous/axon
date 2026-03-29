@@ -1,0 +1,39 @@
+name: adapt
+version: "1.0"
+category: design
+description: >
+  Cross-device and cross-context adaptation using a mobile-first approach.
+  Evaluates and plans adaptation strategies for mobile, tablet, desktop, print,
+  and email contexts. Adaptation is not just scaling — it's rethinking the
+  experience for each context.
+
+triggers:
+  - adapt
+  - responsive
+  - mobile-first
+  - cross-device
+  - container queries
+  - responsive design
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or component to assess for cross-context adaptation
+  - name: target_contexts
+    type: string
+    required: false
+    description: "Comma-separated list of target contexts (e.g. mobile, tablet, desktop, print, email)"
+
+outputs:
+  - name: adaptation_plan
+    type: list
+    description: Context-specific adaptation strategies with implementation details
+  - name: breakpoint_strategy
+    type: string
+    description: Recommended breakpoint approach with rationale
+  - name: issues_per_context
+    type: list
+    description: Current issues found per target context
+
+methodology_file: methodology.md

@@ -1,0 +1,44 @@
+name: engineering_review
+version: "1.0"
+category: engineering
+description: >
+  Engineering manager-mode review before implementation. Locks architecture
+  decisions, produces test plans with coverage diagrams, identifies scope creep,
+  and documents failure scenarios for every new code path.
+
+triggers:
+  - engineering review
+  - architecture review
+  - test planning
+  - coverage diagram
+  - eng review
+
+inputs:
+  - name: proposal
+    type: string
+    required: true
+    description: The feature, change, or system to review before implementation
+  - name: codebase_context
+    type: string
+    required: false
+    description: Relevant codebase details — file structure, existing patterns, tech stack
+
+outputs:
+  - name: architecture_assessment
+    type: string
+    required: true
+    description: Architecture decision record with dependency graph and complexity analysis
+  - name: test_plan
+    type: list
+    required: true
+    description: Structured test plan with specific scenarios, types, and file references
+  - name: risk_areas
+    type: list
+    required: true
+    description: Identified risk areas with failure scenarios and mitigation strategies
+  - name: scope_verdict
+    type: string
+    required: true
+    description: Go/refine/reject verdict with rationale
+
+methodology_file: methodology.md

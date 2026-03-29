@@ -1,0 +1,41 @@
+name: optimize_performance
+version: "1.0"
+category: engineering
+description: >
+  Performance improvement across loading, rendering, animation, and Core Web Vitals.
+  Measure-first approach covering images, JS bundles, CSS, fonts, caching, lazy loading,
+  layout thrashing, virtual scrolling, GPU acceleration, LCP, FID/INP, and CLS.
+
+triggers:
+  - optimize performance
+  - core web vitals
+  - LCP
+  - loading speed
+  - rendering performance
+  - page speed
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The application, page, or component to optimize — code, URLs, or performance profiles
+  - name: target_metric
+    type: string
+    required: false
+    description: Specific metric to focus on (e.g. "LCP", "bundle size", "animation jank")
+
+outputs:
+  - name: current_metrics
+    type: list
+    description: Baseline performance measurements or estimates for key metrics
+  - name: bottlenecks
+    type: list
+    description: Identified performance bottlenecks ranked by impact
+  - name: optimization_plan
+    type: list
+    description: Prioritized list of optimizations with expected improvement for each
+  - name: expected_improvement
+    type: string
+    description: Summary of expected overall improvement after implementing the plan
+
+methodology_file: methodology.md

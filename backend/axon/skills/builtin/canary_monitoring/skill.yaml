@@ -1,0 +1,50 @@
+name: canary_monitoring
+version: "1.0"
+category: engineering
+description: >
+  Post-deploy monitoring methodology. Watches production for a configurable
+  window after deployment, comparing against visual and performance baselines.
+  Alerts on visual regressions, new errors, and performance degradation with
+  transient tolerance to avoid false positives.
+
+triggers:
+  - canary
+  - post-deploy
+  - canary monitoring
+  - visual baseline
+  - deploy watch
+  - production monitoring
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The deployed application or URL to monitor
+  - name: duration
+    type: string
+    required: false
+    description: Monitoring duration (default 10m). Accepts formats like 5m, 15m, 30m.
+  - name: pages
+    type: string
+    required: false
+    description: Comma-separated list of specific pages to monitor
+
+outputs:
+  - name: alert_summary
+    type: list
+    required: true
+    description: Alerts triggered during monitoring with severity and details
+  - name: baseline_comparison
+    type: string
+    required: true
+    description: Visual and performance comparison against pre-deploy baseline
+  - name: health_status
+    type: string
+    required: true
+    description: Overall health status — healthy, degraded, or critical
+  - name: metrics_timeline
+    type: list
+    required: true
+    description: Time-series metrics collected during the monitoring window
+
+methodology_file: methodology.md

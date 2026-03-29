@@ -1,0 +1,41 @@
+name: animate
+version: "1.0"
+category: design
+description: >
+  Purposeful motion design and micro-interactions. 4-step methodology: prepare
+  (context gathering), assess (identify static areas), strategy (plan hero moment
+  and systematic layers), implement (timing, easing, GPU acceleration, accessibility).
+
+triggers:
+  - animate
+  - motion design
+  - micro-interaction
+  - animation
+  - transitions
+  - add motion
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or component to enhance with motion — code, screenshots, or descriptions
+  - name: style
+    type: string
+    required: false
+    description: "Motion intensity: subtle, moderate, or dramatic"
+
+outputs:
+  - name: motion_plan
+    type: list
+    description: Complete motion plan with each animation, its purpose, timing, and easing
+  - name: hero_moment
+    type: string
+    description: The single most impactful animation that defines the experience
+  - name: timing_specs
+    type: list
+    description: Exact timing and easing specifications for each animation
+  - name: accessibility_notes
+    type: list
+    description: Reduced motion alternatives and accessibility considerations
+
+methodology_file: methodology.md

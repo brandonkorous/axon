@@ -1,0 +1,28 @@
+name: ref_spatial_design
+version: "1.0"
+category: reference
+description: >
+  Spatial design reference guide. Covers 4pt base unit system,
+  semantic spacing tokens, self-adjusting grids, visual hierarchy
+  via space, container queries, and optical adjustments.
+
+triggers:
+  - spatial reference
+  - spacing system
+  - 4pt grid
+  - spacing tokens
+  - spatial guide
+
+inputs:
+  - name: context
+    type: string
+    required: false
+    description: Specific spatial design question to address
+
+outputs:
+  - name: guidance
+    type: string
+    required: true
+    description: Relevant spatial design guidance
+
+methodology_file: methodology.md

@@ -1,0 +1,51 @@
+name: security_audit
+version: "1.0"
+category: security
+description: >
+  Comprehensive security audit combining OWASP Top 10 and STRIDE threat modeling
+  across 14 phases. Covers stack detection, attack surface mapping, secrets
+  archaeology, dependency supply chain, CI/CD security, infrastructure hardening,
+  LLM vulnerabilities, and skill/plugin supply chain analysis.
+
+triggers:
+  - security audit
+  - security review
+  - vulnerability
+  - OWASP
+  - threat model
+  - STRIDE
+  - security scan
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The codebase, system, or component to audit
+  - name: scope
+    type: string
+    required: false
+    description: Audit scope — infra, code, supply-chain, owasp, or full (default full)
+  - name: confidence_threshold
+    type: string
+    required: false
+    description: Minimum confidence to report findings (1-10, default 8 for daily, 2 for comprehensive)
+
+outputs:
+  - name: findings
+    type: list
+    required: true
+    description: Security findings with exploit scenarios, severity, and remediation steps
+  - name: severity_summary
+    type: string
+    required: true
+    description: Summary of findings by severity level
+  - name: threat_model
+    type: string
+    required: true
+    description: STRIDE threat model for the system
+  - name: risk_score
+    type: number
+    required: true
+    description: Overall risk score (0-100, lower is better)
+
+methodology_file: methodology.md

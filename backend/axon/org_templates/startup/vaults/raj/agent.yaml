@@ -38,6 +38,13 @@ skills:
   enabled_skills:
     - first_principles_thinking
     - design_audit
+    - engineering_review
+    - security_audit
+    - qa_testing
+    - performance_benchmark
+    - release_pipeline
+    - deploy_verification
+    - retrospective
 
 self_regulation:
   enabled: true

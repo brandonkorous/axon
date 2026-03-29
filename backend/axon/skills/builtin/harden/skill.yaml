@@ -1,0 +1,40 @@
+name: harden
+version: "1.0"
+category: engineering
+description: >
+  Interface resilience and production-readiness assessment across five core
+  dimensions: text overflow management, internationalization, error resilience,
+  edge cases, and input protection. Designs that only work with perfect data
+  aren't production-ready.
+
+triggers:
+  - harden
+  - resilience
+  - edge cases
+  - text overflow
+  - i18n
+  - error resilience
+  - production ready
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface, component, or system to assess for production resilience
+  - name: focus
+    type: string
+    required: false
+    description: Specific dimension to focus on (text_overflow, i18n, error_resilience, edge_cases, input_protection)
+
+outputs:
+  - name: vulnerabilities
+    type: list
+    description: All identified resilience vulnerabilities with severity and dimension
+  - name: hardening_plan
+    type: list
+    description: Prioritized remediation steps for each vulnerability
+  - name: coverage_score
+    type: number
+    description: Number of dimensions passing (0-5)
+
+methodology_file: methodology.md

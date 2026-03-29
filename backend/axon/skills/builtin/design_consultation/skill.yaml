@@ -1,0 +1,48 @@
+name: design_consultation
+version: "1.0"
+category: design
+description: >
+  Complete design system creation from scratch. Guided process covering aesthetic
+  direction, color palette, typography, spacing, motion, and component patterns.
+  Produces DESIGN.md as the source of truth for the entire system.
+
+triggers:
+  - design consultation
+  - design system creation
+  - create design system
+  - visual identity
+  - DESIGN.md
+
+inputs:
+  - name: product_description
+    type: string
+    required: true
+    description: Description of the product, its purpose, and target audience
+  - name: brand_personality
+    type: string
+    required: false
+    description: Desired brand personality traits (e.g., warm, professional, playful)
+  - name: existing_brand
+    type: string
+    required: false
+    description: Existing brand elements to incorporate (logo, colors, fonts)
+
+outputs:
+  - name: design_system
+    type: string
+    required: true
+    description: Complete design system specification as DESIGN.md content
+  - name: color_palette
+    type: list
+    required: true
+    description: Full color palette with hex values, roles, and usage guidelines
+  - name: typography_spec
+    type: list
+    required: true
+    description: Typography specifications including font families, scale, and usage
+  - name: spacing_scale
+    type: list
+    required: true
+    description: Spacing scale with base unit and multipliers
+
+methodology_file: methodology.md

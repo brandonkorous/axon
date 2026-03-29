@@ -1,0 +1,42 @@
+name: delight
+version: "1.0"
+category: design
+description: >
+  Add moments of joy, personality, and unexpected touches that make interfaces
+  memorable and enjoyable. Contextual approach adapted to brand personality:
+  playful, professional, quirky, or elegant. Delight moments must be quick,
+  skippable, appropriate, and non-repetitive.
+
+triggers:
+  - delight
+  - personality
+  - easter egg
+  - joy
+  - memorable
+  - fun
+  - playful
+  - whimsy
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or experience to add delight moments to
+  - name: personality
+    type: string
+    required: false
+    description: "Brand personality: playful, professional, quirky, or elegant"
+    default: professional
+
+outputs:
+  - name: delight_opportunities
+    type: list
+    description: Identified moments where delight can be added with context and rationale
+  - name: implementation_specs
+    type: list
+    description: Technical specifications for each delight moment
+  - name: personality_guidelines
+    type: string
+    description: Tone and personality guardrails for consistent delight
+
+methodology_file: methodology.md

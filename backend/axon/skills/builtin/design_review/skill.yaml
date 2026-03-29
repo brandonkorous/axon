@@ -1,0 +1,44 @@
+name: design_review
+version: "1.0"
+category: design
+description: >
+  Pre-implementation design audit with 0-10 scoring across seven dimensions.
+  Evaluates information architecture, interaction states, user journey,
+  AI slop risk, design system alignment, accessibility, and decision completeness.
+
+triggers:
+  - design review
+  - pre-implementation review
+  - design scoring
+  - design critique
+  - pre-build review
+
+inputs:
+  - name: proposal
+    type: string
+    required: true
+    description: The design proposal, mockup description, or feature specification to review
+  - name: existing_design_system
+    type: string
+    required: false
+    description: Reference to existing design system, tokens, or component library
+
+outputs:
+  - name: dimension_scores
+    type: list
+    required: true
+    description: Scores for each of the seven design dimensions with rationale
+  - name: total_score
+    type: number
+    required: true
+    description: Combined score across all dimensions (0-70)
+  - name: unresolved_decisions
+    type: list
+    required: true
+    description: Design decisions that remain ambiguous or unspecified
+  - name: mockup_recommendations
+    type: list
+    required: true
+    description: Recommendations for visual mockups or prototypes to create
+
+methodology_file: methodology.md

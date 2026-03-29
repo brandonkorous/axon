@@ -27,7 +27,11 @@ export function TaskEditModal({
   const [status, setStatus] = useState(task.status);
   const [assignee, setAssignee] = useState(task.assignee);
   const [priority, setPriority] = useState(task.priority);
+  const [startDate, setStartDate] = useState(task.start_date || "");
   const [dueDate, setDueDate] = useState(task.due_date || "");
+  const [estimatedHours, setEstimatedHours] = useState(
+    task.estimated_hours?.toString() || ""
+  );
   const [labels, setLabels] = useState(task.labels?.join(", ") || "");
   const [body, setBody] = useState(task.body || "");
 
@@ -49,7 +53,9 @@ export function TaskEditModal({
       status,
       assignee,
       priority,
+      start_date: startDate,
       due_date: dueDate,
+      estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,
       labels: parsedLabels,
       body,
     });
@@ -97,29 +103,56 @@ export function TaskEditModal({
             </select>
           </div>
 
+          <select
+            value={assignee}
+            onChange={(e) => setAssignee(e.target.value)}
+            aria-label="Assignee"
+            className="select select-sm w-full"
+          >
+            <option value="">Unassigned</option>
+            {agents
+              .filter((a) => a.id !== "axon")
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+          </select>
+
           <div className="flex gap-3">
-            <select
-              value={assignee}
-              onChange={(e) => setAssignee(e.target.value)}
-              aria-label="Assignee"
-              className="select select-sm flex-1"
-            >
-              <option value="">Unassigned</option>
-              {agents
-                .filter((a) => a.id !== "axon")
-                .map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-            </select>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              aria-label="Due date"
-              className="input input-sm flex-1"
-            />
+            <div className="flex-1">
+              <label className="label text-xs">Start date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                aria-label="Start date"
+                className="input input-sm w-full"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="label text-xs">Due date</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                aria-label="Due date"
+                className="input input-sm w-full"
+              />
+            </div>
+            <div className="w-24">
+              <label className="label text-xs">Est. hours</label>
+              <input
+                type="number"
+                value={estimatedHours}
+                onChange={(e) => setEstimatedHours(e.target.value)}
+                placeholder="0"
+                step={0.5}
+                min={0}
+                aria-label="Estimated hours"
+                className="input input-sm w-full"
+              />
+            </div>
           </div>
 
           <input

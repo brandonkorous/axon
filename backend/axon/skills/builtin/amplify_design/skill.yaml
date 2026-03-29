@@ -1,0 +1,41 @@
+name: amplify_design
+version: "1.0"
+category: design
+description: >
+  Amplify safe or boring designs to be more visually interesting and impactful.
+  Addresses six amplification areas: typography, color, spatial, visual effects,
+  motion, and composition. Every amplification must serve a purpose — boldness
+  without intent is just noise.
+
+triggers:
+  - amplify
+  - bolder
+  - make it pop
+  - more impactful
+  - more bold
+  - more dramatic
+  - visually boring
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface or design to amplify
+  - name: intensity
+    type: string
+    required: false
+    description: "Amplification intensity: moderate, high, or maximum"
+    default: moderate
+
+outputs:
+  - name: amplification_plan
+    type: list
+    description: Specific amplification recommendations per area with implementation details
+  - name: before_after_contrast
+    type: string
+    description: Summary of the transformation from current state to amplified state
+  - name: guardrail_checks
+    type: list
+    description: Accessibility and usability checks to verify amplification doesn't harm function
+
+methodology_file: methodology.md

@@ -1,0 +1,38 @@
+name: clarify
+version: "1.0"
+category: design
+description: >
+  UX microcopy and writing improvement. Systematically fixes jargon, ambiguity,
+  passive construction, missing context, and tone mismatches across error messages,
+  form labels, button text, empty states, tooltips, and confirmations.
+
+triggers:
+  - clarify
+  - microcopy
+  - ux copy
+  - error messages
+  - copy review
+  - ux writing
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface, component, or copy to review — code, screenshots, or text content
+  - name: tone
+    type: string
+    required: false
+    description: "Desired tone: formal, casual, or technical"
+
+outputs:
+  - name: issues
+    type: list
+    description: All microcopy issues found with location, problem type, and severity
+  - name: rewrites
+    type: list
+    description: Before/after rewrites for each issue with rationale
+  - name: tone_assessment
+    type: string
+    description: Overall assessment of tone consistency and appropriateness
+
+methodology_file: methodology.md

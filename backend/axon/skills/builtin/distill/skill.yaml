@@ -1,0 +1,37 @@
+name: distill
+version: "1.0"
+category: design
+description: >
+  Complexity reduction and UI simplification. Extracts the essential purpose of
+  each view, applies 6-dimension simplification, and implements progressive
+  disclosure. Ruthless editing while maintaining discoverability.
+
+triggers:
+  - distill
+  - simplify
+  - reduce complexity
+  - progressive disclosure
+  - simplification
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The interface, page, or component to simplify — code, screenshots, or descriptions
+  - name: constraint
+    type: string
+    required: false
+    description: "Specific constraint to apply (e.g., 'mobile only', 'first-time user')"
+
+outputs:
+  - name: essential_purpose
+    type: string
+    description: The single primary goal of the view, distilled to one sentence
+  - name: removals
+    type: list
+    description: Elements recommended for removal or demotion, with justification
+  - name: simplification_score
+    type: number
+    description: Before/after complexity score showing reduction achieved
+
+methodology_file: methodology.md

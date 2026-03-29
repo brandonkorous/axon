@@ -1,0 +1,49 @@
+name: strategic_scope_review
+version: "1.0"
+category: strategy
+description: >
+  Strategic founder-mode scope analysis with four distinct modes: expand, selective,
+  hold, and reduce. Provides comprehensive architecture overview, error mapping,
+  security threat model, data flow tracing, and long-term trajectory assessment.
+
+triggers:
+  - scope review
+  - strategic review
+  - scope expansion
+  - scope reduction
+  - ceo review
+  - founder review
+
+inputs:
+  - name: proposal
+    type: string
+    required: true
+    description: The proposal, feature, or project to review strategically
+  - name: mode
+    type: string
+    required: true
+    description: Review mode — expand, selective, hold, or reduce
+  - name: context
+    type: string
+    required: false
+    description: Additional context about the project, constraints, or goals
+
+outputs:
+  - name: mode_analysis
+    type: string
+    required: true
+    description: Mode-specific analysis and recommendations
+  - name: architecture_overview
+    type: string
+    required: true
+    description: High-level architecture assessment and dependency map
+  - name: risk_assessment
+    type: list
+    required: true
+    description: Identified risks with severity and mitigation strategies
+  - name: recommendation
+    type: string
+    required: true
+    description: Strategic recommendation with concrete next steps
+
+methodology_file: methodology.md

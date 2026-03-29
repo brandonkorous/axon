@@ -1,0 +1,47 @@
+name: release_pipeline
+version: "1.0"
+category: engineering
+description: >
+  Complete release pipeline methodology covering pre-flight checks,
+  merge and test, coverage audit, pre-landing review, adversarial review,
+  version management, changelog generation, TODO detection, commit
+  organization, and PR/MR creation with quality gates.
+
+triggers:
+  - release
+  - ship
+  - release pipeline
+  - changelog
+  - version bump
+  - ship it
+  - prepare release
+
+inputs:
+  - name: subject
+    type: string
+    required: true
+    description: The subject of the release — branch name, feature description, or release scope
+  - name: version_type
+    type: string
+    required: false
+    description: Semver bump type — patch, minor, or major
+
+outputs:
+  - name: test_results
+    type: string
+    required: true
+    description: Summary of test suite execution results
+  - name: coverage_audit
+    type: list
+    description: New code paths and their test coverage status
+  - name: review_findings
+    type: list
+    description: Issues found during pre-landing and adversarial review passes
+  - name: changelog
+    type: string
+    description: Auto-generated changelog grouped by conventional commit prefix
+  - name: pr_body
+    type: string
+    description: Generated PR/MR body with summary, coverage, findings, and TODOs
+
+methodology_file: methodology.md

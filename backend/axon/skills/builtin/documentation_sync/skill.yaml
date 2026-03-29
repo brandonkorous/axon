@@ -1,0 +1,43 @@
+name: documentation_sync
+version: "1.0"
+category: engineering
+description: >
+  Post-release documentation synchronization. Cross-references code
+  diffs against all documentation, detects stale instructions, finds
+  broken references, and separates auto-fixable updates from changes
+  requiring user approval.
+
+triggers:
+  - document release
+  - documentation sync
+  - stale docs
+  - doc update
+  - sync docs
+  - update documentation
+
+inputs:
+  - name: changes
+    type: string
+    required: true
+    description: What changed in the release — diff summary, commit list, or feature description
+  - name: docs_paths
+    type: string
+    required: false
+    description: Specific documentation paths to check, comma-separated
+
+outputs:
+  - name: auto_updates
+    type: list
+    required: true
+    description: Factual corrections applied automatically
+  - name: prompts_for_user
+    type: list
+    description: Changes requiring user review and approval
+  - name: stale_references
+    type: list
+    description: Documentation references that no longer match the codebase
+  - name: coverage_gaps
+    type: list
+    description: New features or removed functionality missing documentation
+
+methodology_file: methodology.md

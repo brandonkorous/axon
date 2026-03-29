@@ -1,0 +1,28 @@
+name: ref_interaction
+version: "1.0"
+category: reference
+description: >
+  Interaction design reference guide. Covers the 8 interactive states,
+  focus management, label requirements, native-first tooling, undo
+  over confirmation patterns, and keyboard navigation.
+
+triggers:
+  - interaction reference
+  - interaction states
+  - focus management
+  - 8 states
+  - interaction guide
+
+inputs:
+  - name: context
+    type: string
+    required: false
+    description: Specific interaction design question to address
+
+outputs:
+  - name: guidance
+    type: string
+    required: true
+    description: Relevant interaction design guidance
+
+methodology_file: methodology.md
