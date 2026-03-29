@@ -67,7 +67,15 @@ export const useIssueStore = create<IssueStore>((set, get) => ({
       const url = orgApiPath("issues") + (qs ? `?${qs}` : "");
       const res = await fetch(url);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const issues = await res.json();
+      const raw = await res.json();
+      const issues = (raw as Issue[]).map((issue) => ({
+        ...issue,
+        labels: Array.isArray(issue.labels)
+          ? issue.labels
+          : typeof issue.labels === "string"
+            ? (issue.labels as string).split(",").map((l) => l.trim()).filter(Boolean)
+            : [],
+      }));
       set({ issues, loading: false });
     } catch (e) {
       set({ loading: false, error: (e as Error).message });

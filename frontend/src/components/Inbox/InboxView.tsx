@@ -164,14 +164,14 @@ export function InboxView() {
             </thead>
             <tbody>
               {filtered.map((item) => {
-                const key = `${item.agent_id}/${item.filename}`;
+                const key = `${item.agent_id}/${item.path}`;
                 return (
                   <InboxRow
                     key={key}
                     item={item}
                     isExpanded={expandedId === key}
                     onToggle={() => toggleExpand(key)}
-                    onMarkRead={() => markAsRead(item.agent_id, item.filename)}
+                    onMarkRead={() => markAsRead(item.agent_id, item.path)}
                   />
                 );
               })}

@@ -734,61 +734,33 @@ class ToolExecutor:
             await self._stream_callback(chunk)
 
     async def _request_agent(self, args: dict) -> str:
+        import asyncio as _asyncio
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
         role = args["role"]
         reason = args["reason"]
         description = args.get("description", "")
+        _log.info("[RECRUIT] %s requesting '%s'", self.agent_id, role)
 
-        # Build team roster context so the refinement LLM knows who exists
-        roster_lines = []
-        if self._org_id:
-            import axon.registry as _reg
-            org = _reg.get_org(self._org_id)
-            if org:
-                for aid, agent in org.agent_registry.items():
-                    if hasattr(agent, "config"):
-                        cfg = agent.config
-                        domains = cfg.guardrails.domains.allowed_domains if cfg.guardrails.has_domain_boundaries else []
-                        domain_str = f" — domains: {', '.join(domains)}" if domains else ""
-                        roster_lines.append(f"- {cfg.name} (`{aid}`): {cfg.title}{domain_str}")
-
-        roster_context = "\n".join(roster_lines) if roster_lines else "No existing agents."
-
-        # Refine the brief into a full persona via LLM
-        system_prompt, domains = await self._refine_recruitment_prompt(
-            role=role,
-            reason=reason,
-            description=description,
-            requested_by=self.agent_id,
-            team_roster=roster_context,
-        )
-
-        # Store in-memory for the current response
-        self._pending_recruitment = {
-            "requested_by": self.agent_id,
-            "role": role,
-            "reason": reason,
-            "system_prompt": system_prompt,
-            "domains": domains,
-            "suggested_capabilities": [],
-        }
-
-        # Persist to shared vault so it survives restarts and is visible to the API
+        # Write the request to the vault immediately with pending refinement
+        task_path = ""
         if self._shared_executor:
             from axon.agents.shared_tools import _slugify
             today_str = str(date.today())
             slug = _slugify(role[:60])
             task_path = f"tasks/{today_str}-recruit-{slug}.md"
-            domain_str = ", ".join(domains)
             meta = {
                 "name": f"Recruit: {role}",
                 "type": "recruitment",
-                "status": "awaiting_approval",
+                "status": "refining",
                 "priority": "p2",
                 "requested_by": self.agent_id,
                 "role": role,
                 "reason": reason,
-                "system_prompt": system_prompt,
-                "domains": domains,
+                "system_prompt": "",
+                "domains": [],
+                "description": description,
                 "suggested_capabilities": [],
                 "created_at": datetime.utcnow().isoformat() + "Z",
             }
@@ -796,16 +768,101 @@ class ToolExecutor:
                 f"# Recruitment Request: {role}\n\n"
                 f"**Requested by:** {self.agent_id}\n"
                 f"**Reason:** {reason}\n"
+                f"**Description:** {description}\n\n"
+                f"*Prompt refinement in progress...*\n"
             )
-            if domain_str:
-                body += f"**Domains:** {domain_str}\n"
-            body += f"\n## System Prompt\n\n{system_prompt}\n"
             self._shared_executor.vault.write_file(task_path, meta, body)
+            _log.info("[RECRUIT] Written draft to %s — refinement starting in background", task_path)
+
+        # Store in-memory for the current response
+        self._pending_recruitment = {
+            "requested_by": self.agent_id,
+            "role": role,
+            "reason": reason,
+        }
+
+        # Fire off refinement in the background — don't block the response
+        _asyncio.create_task(self._refine_and_update_recruitment(
+            role=role,
+            reason=reason,
+            description=description,
+            task_path=task_path,
+        ))
 
         return (
-            f"Agent recruitment request submitted: {role}. "
-            f"The user will be asked to approve or deny this request."
+            f"Recruitment request submitted for '{role}'. "
+            f"The system is crafting a detailed persona in the background — "
+            f"it will appear in the approval queue once ready."
         )
+
+    async def _refine_and_update_recruitment(
+        self,
+        role: str,
+        reason: str,
+        description: str,
+        task_path: str,
+    ) -> None:
+        """Background task: refine a recruitment brief and update the vault entry."""
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
+        try:
+            # Build team roster context
+            roster_lines = []
+            if self.org_id:
+                import axon.registry as _reg
+                org = _reg.get_org(self.org_id)
+                if org:
+                    for aid, agent in org.agent_registry.items():
+                        if hasattr(agent, "config"):
+                            cfg = agent.config
+                            domains = cfg.guardrails.domains.allowed_domains if cfg.guardrails.has_domain_boundaries else []
+                            domain_str = f" — domains: {', '.join(domains)}" if domains else ""
+                            roster_lines.append(f"- {cfg.name} (`{aid}`): {cfg.title}{domain_str}")
+            roster_context = "\n".join(roster_lines) if roster_lines else "No existing agents."
+
+            # Refine via LLM
+            _log.info("[RECRUIT] Refining prompt for '%s'...", role)
+            system_prompt, domains = await self._refine_recruitment_prompt(
+                role=role,
+                reason=reason,
+                description=description,
+                requested_by=self.agent_id,
+                team_roster=roster_context,
+            )
+            _log.info("[RECRUIT] Refinement complete for '%s' — %d domains, %d chars",
+                       role, len(domains), len(system_prompt))
+
+            # Update the vault entry with the refined prompt
+            if task_path and self._shared_executor:
+                meta, _body = self._shared_executor.vault.read_file(task_path)
+                meta["system_prompt"] = system_prompt
+                meta["domains"] = domains
+                meta["status"] = "awaiting_approval"
+                domain_str = ", ".join(domains)
+                body = (
+                    f"# Recruitment Request: {role}\n\n"
+                    f"**Requested by:** {self.agent_id}\n"
+                    f"**Reason:** {reason}\n"
+                )
+                if domain_str:
+                    body += f"**Domains:** {domain_str}\n"
+                body += f"\n## System Prompt\n\n{system_prompt}\n"
+                self._shared_executor.vault.write_file(task_path, meta, body)
+                _log.info("[RECRUIT] Updated %s → awaiting_approval", task_path)
+
+        except Exception:
+            _log.exception("[RECRUIT] Background refinement failed for '%s'", role)
+            # Still flip to awaiting_approval with the raw description as fallback
+            if task_path and self._shared_executor:
+                try:
+                    meta, _body = self._shared_executor.vault.read_file(task_path)
+                    meta["system_prompt"] = description
+                    meta["status"] = "awaiting_approval"
+                    self._shared_executor.vault.write_file(task_path, meta, _body)
+                    _log.info("[RECRUIT] Fallback: promoted %s with raw description", task_path)
+                except Exception:
+                    _log.exception("[RECRUIT] Fallback write also failed for %s", task_path)
 
     async def _refine_recruitment_prompt(
         self,
@@ -852,22 +909,27 @@ class ToolExecutor:
         )
 
         try:
-            response = await complete(
-                model=settings.default_model,
-                messages=[
-                    {"role": "system", "content": refinement_system},
-                    {"role": "user", "content": user_message},
-                ],
-                max_tokens=2048,
-                temperature=0.7,
+            import asyncio as _asyncio
+            response = await _asyncio.wait_for(
+                complete(
+                    model=settings.default_model,
+                    messages=[
+                        {"role": "system", "content": refinement_system},
+                        {"role": "user", "content": user_message},
+                    ],
+                    max_tokens=2048,
+                    temperature=0.7,
+                ),
+                timeout=15,
             )
             content = response.get("content", "")
             # Strip markdown code fencing if present
-            if content.startswith("```"):
-                content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-                if content.endswith("```"):
-                    content = content[:-3]
-                content = content.strip()
+            if "```" in content:
+                # Handle ```json ... ``` or ``` ... ```
+                import re
+                json_match = re.search(r"```(?:json)?\s*\n?(.*?)```", content, re.DOTALL)
+                if json_match:
+                    content = json_match.group(1).strip()
             parsed = _json.loads(content)
             return parsed.get("system_prompt", description), parsed.get("domains", [])
         except Exception as e:

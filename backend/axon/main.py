@@ -556,12 +556,17 @@ async def debug_scheduler():
                 hasattr(agent, "_processing_lock") and agent._processing_lock.locked()
             )
             tasks = AgentScheduler._find_agent_tasks(agent, agent_id)
+            has_pending_inbox = (
+                AgentScheduler._has_pending_inbox(agent)
+                if hasattr(agent, "vault") else False
+            )
             result["agents"][agent_id] = {
                 "proactive_checks": [
                     {"action": c.action, "trigger": c.trigger} for c in checks
                 ],
                 "processing_lock_held": lock_held,
                 "has_shared_vault": agent.shared_vault is not None,
+                "has_pending_inbox": has_pending_inbox,
                 "in_progress_tasks": [
                     {
                         "path": t["path"],

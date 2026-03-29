@@ -6,7 +6,7 @@ export type InboxItemType = "task_completed" | "plan_ready" | "task_failed" | "p
 export type InboxItemStatus = "pending" | "read" | "actioned";
 
 export interface InboxItem {
-  filename: string;
+  path: string; // Full relative path e.g. "inbox/2026-03-22-plan-ready.md"
   agent_id: string;
   date: string;
   from: string;
@@ -20,7 +20,7 @@ interface InboxStore {
   items: InboxItem[];
   loading: boolean;
   fetchAll: () => Promise<void>;
-  markAsRead: (agentId: string, filename: string) => Promise<boolean>;
+  markAsRead: (agentId: string, path: string) => Promise<boolean>;
 }
 
 export const useInboxStore = create<InboxStore>((set, get) => ({
@@ -43,31 +43,29 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
               );
               if (!listRes.ok) return;
               const listData = await listRes.json();
-              const files: { name: string }[] = listData.files || [];
+              const files: { name: string; path: string }[] = listData.files || [];
 
               await Promise.all(
-                files
-                  .filter((f) => f.name.endsWith(".md"))
-                  .map(async (file) => {
-                    try {
-                      const detailRes = await fetch(
-                        orgApiPath(`vaults/${agent.id}/files/inbox/${file.name}`)
-                      );
-                      if (!detailRes.ok) return;
-                      const detail = await detailRes.json();
-                      const fm = detail.frontmatter || {};
-                      allItems.push({
-                        filename: file.name,
-                        agent_id: agent.id,
-                        date: fm.date || "",
-                        from: fm.from || agent.id,
-                        status: fm.status || "pending",
-                        type: fm.type || "task_completed",
-                        task_ref: fm.task_ref || "",
-                        content: detail.content || "",
-                      });
-                    } catch { /* skip individual file errors */ }
-                  })
+                files.map(async (file) => {
+                  try {
+                    const detailRes = await fetch(
+                      orgApiPath(`vaults/${agent.id}/files/${file.path}`)
+                    );
+                    if (!detailRes.ok) return;
+                    const detail = await detailRes.json();
+                    const fm = detail.frontmatter || {};
+                    allItems.push({
+                      path: file.path,
+                      agent_id: agent.id,
+                      date: fm.date || "",
+                      from: fm.from || agent.id,
+                      status: fm.status || "pending",
+                      type: fm.type || "task_completed",
+                      task_ref: fm.task_ref || "",
+                      content: detail.content || "",
+                    });
+                  } catch { /* skip individual file errors */ }
+                })
               );
             } catch { /* skip agent-level errors */ }
           })
@@ -81,15 +79,15 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     }
   },
 
-  markAsRead: async (agentId: string, filename: string) => {
+  markAsRead: async (agentId: string, path: string) => {
     try {
       const item = get().items.find(
-        (i) => i.agent_id === agentId && i.filename === filename
+        (i) => i.agent_id === agentId && i.path === path
       );
       if (!item) return false;
 
       const res = await fetch(
-        orgApiPath(`vaults/${agentId}/files/inbox/${filename}`),
+        orgApiPath(`vaults/${agentId}/files/${path}`),
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -109,7 +107,7 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
       if (res.ok) {
         set({
           items: get().items.map((i) =>
-            i.agent_id === agentId && i.filename === filename
+            i.agent_id === agentId && i.path === path
               ? { ...i, status: "read" }
               : i
           ),

@@ -33,14 +33,15 @@ INTERVAL_SECONDS = {
 
 # Built-in action prompts — what the agent "hears" when a check fires
 ACTION_PROMPTS = {
-    "check_inbox": (
-        "[SYSTEM] Check your inbox for pending delegated tasks. "
-        "For each pending task:\n"
-        "1. Read the task details\n"
-        "2. Execute the work described\n"
-        "3. Write your findings/output to the appropriate vault location\n"
-        "4. Update the inbox task status to 'done'\n"
-        "If the inbox is empty, do nothing."
+    "process_inbox": (
+        "[SYSTEM] You have pending inbox notifications from other agents. "
+        "Review each notification and take appropriate action:\n"
+        "- **task_completed**: Acknowledge the result, extract key findings, "
+        "update your vault if the result changes your recommendations.\n"
+        "- **task_failed**: Assess whether to retry, re-delegate, or escalate.\n"
+        "- **plan_ready**: Review the proposed plan and approve or decline it.\n"
+        "- **memory_nudge**: Verify and save the information to your vault.\n"
+        "After processing each item, mark it as done in your inbox."
     ),
     "work_on_tasks": (
         "[SYSTEM] You have an in_progress task to complete. Here are the details:\n\n"
@@ -158,11 +159,19 @@ class AgentScheduler:
                                 if fired:
                                     await asyncio.sleep(5)
 
+                        # Scan inbox for pending notifications (all agents with vaults)
+                        if hasattr(agent, "vault"):
+                            fired = await self._fire_inbox_scan(
+                                org_id, agent_id, agent, now,
+                            )
+                            if fired:
+                                await asyncio.sleep(5)
+
                         # Run any additional configured proactive checks
                         checks = agent.config.behavior.proactive_checks
                         for check in checks:
-                            if check.action == "work_on_tasks":
-                                continue  # Already handled above
+                            if check.action in ("work_on_tasks", "check_inbox"):
+                                continue  # Handled above / deprecated
                             fired = await self._maybe_fire(
                                 org_id, agent_id, agent, check, now,
                             )
@@ -242,6 +251,176 @@ class AgentScheduler:
             if chunk.type == "text":
                 response_text += chunk.content
         return response_text
+
+    ACTIONABLE_INBOX_TYPES = ("plan_ready", "task_completed", "task_failed", "memory_nudge")
+
+    # After this many failed processing attempts, escalate to an issue
+    INBOX_MAX_RETRIES = 2
+
+    @staticmethod
+    def _get_pending_inbox_items(agent: "Agent") -> list[str]:
+        """Return paths of pending actionable inbox items (without calling the LLM)."""
+        inbox_dir = Path(agent.vault.vault_path) / "inbox"
+        if not inbox_dir.exists():
+            return []
+
+        pending: list[str] = []
+        for md_file in inbox_dir.glob("*.md"):
+            if md_file.name.endswith("-index.md"):
+                continue
+            rel_path = f"inbox/{md_file.name}"
+            try:
+                metadata, _ = agent.vault.read_file(rel_path)
+                if metadata.get("status") != "pending":
+                    continue
+                if metadata.get("type") not in AgentScheduler.ACTIONABLE_INBOX_TYPES:
+                    continue
+                pending.append(rel_path)
+            except Exception:
+                continue
+        return pending
+
+    @staticmethod
+    def _has_pending_inbox(agent: "Agent") -> bool:
+        """Check if an agent has pending actionable inbox items."""
+        return len(AgentScheduler._get_pending_inbox_items(agent)) > 0
+
+    async def _fire_inbox_scan(
+        self,
+        org_id: str,
+        agent_id: str,
+        agent: "Agent",
+        now: datetime,
+    ) -> bool:
+        """Process pending inbox notifications for an agent.
+
+        Runs for ALL agents every tick — but the filesystem pre-check
+        means we only call the LLM when there are actual pending items.
+        After the LLM runs, items still pending get a retry bump.
+        Items exceeding INBOX_MAX_RETRIES are escalated to issues.
+        """
+        key = f"{org_id}:{agent_id}:inbox_scan"
+        last = self._last_run.get(key)
+        interval = INTERVAL_SECONDS["frequent"]
+        if last and (now - last).total_seconds() < interval:
+            return False
+
+        pending_paths = self._get_pending_inbox_items(agent)
+        if not pending_paths:
+            return False
+
+        logger.info(
+            "[SCHEDULER] Inbox scan for %s/%s — %d pending items",
+            org_id, agent_id, len(pending_paths),
+        )
+        self._last_run[key] = now
+
+        prompt = ACTION_PROMPTS["process_inbox"]
+        try:
+            response_text = await asyncio.wait_for(
+                self._consume_stream(agent, prompt, save_history=False),
+                timeout=TASK_TIMEOUT,
+            )
+            logger.info(
+                "[SCHEDULER] %s/%s inbox scan complete — %d chars response",
+                org_id, agent_id, len(response_text),
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "[SCHEDULER] %s/%s inbox scan timed out after %ds",
+                org_id, agent_id, TASK_TIMEOUT,
+            )
+        except Exception as e:
+            logger.error(
+                "[SCHEDULER] %s/%s inbox scan failed: %s",
+                org_id, agent_id, e,
+            )
+
+        # Check which items the agent failed to resolve — bump retries or escalate
+        for path in pending_paths:
+            try:
+                metadata, body = agent.vault.read_file(path)
+                if metadata.get("status") != "pending":
+                    continue  # Agent handled it — good
+
+                retries = metadata.get("_retries", 0) + 1
+                metadata["_retries"] = retries
+
+                if retries > self.INBOX_MAX_RETRIES:
+                    # Escalate — create an issue and mark the item
+                    metadata["status"] = "escalated"
+                    agent.vault.write_file(path, metadata, body)
+                    await self._escalate_inbox_to_issue(
+                        org_id, agent_id, agent, path, metadata, body,
+                    )
+                else:
+                    agent.vault.write_file(path, metadata, body)
+                    logger.info(
+                        "[SCHEDULER] Inbox item %s retry %d/%d",
+                        path, retries, self.INBOX_MAX_RETRIES,
+                    )
+            except Exception:
+                continue
+
+        return True
+
+    @staticmethod
+    async def _escalate_inbox_to_issue(
+        org_id: str,
+        agent_id: str,
+        agent: "Agent",
+        inbox_path: str,
+        metadata: dict,
+        body: str,
+    ) -> None:
+        """Create an issue for an inbox item that couldn't be processed."""
+        shared_vault = agent.shared_vault
+        if not shared_vault:
+            logger.warning(
+                "[SCHEDULER] Cannot escalate %s — no shared vault", inbox_path,
+            )
+            return
+
+        from_agent = metadata.get("from", "unknown")
+        item_type = metadata.get("type", "unknown")
+        item_date = metadata.get("date", "unknown")
+        task_ref = metadata.get("task_ref", "")
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        slug = inbox_path.split("/")[-1].replace(".md", "")[:60]
+        issue_path = f"issues/{today}-unprocessed-{slug}.md"
+
+        issue_meta = {
+            "name": f"Unprocessed inbox: {item_type} from {from_agent}",
+            "type": "issue",
+            "status": "open",
+            "priority": "p2",
+            "assignee": agent_id,
+            "labels": ["inbox", "unprocessed"],
+            "inbox_ref": inbox_path,
+            "created_at": datetime.now().isoformat() + "Z",
+        }
+        issue_body = (
+            f"# Unprocessed Inbox Item\n\n"
+            f"**Agent:** {agent_id}\n"
+            f"**From:** {from_agent}\n"
+            f"**Type:** {item_type}\n"
+            f"**Date:** {item_date}\n"
+            f"**Inbox path:** {inbox_path}\n"
+        )
+        if task_ref:
+            issue_body += f"**Task ref:** {task_ref}\n"
+        issue_body += f"\n## Original Content\n\n{body}\n"
+
+        try:
+            shared_vault.write_file(issue_path, issue_meta, issue_body)
+            logger.info(
+                "[SCHEDULER] Escalated inbox item %s → %s", inbox_path, issue_path,
+            )
+        except Exception as e:
+            logger.error(
+                "[SCHEDULER] Failed to escalate %s: %s", inbox_path, e,
+            )
 
     async def _fire_memory_consolidation(
         self,
