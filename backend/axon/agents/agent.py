@@ -25,6 +25,8 @@ from axon.agents.tools import (
     VAULT_TOOLS,
     ToolExecutor,
 )
+from axon.discovery.executor import DiscoveryToolExecutor
+from axon.discovery.tools import CAPABILITY_TOOLS
 from axon.config import ActionBias, PersonaConfig
 from axon.lifecycle import AgentLifecycle
 from axon.vault.navigator import MemoryNavigator
@@ -190,6 +192,15 @@ class Agent:
                 config.integrations.enabled,
             )
 
+        # Discovery executor (capability introspection and self-provisioning)
+        self._discovery_executor = DiscoveryToolExecutor(
+            agent_id=self.id,
+            org_id=org_id,
+            get_config=lambda: self.config,
+            get_shared_vault=lambda: self.shared_vault,
+            on_capability_enabled=self._on_capability_enabled,
+        )
+
         # Tools
         self.tool_executor = ToolExecutor(
             self.vault, self.id,
@@ -204,6 +215,7 @@ class Agent:
             browser_executor=self._browser_executor,
             media_executor=self._media_executor,
             integration_executor=self._integration_executor,
+            discovery_executor=self._discovery_executor,
         )
         self.tool_executor._stream_callback = self._buffer_tool_stream_event
         self._pending_tool_events: list[StreamChunk] = []
@@ -259,6 +271,14 @@ class Agent:
             )
             self.tool_executor._integration_executor = self._integration_executor
             self.tools = self._build_tool_list()
+
+    async def _on_capability_enabled(self, cap_type: str, name: str) -> None:
+        """Called by DiscoveryToolExecutor after auto-enabling a capability.
+
+        Rebuilds the tool list so the agent can use it immediately.
+        """
+        logger.info("[%s] Capability auto-enabled: %s '%s' — rebuilding tools", self.id, cap_type, name)
+        self.tools = self._build_tool_list()
 
     def build_roster(self, all_configs: dict[str, "PersonaConfig"]) -> None:
         """Build a peer roster from org agent configs.
@@ -727,6 +747,28 @@ class Agent:
                 org_context += f"You accept delegated work from: {', '.join(accepts)}\n"
             org_context += "\n"
 
+        # Capability self-awareness — agents should know they can discover and request tools
+        discovery_section = (
+            "## Capability Self-Awareness\n"
+            "You have access to capability discovery tools. **Use them.**\n\n"
+            "### When to discover\n"
+            "- When someone asks what tools you have or need — call `discover_capabilities` "
+            "to see what's **actually available**, not just what you currently have.\n"
+            "- When you realize you **can't** do something (browse a site, generate a PDF, "
+            "run code, process images) — search for a capability that would let you.\n"
+            "- When asked to inspect, audit, or interact with external resources and you "
+            "lack the tools — don't just say \"I can't\". Search first.\n\n"
+            "### When to request\n"
+            "- If `discover_capabilities` finds something you need but don't have enabled, "
+            "use `request_capability` to enable it.\n"
+            "- If nothing exists for what you need, use `request_new_capability` to flag the gap.\n\n"
+            "### Critical rule\n"
+            "**Never say \"I have everything I need\" without checking.** If your role "
+            "implies you should be able to do something (e.g., a design lead should be able "
+            "to inspect the product's website), and you can't — that's a gap. Discover it, "
+            "request it, don't ignore it.\n\n"
+        )
+
         # Comms instructions — when agent has comms tools
         comms_section = ""
         if self._comms_executor:
@@ -797,6 +839,7 @@ class Agent:
             + action_section
             + principles_section
             + org_context
+            + discovery_section
             + guardrails_section
             + confidence_section
             + comms_section
@@ -1004,6 +1047,7 @@ class Agent:
 
         if _want(TOOL_GROUP_DISCOVERY):
             tools.extend(DISCOVERY_TOOLS)
+            tools.extend(CAPABILITY_TOOLS)
 
         if _want(TOOL_GROUP_RECRUITMENT):
             tools.extend(RECRUITMENT_TOOLS)

@@ -369,6 +369,7 @@ class ToolExecutor:
         browser_executor: "BrowserToolExecutor | None" = None,
         media_executor: "MediaToolExecutor | None" = None,
         integration_executor: "IntegrationToolExecutor | None" = None,
+        discovery_executor: "DiscoveryToolExecutor | None" = None,
     ):
         self.vault = vault
         self.agent_id = agent_id
@@ -398,6 +399,9 @@ class ToolExecutor:
 
         # Integration executor for external service plugins
         self._integration_executor: "IntegrationToolExecutor | None" = integration_executor
+
+        # Discovery executor for capability introspection and requests
+        self._discovery_executor: "DiscoveryToolExecutor | None" = discovery_executor
 
         # Stream callback — allows tools to emit StreamChunks mid-execution
         self._stream_callback: Any = None  # set by Agent after init
@@ -461,6 +465,12 @@ class ToolExecutor:
         # Route media tools to the media executor
         if self._media_executor and tool_name.startswith("media_"):
             result = await self._media_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
+        # Route discovery tools to the discovery executor
+        if self._discovery_executor and self._discovery_executor.can_handle(tool_name):
+            result = await self._discovery_executor.execute(tool_name, arguments)
             self._log_audit(tool_name, arguments, result)
             return result
 
@@ -823,25 +833,32 @@ class ToolExecutor:
 
             # Refine via LLM
             _log.info("[RECRUIT] Refining prompt for '%s'...", role)
-            system_prompt, domains = await self._refine_recruitment_prompt(
+            name, system_prompt, domains = await self._refine_recruitment_prompt(
                 role=role,
                 reason=reason,
                 description=description,
                 requested_by=self.agent_id,
                 team_roster=roster_context,
             )
-            _log.info("[RECRUIT] Refinement complete for '%s' — %d domains, %d chars",
-                       role, len(domains), len(system_prompt))
+            if not name:
+                # Fallback name from role
+                name = role.split("-")[0].strip() if "-" in role else role
+            _log.info("[RECRUIT] Refinement complete for '%s' (name: %s) — %d domains, %d chars",
+                       role, name, len(domains), len(system_prompt))
 
-            # Update the vault entry with the refined prompt
+            # Update the vault entry with the refined prompt and name
             if task_path and self._shared_executor:
                 meta, _body = self._shared_executor.vault.read_file(task_path)
                 meta["system_prompt"] = system_prompt
                 meta["domains"] = domains
+                meta["agent_name"] = name
                 meta["status"] = "awaiting_approval"
+                meta["name"] = f"Recruit: {name} ({role})"
                 domain_str = ", ".join(domains)
                 body = (
-                    f"# Recruitment Request: {role}\n\n"
+                    f"# Recruitment Request: {name} — {role}\n\n"
+                    f"**Name:** {name}\n"
+                    f"**Role:** {role}\n"
                     f"**Requested by:** {self.agent_id}\n"
                     f"**Reason:** {reason}\n"
                 )
@@ -871,8 +888,11 @@ class ToolExecutor:
         description: str,
         requested_by: str,
         team_roster: str,
-    ) -> tuple[str, list[str]]:
-        """Use an LLM to refine a recruitment brief into a full agent persona."""
+    ) -> tuple[str, str, list[str]]:
+        """Use an LLM to refine a recruitment brief into a full agent persona.
+
+        Returns (name, system_prompt, domains).
+        """
         from axon.agents.provider import complete
         from axon.config import settings
         import json as _json
@@ -884,9 +904,13 @@ class ToolExecutor:
             "- The requested role and why it's needed\n"
             "- A brief description from the requesting agent\n"
             "- The current team roster (so you know who exists and can reference them)\n\n"
-            "Produce a JSON object with exactly two keys:\n"
+            "Produce a JSON object with exactly three keys:\n"
+            '- "name": A human first name for this agent (e.g., "Alex", "Priya", "Jordan"). '
+            "  If the brief already includes a name, use it. Otherwise, invent one that feels "
+            "  natural. This becomes the agent's identity — never use the role title as the name. "
+            "  The name must be unique across the existing team roster.\n"
             '- "system_prompt": A well-structured persona prompt (string) that includes:\n'
-            "  1. A clear identity statement — who they are and their role\n"
+            "  1. A clear identity statement using the name — who they are and their role\n"
             "  2. Core responsibilities (5-8 bullet points, specific to the role)\n"
             "  3. How they operate — principles, approach, what makes them effective\n"
             "  4. Coordination points — which existing team members they work with and on what\n"
@@ -920,23 +944,22 @@ class ToolExecutor:
                     max_tokens=2048,
                     temperature=0.7,
                 ),
-                timeout=15,
+                timeout=30,
             )
             content = response.get("content", "")
             # Strip markdown code fencing if present
             if "```" in content:
-                # Handle ```json ... ``` or ``` ... ```
                 import re
                 json_match = re.search(r"```(?:json)?\s*\n?(.*?)```", content, re.DOTALL)
                 if json_match:
                     content = json_match.group(1).strip()
             parsed = _json.loads(content)
-            return parsed.get("system_prompt", description), parsed.get("domains", [])
+            name = parsed.get("name", "")
+            return name, parsed.get("system_prompt", description), parsed.get("domains", [])
         except Exception as e:
-            # Fallback: use the raw description if refinement fails
             import logging
             logging.getLogger(__name__).warning("Recruitment prompt refinement failed: %s", e)
-            return description, []
+            return "", description, []
 
     async def _find_agents(self, args: dict) -> str:
         """Search the org agent registry with optional filters."""

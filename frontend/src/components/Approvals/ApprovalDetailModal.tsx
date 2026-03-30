@@ -106,6 +106,12 @@ export function ApprovalDetailModal({ approval, onClose }: ApprovalDetailModalPr
           ) : approval.type === "recruitment" ? (
             <>
               <div className="bg-base-100 rounded p-4 space-y-3 text-sm">
+                {approval.agent_name && (
+                  <div>
+                    <span className="text-base-content/60">Name:</span>{" "}
+                    <span className="text-base-content font-semibold">{approval.agent_name}</span>
+                  </div>
+                )}
                 <div>
                   <span className="text-base-content/60">Role:</span>{" "}
                   <span className="text-base-content font-medium">{approval.role}</span>

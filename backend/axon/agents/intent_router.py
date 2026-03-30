@@ -114,6 +114,19 @@ _INTENT_RULES: list[dict[str, Any]] = [
         "confidence": 0.7,
     },
     {
+        "name": "capability_discovery",
+        "patterns": [
+            r"\b(what tools|need tools|need more|missing|equipped|capabilities)\b",
+            r"\b(can you (browse|access|inspect|view|open|scrape))\b",
+            r"\b(do you have|don'?t have|lack|can'?t (do|access|generate|process))\b",
+            r"\b(plugin|skill|sandbox|integration|discover|enable|request)\b.*\b(tool|capability|feature|access)\b",
+            r"\b(discover|available|install|activate|unlock)\b.*\b(plugin|skill|sandbox|tool)\b",
+        ],
+        "tool_groups": [TOOL_GROUP_DISCOVERY],
+        "cognitive_patterns": [],
+        "confidence": 0.85,
+    },
+    {
         "name": "team_discovery",
         "patterns": [
             r"\b(who handles|find agent|team|colleague|expert|specialist)\b",

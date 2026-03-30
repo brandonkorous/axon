@@ -57,25 +57,31 @@ async def _get_vault_graph_stats(agent):
     return agent.vault.graph.get_stats()
 
 
-async def _list_vault_files(agent, branch: str | None = None):
+def _list_vault_files_sync(agent, branch: str | None = None):
+    """List vault files (sync — runs in thread)."""
     if branch:
-        files = agent.vault.list_branch(branch)
-    else:
-        vault_path = Path(agent.config.vault.path)
-        files = []
-        for item in sorted(vault_path.iterdir()):
-            if item.is_dir() and not item.name.startswith("."):
-                files.append({
-                    "name": item.name,
-                    "type": "directory",
-                    "file_count": len(list(item.glob("*.md"))),
-                })
-            elif item.suffix == ".md":
-                files.append({
-                    "name": item.name,
-                    "type": "file",
-                    "path": item.name,
-                })
+        return agent.vault.list_branch(branch)
+    vault_path = Path(agent.config.vault.path)
+    files = []
+    for item in sorted(vault_path.iterdir()):
+        if item.is_dir() and not item.name.startswith("."):
+            files.append({
+                "name": item.name,
+                "type": "directory",
+                "file_count": len(list(item.glob("*.md"))),
+            })
+        elif item.suffix == ".md":
+            files.append({
+                "name": item.name,
+                "type": "file",
+                "path": item.name,
+            })
+    return files
+
+
+async def _list_vault_files(agent, branch: str | None = None):
+    import asyncio
+    files = await asyncio.to_thread(_list_vault_files_sync, agent, branch)
     return {"agent_id": agent.id, "branch": branch, "files": files}
 
 

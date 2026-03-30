@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from datetime import date
 from pathlib import Path
@@ -60,13 +61,32 @@ class VaultManager:
     def root_path(self) -> Path:
         return self.vault_path / self.root_file
 
+    async def warm_cache(self) -> None:
+        """Load the vault cache in a background thread (non-blocking).
+
+        Call during startup so the cache is ready before the first request.
+        Runs the heavy disk I/O off the event loop to avoid starving
+        heartbeats and other async tasks.
+        """
+        if self._cache is not None:
+            return
+        cache = VaultCache(self.vault_path)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, cache.load_all)
+        self._cache = cache
+        self._watcher = VaultWatcher(self.vault_path, self._cache)
+        self._watcher.start()
+
     @property
     def cache(self) -> VaultCache:
-        """Lazy-loaded vault cache. Hydrates from disk on first access."""
+        """Vault cache. Prefer calling warm_cache() during startup.
+
+        Falls back to synchronous loading if accessed before warm_cache
+        completes (e.g. during non-async init paths).
+        """
         if self._cache is None:
             self._cache = VaultCache(self.vault_path)
             self._cache.load_all()
-            # Start file watcher to keep cache synced with external edits
             self._watcher = VaultWatcher(self.vault_path, self._cache)
             self._watcher.start()
         return self._cache

@@ -56,13 +56,22 @@ def extract_wikilinks(content: str, context_chars: int = 100) -> list[WikiLink]:
     return links
 
 
-def resolve_wikilink(target: str, vault_root: Path, current_file: Path | None = None) -> Path | None:
+def resolve_wikilink(
+    target: str,
+    vault_root: Path,
+    current_file: Path | None = None,
+    filename_index: dict[str, list[Path]] | None = None,
+) -> Path | None:
     """Resolve a wikilink target to an actual file path.
 
     Resolution order:
     1. Exact path relative to vault root (with .md extension)
     2. Exact path relative to current file's directory
     3. Filename match anywhere in vault (Obsidian's shortest-path behavior)
+
+    Args:
+        filename_index: Optional pre-built mapping of filename -> [paths].
+            When provided, avoids expensive rglob for step 3.
 
     Returns the resolved Path or None if not found.
     """
@@ -82,6 +91,11 @@ def resolve_wikilink(target: str, vault_root: Path, current_file: Path | None = 
 
     # 3. Filename match anywhere in vault
     filename = f"{clean_target.split('/')[-1]}.md"
+    if filename_index is not None:
+        matches = filename_index.get(filename)
+        return matches[0] if matches else None
+
+    # Fallback to rglob only when no index provided (single-file updates)
     for match in vault_root.rglob(filename):
         return match  # Return first match
 

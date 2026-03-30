@@ -118,7 +118,7 @@ export function MindView() {
       </div>
 
       {/* Graph (center) */}
-      <div className="flex-1 relative">
+      <div className="flex-1 min-w-0 relative">
         {/* Mobile menu toggle */}
         <button
           onClick={() => setSidebarOpen(true)}
@@ -135,6 +135,7 @@ export function MindView() {
           edges={store.edges}
           visibleBranches={store.visibleBranches}
           highlightedNodeId={store.highlightedNodeId}
+          selectedNodeId={store.selectedFile?.path ?? null}
           onNodeSelect={handleFileSelect}
           onNodeHover={store.setHighlightedNode}
         />

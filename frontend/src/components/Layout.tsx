@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useOrgStore } from "../stores/orgStore";
 import { OrgSwitcher } from "./OrgSwitcher";
-import { VoiceChatFAB } from "./VoiceChat/VoiceChatFAB";
 import { VoiceChatOverlay } from "./VoiceChat/VoiceChatOverlay";
 import { SettingsModal } from "./Settings/SettingsModal";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -102,19 +101,16 @@ export function Layout() {
                 Axon
               </NavLink>
             </li>
-            <li>
-              <NavLink to="/huddle" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                Huddle
-              </NavLink>
-            </li>
+
+            <li className="menu-title mt-4">Workspace</li>
             <li>
               <NavLink to="/dashboard" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 Dashboard
               </NavLink>
             </li>
             <li>
-              <NavLink to="/analytics" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                Analytics
+              <NavLink to="/huddle" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Huddle
               </NavLink>
             </li>
             <li>
@@ -137,6 +133,8 @@ export function Layout() {
                 Calendar
               </NavLink>
             </li>
+
+            <li className="menu-title mt-4">Oversight</li>
             <li>
               <NavLink to="/approvals" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 <span className="flex items-center justify-between w-full">
@@ -153,23 +151,20 @@ export function Layout() {
               </NavLink>
             </li>
             <li>
+              <NavLink to="/analytics" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Analytics
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/achievements" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 Achievements
               </NavLink>
             </li>
+
+            <li className="menu-title mt-4">Knowledge</li>
             <li>
-              <NavLink to="/org-chart" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                Org Chart
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/audit" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                Audit Log
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/usage" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                Usage
+              <NavLink to="/mind" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Mind
               </NavLink>
             </li>
 
@@ -190,24 +185,27 @@ export function Layout() {
               </NavLink>
             </li>
             <li>
-              <NavLink to="/repos" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                Repositories
-              </NavLink>
-            </li>
-            <li>
               <NavLink to="/artifacts" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 Artifacts
               </NavLink>
             </li>
 
-            <li className="menu-title mt-4">Knowledge</li>
+            <li className="menu-title mt-4">Admin</li>
             <li>
-              <NavLink to="/mind" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                Mind
+              <NavLink to="/org-chart" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Org Chart
               </NavLink>
             </li>
-
-            <li className="menu-title mt-4">Settings</li>
+            <li>
+              <NavLink to="/audit" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Audit Log
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/usage" className={({ isActive }) => isActive ? "menu-active" : ""}>
+                Usage
+              </NavLink>
+            </li>
             <li>
               <button onClick={() => openSettings()}>
                 Settings
@@ -238,7 +236,6 @@ export function Layout() {
 
       <StatusBar />
 
-      <VoiceChatFAB />
       <VoiceChatOverlay />
       <SettingsModal />
     </div>

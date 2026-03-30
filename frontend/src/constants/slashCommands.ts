@@ -12,4 +12,5 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: "recall", description: "Search memory and surface results", hasArgs: true, argHint: "<query>" },
   { name: "tasks", description: "Show running/pending tasks", hasArgs: false },
   { name: "status", description: "Agent status, memory stats", hasArgs: false },
+  { name: "discover", description: "Search available capabilities", hasArgs: true, argHint: "<query>" },
 ];

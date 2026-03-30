@@ -297,7 +297,14 @@ async def start_discord_bot() -> AxonDiscordBot | None:
     logger.info(f"Starting Discord bot with {len(channel_map)} channel mapping(s)")
     print(f"[AXON] Starting Discord bot with {len(channel_map)} channel mapping(s)")
 
+    async def _supervised_start() -> None:
+        """Run the bot with error logging — prevents silent task death."""
+        try:
+            await bot.start(token)
+        except Exception:
+            logger.exception("Discord bot crashed — will not auto-restart")
+
     # Start in background — don't block the server
-    asyncio.create_task(bot.start(token))
+    asyncio.create_task(_supervised_start())
 
     return bot

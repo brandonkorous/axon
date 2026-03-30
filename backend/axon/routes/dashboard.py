@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -290,7 +291,9 @@ async def get_dashboard():
             if vault_path.exists():
                 vaults_dir = vault_path.parent
                 break
-    return _build_dashboard(registry.agent_registry, vaults_dir, registry.default_org_id)
+    return await asyncio.to_thread(
+        _build_dashboard, registry.agent_registry, vaults_dir, registry.default_org_id,
+    )
 
 
 # ── Org-scoped routes ───────────────────────────────────────────────
@@ -303,8 +306,6 @@ async def get_org_dashboard(org_id: str):
     if not org:
         raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
 
-    # For org-scoped, scan within the org's vault directories
-    # We'll look at each agent's vault path parent to find the vaults root
     vaults_dir = None
     for agent in org.agent_registry.values():
         vault_path = Path(agent.config.vault.path)
@@ -312,4 +313,6 @@ async def get_org_dashboard(org_id: str):
             vaults_dir = vault_path.parent
             break
 
-    return _build_dashboard(org.agent_registry, vaults_dir, org_id)
+    return await asyncio.to_thread(
+        _build_dashboard, org.agent_registry, vaults_dir, org_id,
+    )

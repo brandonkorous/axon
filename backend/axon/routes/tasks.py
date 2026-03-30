@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -223,7 +224,9 @@ async def list_tasks_org(
     conversation_id: str | None = None,
     ws_target: str | None = None,
 ):
-    return _list_tasks(org_id, status, assignee, priority, conversation_id, ws_target)
+    return await asyncio.to_thread(
+        _list_tasks, org_id, status, assignee, priority, conversation_id, ws_target,
+    )
 
 
 @org_router.get("/{task_path:path}")
@@ -263,7 +266,9 @@ async def list_tasks_legacy(
     conversation_id: str | None = None,
     ws_target: str | None = None,
 ):
-    return _list_tasks(registry.default_org_id, status, assignee, priority, conversation_id, ws_target)
+    return await asyncio.to_thread(
+        _list_tasks, registry.default_org_id, status, assignee, priority, conversation_id, ws_target,
+    )
 
 
 @router.get("/{task_path:path}")

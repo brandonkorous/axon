@@ -46,14 +46,23 @@ class VaultCache:
 
     def load_all(self) -> None:
         """Hydrate the cache by reading all .md files from disk."""
-        files: dict[str, CachedFile] = {}
+        # First pass: collect all .md files and build a filename index
+        # so resolve_wikilink never needs to rglob per-link.
+        all_md_files: list[tuple[Path, str]] = []
+        filename_index: dict[str, list[Path]] = {}
 
         for md_file in self.vault_path.rglob("*.md"):
             if md_file.name.startswith("."):
                 continue
+            rel_path = str(md_file.relative_to(self.vault_path)).replace("\\", "/")
+            all_md_files.append((md_file, rel_path))
+            filename_index.setdefault(md_file.name, []).append(md_file)
+
+        # Second pass: parse files using the pre-built index
+        files: dict[str, CachedFile] = {}
+        for md_file, rel_path in all_md_files:
             try:
-                rel_path = str(md_file.relative_to(self.vault_path)).replace("\\", "/")
-                cached = self._parse_file(md_file, rel_path)
+                cached = self._parse_file(md_file, rel_path, filename_index)
                 if cached:
                     files[rel_path] = cached
             except Exception:
@@ -142,6 +151,12 @@ class VaultCache:
         adjacency: dict[str, list[str]] = {}
         backlinks: dict[str, list[str]] = {}
 
+        # Build filename index from cached files to avoid rglob
+        filename_index: dict[str, list[Path]] = {}
+        for rel_path in self._files:
+            full = self.vault_path / rel_path
+            filename_index.setdefault(full.name, []).append(full)
+
         # Build nodes from cache
         for rel_path, cached in self._files.items():
             parts = rel_path.split("/")
@@ -172,6 +187,7 @@ class VaultCache:
             for link in wikilinks:
                 resolved = resolve_wikilink(
                     link.target, self.vault_path, self.vault_path / rel_path,
+                    filename_index,
                 )
                 if resolved and resolved.exists():
                     target_path = str(resolved.relative_to(self.vault_path)).replace("\\", "/")
@@ -195,7 +211,12 @@ class VaultCache:
 
     # ── Internal ──────────────────────────────────────────────────────
 
-    def _parse_file(self, full_path: Path, rel_path: str) -> CachedFile | None:
+    def _parse_file(
+        self,
+        full_path: Path,
+        rel_path: str,
+        filename_index: dict[str, list[Path]] | None = None,
+    ) -> CachedFile | None:
         """Parse a single file into a CachedFile."""
         try:
             raw = full_path.read_text(encoding="utf-8")
@@ -210,7 +231,9 @@ class VaultCache:
         # Resolve outbound wikilinks
         links: list[str] = []
         for wl in extract_wikilinks(raw):
-            resolved = resolve_wikilink(wl.target, self.vault_path, full_path)
+            resolved = resolve_wikilink(
+                wl.target, self.vault_path, full_path, filename_index,
+            )
             if resolved and resolved.exists():
                 target = str(resolved.relative_to(self.vault_path)).replace("\\", "/")
                 links.append(target)

@@ -13,11 +13,19 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ["react", "react-dom", "react-router-dom"],
-          xyflow: ["@xyflow/react", "d3-force"],
-          markdown: ["react-markdown", "remark-gfm"],
-          motion: ["framer-motion"],
+        manualChunks(id) {
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/") || id.includes("node_modules/react-router")) {
+            return "react";
+          }
+          if (id.includes("node_modules/echarts")) {
+            return "echarts";
+          }
+          if (id.includes("node_modules/react-markdown") || id.includes("node_modules/remark-gfm")) {
+            return "markdown";
+          }
+          if (id.includes("node_modules/framer-motion")) {
+            return "motion";
+          }
         },
       },
     },

@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  type Node,
-  type Edge,
-  Position,
-  MarkerType,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as echarts from "echarts/core";
+import { TreeChart } from "echarts/charts";
+import { TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 import { orgApiPath } from "../../stores/orgStore";
+
+echarts.use([TreeChart, TooltipComponent, CanvasRenderer]);
 
 interface ChartNode {
   id: string;
@@ -33,43 +29,147 @@ interface ChartData {
   edges: ChartEdge[];
 }
 
-const STATUS_RING: Record<string, string> = {
-  active: "var(--color-success)",
-  paused: "var(--color-warning)",
-  disabled: "var(--color-secondary)",
-  terminated: "var(--color-error)",
+const STATUS_COLORS: Record<string, string> = {
+  active: "#22c55e",
+  paused: "#f59e0b",
+  disabled: "#9ca3af",
+  terminated: "#ef4444",
 };
 
-function AgentNode({ data }: { data: ChartNode & { isSubAgent?: boolean } }) {
-  const ringColor = STATUS_RING[data.status] || STATUS_RING.active;
-  const isChild = data.isSubAgent;
-
-  return (
-    <div className={`card bg-base-300 border border-secondary text-center shadow-lg ${isChild ? "px-3 py-2 min-w-[140px]" : "px-4 py-3 min-w-[160px]"}`}>
-      <div
-        className={`rounded-full mx-auto mb-2 flex items-center justify-center font-bold text-white ${isChild ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm"}`}
-        style={{
-          backgroundColor: data.color,
-          boxShadow: `0 0 0 3px ${ringColor}`,
-        }}
-        aria-hidden="true"
-      >
-        {data.name[0]}
-      </div>
-      <div className={`font-semibold text-base-content ${isChild ? "text-xs" : "text-sm"}`}>{data.name}</div>
-      <div className={`text-base-content/60 ${isChild ? "text-[9px]" : "text-[10px]"}`}>{data.title}</div>
-      {data.has_strategy_override && (
-        <div className="text-[9px] text-accent mt-1">strategy override</div>
-      )}
-    </div>
-  );
+interface ThemeColors {
+  label: string;
+  cardBg: string;
+  cardBorder: string;
 }
 
-const nodeTypes = { agent: AgentNode };
+interface TreeNode {
+  name: string;
+  value: string;
+  symbol: string;
+  symbolSize: number;
+  itemStyle: { color: string; borderColor: string; borderWidth: number };
+  label: Record<string, unknown>;
+  children: TreeNode[];
+}
+
+function buildTreeData(chartData: ChartData, theme: ThemeColors): TreeNode[] {
+  // Group children by parent
+  const childrenOf = new Map<string, ChartNode[]>();
+  for (const n of chartData.nodes) {
+    if (n.parent_id) {
+      const list = childrenOf.get(n.parent_id) || [];
+      list.push(n);
+      childrenOf.set(n.parent_id, list);
+    }
+  }
+
+  function toTreeNode(node: ChartNode): TreeNode {
+    const children = childrenOf.get(node.id) || [];
+    const statusColor = STATUS_COLORS[node.status] || STATUS_COLORS.active;
+    const initial = node.name[0]?.toUpperCase() || "?";
+
+    return {
+      name: node.name,
+      value: node.id,
+      symbol: "circle",
+      symbolSize: 0,
+      itemStyle: {
+        color: node.color,
+        borderColor: statusColor,
+        borderWidth: 3,
+      },
+      label: {
+        show: true,
+        formatter: [
+          `{avatar|${initial}}`,
+          "{gap| }",
+          `{name|${node.name}}`,
+          `{title|${node.title}}`,
+          node.has_strategy_override ? "{override|strategy override}" : "",
+        ].filter(Boolean).join("\n"),
+        backgroundColor: theme.cardBg,
+        borderColor: theme.cardBorder,
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: [12, 16, 12, 16],
+        align: "center",
+        rich: {
+          avatar: {
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: node.color,
+            color: "#fff",
+            fontSize: 14,
+            fontWeight: "bold" as const,
+            align: "center",
+            lineHeight: 36,
+            padding: [0, 0, 0, 0],
+            shadowBlur: 4,
+            shadowOffsetY: 1,
+            shadowColor: `${statusColor}88`,
+          },
+          gap: {
+            fontSize: 1,
+            lineHeight: 8,
+          },
+          name: {
+            fontSize: 13,
+            fontWeight: "bold" as const,
+            color: theme.label,
+            lineHeight: 20,
+          },
+          title: {
+            fontSize: 10,
+            color: theme.label + "99",
+            lineHeight: 16,
+          },
+          override: {
+            fontSize: 9,
+            color: "#84cc16",
+            lineHeight: 16,
+            padding: [2, 0, 0, 0],
+          },
+        },
+      },
+      children: children.map(toTreeNode),
+    };
+  }
+
+  // Find root nodes (no parent_id)
+  const roots = chartData.nodes.filter((n) => !n.parent_id);
+
+  // If there's an "axon" node, make it the single root
+  const axon = roots.find((n) => n.id === "axon");
+  if (axon) {
+    const otherRoots = roots.filter((n) => n.id !== "axon");
+    const axonTree = toTreeNode(axon);
+    for (const r of otherRoots) {
+      if (!axonTree.children.some((c) => c.value === r.id)) {
+        axonTree.children.push(toTreeNode(r));
+      }
+    }
+    return [axonTree];
+  }
+
+  return roots.map(toTreeNode);
+}
 
 export function OrgChartView() {
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartInstanceRef = useRef<echarts.ECharts | null>(null);
+
+  const theme = useMemo((): ThemeColors => {
+    const s = getComputedStyle(document.documentElement);
+    const get = (v: string, fallback: string) => s.getPropertyValue(v).trim() || fallback;
+    return {
+      label: get("--color-base-content", "#1f2937"),
+      cardBg: get("--color-base-300", "#d5c4a1"),
+      cardBorder: get("--color-secondary", "#c9a87c"),
+    };
+  }, []);
 
   useEffect(() => {
     fetch(orgApiPath("org-chart"))
@@ -81,142 +181,89 @@ export function OrgChartView() {
       .catch(() => setLoading(false));
   }, []);
 
-  const buildLayout = useCallback(() => {
-    if (!chartData) return { nodes: [], edges: [] };
+  const option = useMemo(() => {
+    if (!chartData) return null;
 
-    const axonNode = chartData.nodes.find((n) => n.id === "axon");
-    const topLevel = chartData.nodes.filter((n) => n.id !== "axon" && !n.parent_id);
-    const subAgents = chartData.nodes.filter((n) => n.parent_id);
+    const treeData = buildTreeData(chartData, theme);
 
-    // Group sub-agents by parent
-    const childrenOf = new Map<string, ChartNode[]>();
-    for (const sub of subAgents) {
-      const list = childrenOf.get(sub.parent_id!) || [];
-      list.push(sub);
-      childrenOf.set(sub.parent_id!, list);
-    }
-
-    const nodes: Node[] = [];
-    const centerX = 300;
-    const spacing = 200;
-
-    // Tier 0: Axon (orchestrator)
-    if (axonNode) {
-      nodes.push({
-        id: axonNode.id,
-        type: "agent",
-        position: { x: centerX, y: 50 },
-        data: axonNode as unknown as Record<string, unknown>,
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      });
-    }
-
-    // Tier 1: top-level agents
-    const startX = centerX - ((topLevel.length - 1) * spacing) / 2;
-    topLevel.forEach((node, i) => {
-      const x = startX + i * spacing;
-      nodes.push({
-        id: node.id,
-        type: "agent",
-        position: { x, y: 250 },
-        data: node as unknown as Record<string, unknown>,
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      });
-
-      // Tier 2: children of this agent
-      const children = childrenOf.get(node.id) || [];
-      const childSpacing = 170;
-      const childStartX = x - ((children.length - 1) * childSpacing) / 2;
-      children.forEach((child, j) => {
-        nodes.push({
-          id: child.id,
-          type: "agent",
-          position: { x: childStartX + j * childSpacing, y: 450 },
-          data: { ...child, isSubAgent: true } as unknown as Record<string, unknown>,
-          sourcePosition: Position.Bottom,
-          targetPosition: Position.Top,
-        });
-      });
-    });
-
-    // Edges
-    const edges: Edge[] = [];
-    const seen = new Set<string>();
-
-    // Separate parent_child edges from delegation edges — parent_child take priority
-    const parentChildPairs = new Set<string>();
-    for (const edge of chartData.edges) {
-      if (edge.type === "parent_child") {
-        parentChildPairs.add(`${edge.from}-${edge.to}`);
-      }
-    }
-
-    for (const edge of chartData.edges) {
-      const pairKey = `${edge.from}-${edge.to}`;
-      const key = `${pairKey}-${edge.type}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      const isParentChild = edge.type === "parent_child";
-
-      // Skip delegation edges that duplicate a parent_child relationship
-      if (!isParentChild && parentChildPairs.has(pairKey)) continue;
-
-      edges.push({
-        id: key,
-        source: edge.from,
-        target: edge.to,
-        animated: !isParentChild && edge.type === "can_delegate_to",
-        style: {
-          stroke: isParentChild
-            ? "var(--color-secondary)"
-            : edge.type === "can_delegate_to"
-              ? "var(--color-primary)"
-              : "var(--color-neutral)",
-          strokeWidth: isParentChild ? 2 : 1,
+    return {
+      tooltip: {
+        trigger: "item" as const,
+        formatter: (params: { data?: { name?: string } }) => params.data?.name || "",
+      },
+      series: [
+        {
+          type: "tree",
+          data: treeData,
+          top: 60,
+          bottom: 60,
+          left: 80,
+          right: 80,
+          layout: "orthogonal",
+          orient: "TB",
+          symbol: "none",
+          symbolSize: 0,
+          edgeShape: "polyline",
+          edgeForkPosition: "50%",
+          initialTreeDepth: -1,
+          roam: true,
+          label: {
+            position: "inside",
+            verticalAlign: "middle",
+            align: "center",
+          },
+          lineStyle: {
+            color: theme.cardBorder,
+            width: 2,
+            curveness: 0,
+          },
+          emphasis: {
+            focus: "ancestor",
+            label: {
+              shadowBlur: 8,
+              shadowColor: "rgba(0,0,0,0.15)",
+            },
+          },
+          expandAndCollapse: false,
+          animationDuration: 600,
+          animationEasingUpdate: "quinticInOut" as const,
         },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: isParentChild ? "var(--color-secondary)" : "var(--color-primary)",
-        },
-      });
-    }
+      ],
+    };
+  }, [chartData, theme]);
 
-    return { nodes, edges };
-  }, [chartData]);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !option) return;
 
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <span className="loading loading-spinner loading-md text-primary" />
-      </div>
-    );
-  }
+    const chart = chartInstanceRef.current ?? echarts.init(el);
+    chartInstanceRef.current = chart;
+    chart.setOption(option, true);
 
-  const { nodes, edges } = buildLayout();
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      chart.dispose();
+      chartInstanceRef.current = null;
+    };
+  }, [option]);
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-6 py-4 border-b border-neutral">
-        <h1 className="text-xl font-bold text-base-content">Org Chart</h1>
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-neutral">
+        <h1 className="text-lg sm:text-xl font-bold text-base-content">Org Chart</h1>
         <p className="text-xs text-base-content/60">
           Agent hierarchy and delegation relationships
         </p>
       </div>
-      <div className="flex-1">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          fitView
-          proOptions={{ hideAttribution: true }}
-          style={{ background: "var(--color-base-100)" }}
-        >
-          <Background color="var(--color-base-300)" gap={20} />
-          <Controls style={{ background: "var(--color-base-200)", borderColor: "var(--color-neutral)" }} />
-        </ReactFlow>
+      <div className="flex-1 min-h-0 relative" ref={containerRef}>
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="loading loading-spinner loading-md text-primary" />
+          </div>
+        )}
       </div>
     </div>
   );

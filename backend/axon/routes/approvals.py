@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -27,12 +28,8 @@ def _get_shared_vault(org_id: str):
     return org
 
 
-@org_router.get("/pending")
-async def list_pending_approvals(org_id: str):
-    """Return all tasks awaiting user approval."""
-    org = _get_shared_vault(org_id)
-    vault = org.shared_vault
-
+def _scan_pending(vault) -> list[dict[str, Any]]:
+    """Scan task files for pending approvals (sync — runs in thread)."""
     tasks_dir = Path(vault.vault_path) / "tasks"
     if not tasks_dir.exists():
         return []
@@ -55,7 +52,6 @@ async def list_pending_approvals(org_id: str):
                     "created_at": metadata.get("created_at", ""),
                     "updated_at": metadata.get("updated_at", ""),
                 }
-                # Include type-specific fields
                 task_type = metadata.get("type", "")
                 if task_type:
                     item["type"] = task_type
@@ -65,6 +61,7 @@ async def list_pending_approvals(org_id: str):
                     item["comms_payload"] = metadata.get("comms_payload", "")
                 elif task_type == "recruitment":
                     item["role"] = metadata.get("role", "")
+                    item["agent_name"] = metadata.get("agent_name", "")
                     item["reason"] = metadata.get("reason", "")
                     item["requested_by"] = metadata.get("requested_by", "")
                     item["system_prompt"] = metadata.get("system_prompt", "")
@@ -78,20 +75,10 @@ async def list_pending_approvals(org_id: str):
     return pending
 
 
-@org_router.get("/history")
-async def list_approval_history(
-    org_id: str,
-    status: str = "",
-    channel: str = "",
-    limit: int = 50,
-):
-    """Return past approvals (approved, declined, send_failed).
-
-    Optional filters: ?status=approved&channel=email&limit=20
-    """
-    org = _get_shared_vault(org_id)
-    vault = org.shared_vault
-
+def _scan_history(
+    vault, status: str, channel: str, limit: int,
+) -> list[dict[str, Any]]:
+    """Scan task files for approval history (sync — runs in thread)."""
     tasks_dir = Path(vault.vault_path) / "tasks"
     if not tasks_dir.exists():
         return []
@@ -140,6 +127,30 @@ async def list_approval_history(
     return results
 
 
+@org_router.get("/pending")
+async def list_pending_approvals(org_id: str):
+    """Return all tasks awaiting user approval."""
+    org = _get_shared_vault(org_id)
+    return await asyncio.to_thread(_scan_pending, org.shared_vault)
+
+
+@org_router.get("/history")
+async def list_approval_history(
+    org_id: str,
+    status: str = "",
+    channel: str = "",
+    limit: int = 50,
+):
+    """Return past approvals (approved, declined, send_failed).
+
+    Optional filters: ?status=approved&channel=email&limit=20
+    """
+    org = _get_shared_vault(org_id)
+    return await asyncio.to_thread(
+        _scan_history, org.shared_vault, status, channel, limit,
+    )
+
+
 @org_router.post("/{task_path:path}/approve")
 async def approve_task(org_id: str, task_path: str):
     """Approve a task plan. Sets status to 'approved'.
@@ -170,15 +181,18 @@ async def approve_task(org_id: str, task_path: str):
     if metadata.get("type") == "recruitment":
         from axon.routes.recruitment import ApproveRequest, approve_recruitment
 
-        role = metadata.get("role", "New Agent")
-        agent_id = role.lower().replace(" ", "_")
+        # Use the agent_name from refinement, fall back to role
+        agent_name = metadata.get("agent_name") or metadata.get("role", "New Agent")
+        role = metadata.get("role", "")
+        agent_id = agent_name.lower().replace(" ", "_").replace("-", "_")
         requested_by = metadata.get("requested_by", "")
         body_req = ApproveRequest(
-            name=role,
+            name=agent_name,
             agent_id=agent_id,
             parent_id=requested_by,
             system_prompt=metadata.get("system_prompt", ""),
             domains=metadata.get("domains", []),
+            tagline=role,
         )
         return await approve_recruitment(org_id, task_path, body_req)
 

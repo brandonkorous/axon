@@ -1,117 +1,59 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  type Node,
-  type Edge,
-  type NodeTypes,
-  Handle,
-  Position,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import {
-  forceSimulation,
-  forceLink,
-  forceManyBody,
-  forceCenter,
-  forceCollide,
-  type SimulationNodeDatum,
-  type SimulationLinkDatum,
-} from "d3-force";
+import { useEffect, useMemo, useRef } from "react";
+import * as echarts from "echarts/core";
+import { GraphChart } from "echarts/charts";
+import { TooltipComponent, LegendComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 import type { GraphNode, GraphEdge } from "../../stores/mindStore";
 
+echarts.use([GraphChart, TooltipComponent, LegendComponent, CanvasRenderer]);
+
 const BRANCH_COLORS: Record<string, string> = {
-  decisions: "#8b5cf6",
+  decisions: "#f97316",
   learnings: "#06b6d4",
   contacts: "#10b981",
-  hindsight: "#f59e0b",
+  hindsight: "#a855f7",
   ideas: "#ec4899",
   tasks: "#3b82f6",
   issues: "#ef4444",
   achievements: "#22c55e",
   audit: "#6b7280",
+  memory: "#f59e0b",
+  conversations: "#9ca3af",
+  deep: "#9ca3af",
+  research: "#8b5cf6",
+  branding: "#d946ef",
+  inbox: "#0ea5e9",
   "": "#9ca3af",
   root: "#9ca3af",
 };
 
+// Fallback palette for branches not in the map
+const FALLBACK_COLORS = ["#f59e0b", "#14b8a6", "#a855f7", "#f43f5e", "#84cc16", "#0891b2", "#e879f9", "#fb923c"];
+
 function getBranchColor(branch: string): string {
-  return BRANCH_COLORS[branch] || "#7c3aed";
+  if (BRANCH_COLORS[branch]) return BRANCH_COLORS[branch];
+  // Deterministic color from branch name so it's stable across renders
+  let hash = 0;
+  for (let i = 0; i < branch.length; i++) hash = (hash * 31 + branch.charCodeAt(i)) | 0;
+  return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
 }
 
-interface VaultNodeData extends Record<string, unknown> {
-  graphNode: GraphNode;
-  isHighlighted: boolean;
-  isNeighbor: boolean;
-  isDimmed: boolean;
-  onHover: (id: string | null) => void;
-  onClick: (id: string) => void;
-}
-
-function VaultNode({ data }: { data: VaultNodeData }) {
-  const { graphNode, isHighlighted, isNeighbor, isDimmed, onHover, onClick } = data;
-  const connections = graphNode.linkCount + graphNode.backlinkCount;
-  const size = Math.max(24, Math.min(48, 20 + connections * 4));
-  const color = getBranchColor(graphNode.branch);
-
-  return (
-    <div
-      className="flex flex-col items-center cursor-pointer"
-      onMouseEnter={() => onHover(graphNode.id)}
-      onMouseLeave={() => onHover(null)}
-      onClick={() => onClick(graphNode.id)}
-      style={{ opacity: isDimmed ? 0.15 : 1, transition: "opacity 150ms" }}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-0 !h-0" />
-      <div
-        className="rounded-full flex items-center justify-center text-xs font-bold text-white"
-        style={{
-          width: size,
-          height: size,
-          backgroundColor: color,
-          boxShadow: isHighlighted
-            ? `0 0 0 3px #fff, 0 0 12px ${color}`
-            : isNeighbor
-              ? `0 0 0 2px ${color}80`
-              : "none",
-          transition: "box-shadow 150ms",
-        }}
-      >
-        {graphNode.name[0]?.toUpperCase()}
-      </div>
-      <span
-        className="text-[10px] mt-1 max-w-[80px] truncate text-center"
-        style={{
-          color: isHighlighted || isNeighbor ? "#e5e7eb" : "#9ca3af",
-        }}
-      >
-        {graphNode.title || graphNode.name}
-      </span>
-      <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-0 !h-0" />
-    </div>
-  );
-}
-
-const nodeTypes: NodeTypes = { vault: VaultNode };
-
-interface SimNode extends SimulationNodeDatum {
-  id: string;
-}
+const LABEL_SIZE_THRESHOLD = 25;
 
 interface Props {
   nodes: GraphNode[];
   edges: GraphEdge[];
   visibleBranches: Set<string>;
   highlightedNodeId: string | null;
+  selectedNodeId: string | null;
   onNodeSelect: (id: string) => void;
   onNodeHover: (id: string | null) => void;
 }
 
-export function MindGraph({ nodes, edges, visibleBranches, highlightedNodeId, onNodeSelect, onNodeHover }: Props) {
-  const layoutRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-  const prevNodeCountRef = useRef(0);
+export function MindGraph({ nodes, edges, visibleBranches, highlightedNodeId, selectedNodeId, onNodeSelect, onNodeHover }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartInstanceRef = useRef<echarts.ECharts | null>(null);
 
-  // Filter nodes by visible branches
   const filteredNodes = useMemo(
     () => nodes.filter((n) => visibleBranches.has(n.branch || "root")),
     [nodes, visibleBranches],
@@ -124,96 +66,144 @@ export function MindGraph({ nodes, edges, visibleBranches, highlightedNodeId, on
     [edges, filteredNodeIds],
   );
 
-  // Build neighbor set for highlighting
-  const neighborIds = useMemo(() => {
-    if (!highlightedNodeId) return new Set<string>();
-    const ids = new Set<string>();
-    for (const e of filteredEdges) {
-      if (e.source === highlightedNodeId) ids.add(e.target);
-      if (e.target === highlightedNodeId) ids.add(e.source);
-    }
-    return ids;
-  }, [highlightedNodeId, filteredEdges]);
-
-  // Run force simulation when nodes change
-  useEffect(() => {
-    if (filteredNodes.length === 0) return;
-    if (filteredNodes.length === prevNodeCountRef.current && layoutRef.current.size > 0) return;
-    prevNodeCountRef.current = filteredNodes.length;
-
-    const simNodes: SimNode[] = filteredNodes.map((n) => ({
-      id: n.id,
-      x: layoutRef.current.get(n.id)?.x ?? Math.random() * 800,
-      y: layoutRef.current.get(n.id)?.y ?? Math.random() * 600,
+  const categories = useMemo(() => {
+    const branches = [...new Set(filteredNodes.map((n) => n.branch || "root"))];
+    return branches.map((b) => ({
+      name: b,
+      itemStyle: { color: getBranchColor(b) },
     }));
+  }, [filteredNodes]);
 
-    const nodeIndex = new Map(simNodes.map((n, i) => [n.id, i]));
-    const simLinks: SimulationLinkDatum<SimNode>[] = filteredEdges
-      .filter((e) => nodeIndex.has(e.source) && nodeIndex.has(e.target))
-      .map((e) => ({ source: nodeIndex.get(e.source)!, target: nodeIndex.get(e.target)! }));
+  const categoryIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    categories.forEach((c, i) => map.set(c.name, i));
+    return map;
+  }, [categories]);
 
-    const sim = forceSimulation(simNodes)
-      .force("link", forceLink(simLinks).distance(120).strength(0.3))
-      .force("charge", forceManyBody().strength(-200))
-      .force("center", forceCenter(400, 300))
-      .force("collide", forceCollide(40))
-      .stop();
+  // Resolve theme color for labels
+  const labelColor = useMemo(() => {
+    const el = document.documentElement;
+    return getComputedStyle(el).getPropertyValue("--color-base-content").trim() || "#1f2937";
+  }, []);
 
-    // Run synchronously
-    for (let i = 0; i < 200; i++) sim.tick();
+  const option = useMemo(() => {
+    const graphNodes = filteredNodes.map((n) => {
+      const connections = n.linkCount + n.backlinkCount;
+      const size = Math.max(8, Math.min(50, 10 + connections * 4));
 
-    const next = new Map<string, { x: number; y: number }>();
-    for (const n of simNodes) {
-      next.set(n.id, { x: n.x ?? 0, y: n.y ?? 0 });
-    }
-    layoutRef.current = next;
-  }, [filteredNodes, filteredEdges]);
-
-  // Build xyflow nodes/edges
-  const flowNodes: Node[] = useMemo(() => {
-    return filteredNodes.map((n) => {
-      const pos = layoutRef.current.get(n.id) || { x: Math.random() * 800, y: Math.random() * 600 };
-      const isHighlighted = n.id === highlightedNodeId;
-      const isNeighbor = neighborIds.has(n.id);
-      const isDimmed = !!highlightedNodeId && !isHighlighted && !isNeighbor;
+      const isSelected = n.id === selectedNodeId;
 
       return {
         id: n.id,
-        type: "vault",
-        position: pos,
-        data: {
-          graphNode: n,
-          isHighlighted,
-          isNeighbor,
-          isDimmed,
-          onHover: onNodeHover,
-          onClick: onNodeSelect,
-        } satisfies VaultNodeData,
-      };
-    });
-  }, [filteredNodes, highlightedNodeId, neighborIds, onNodeSelect, onNodeHover]);
-
-  const flowEdges: Edge[] = useMemo(() => {
-    return filteredEdges.map((e, i) => {
-      const isActive =
-        highlightedNodeId &&
-        (e.source === highlightedNodeId || e.target === highlightedNodeId);
-      return {
-        id: `e-${i}`,
-        source: e.source,
-        target: e.target,
-        style: {
-          stroke: isActive ? "#8b5cf6" : "#374151",
-          strokeWidth: isActive ? 2 : 1,
-          opacity: highlightedNodeId && !isActive ? 0.1 : 0.6,
+        name: n.title || n.name,
+        symbolSize: isSelected ? Math.max(size, 24) : size,
+        category: categoryIndex.get(n.branch || "root") ?? 0,
+        itemStyle: {
+          color: getBranchColor(n.branch),
+          borderColor: isSelected ? "#fff" : "transparent",
+          borderWidth: isSelected ? 3 : 0,
+          shadowBlur: isSelected ? 16 : 0,
+          shadowColor: isSelected ? getBranchColor(n.branch) : "transparent",
+        },
+        label: {
+          show: isSelected || size > LABEL_SIZE_THRESHOLD,
+          fontWeight: isSelected ? ("bold" as const) : ("normal" as const),
         },
       };
     });
-  }, [filteredEdges, highlightedNodeId]);
 
-  const onPaneClick = useCallback(() => {
-    onNodeHover(null);
-  }, [onNodeHover]);
+    const graphLinks = filteredEdges.map((e) => ({
+      source: e.source,
+      target: e.target,
+    }));
+
+    return {
+      tooltip: {},
+      legend: [
+        {
+          data: categories.map((c) => c.name),
+          textStyle: { color: labelColor, fontSize: 11 },
+          top: 12,
+          left: 12,
+        },
+      ],
+      animationDuration: 1500,
+      animationEasingUpdate: "quinticInOut" as const,
+      series: [
+        {
+          type: "graph",
+          legendHoverLink: false,
+          layout: "force",
+          roam: true,
+          draggable: true,
+          data: graphNodes,
+          links: graphLinks,
+          categories,
+          force: {
+            repulsion: 200,
+            edgeLength: [80, 160],
+            gravity: 0.1,
+            friction: 0.6,
+          },
+          label: {
+            position: "right",
+            formatter: (params: { name?: string }) => {
+              const name = params.name || "";
+              return name.length > 20 ? name.slice(0, 20) + "..." : name;
+            },
+            fontSize: 12,
+            color: labelColor,
+          },
+          lineStyle: {
+            color: "source",
+            curveness: 0.3,
+          },
+          emphasis: {
+            focus: "adjacency",
+            lineStyle: {
+              width: 10,
+            },
+          },
+        },
+      ],
+    };
+  }, [filteredNodes, filteredEdges, categories, categoryIndex, labelColor, selectedNodeId]);
+
+  // Init chart
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const chart = echarts.init(containerRef.current);
+    chartInstanceRef.current = chart;
+
+    chart.on("click", (params) => {
+      if (params.dataType === "node" && (params.data as { id?: string })?.id) {
+        onNodeSelect((params.data as { id: string }).id);
+      }
+    });
+    chart.on("mouseover", (params) => {
+      if (params.dataType === "node" && (params.data as { id?: string })?.id) {
+        onNodeHover((params.data as { id: string }).id);
+      }
+    });
+    chart.on("mouseout", (params) => {
+      if (params.dataType === "node") onNodeHover(null);
+    });
+
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(containerRef.current);
+
+    return () => {
+      observer.disconnect();
+      chart.dispose();
+      chartInstanceRef.current = null;
+    };
+  }, [onNodeSelect, onNodeHover]);
+
+  // Update options
+  useEffect(() => {
+    chartInstanceRef.current?.setOption(option, true);
+  }, [option]);
 
   if (filteredNodes.length === 0) {
     return (
@@ -223,25 +213,5 @@ export function MindGraph({ nodes, edges, visibleBranches, highlightedNodeId, on
     );
   }
 
-  return (
-    <ReactFlow
-      nodes={flowNodes}
-      edges={flowEdges}
-      nodeTypes={nodeTypes}
-      onPaneClick={onPaneClick}
-      fitView
-      minZoom={0.2}
-      maxZoom={3}
-      proOptions={{ hideAttribution: true }}
-      style={{ background: "var(--color-base-100)" }}
-    >
-      <Background color="var(--color-base-300)" gap={24} />
-      <Controls
-        style={{
-          background: "var(--color-base-200)",
-          borderColor: "var(--color-neutral)",
-        }}
-      />
-    </ReactFlow>
-  );
+  return <div ref={containerRef} className="w-full h-full" />;
 }

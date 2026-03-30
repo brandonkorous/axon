@@ -78,7 +78,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
 
             <div
                 className={`max-w-[80%] rounded-xl px-4 py-3 ${isUser
-                    ? "bg-secondary/30 border border-secondary text-secondary"
+                    ? "bg-neutral/30 border border-neutral text-neutral"
                     : isAck
                         ? "bg-base-300/30 text-base-content/60 border border-base-300/50 italic"
                         : "bg-base-300/50 text-base-content border border-base-300"

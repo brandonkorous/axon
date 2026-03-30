@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -52,6 +53,7 @@ from axon.routes import worker_setup as worker_setup_routes
 from axon.routes import credentials as credentials_routes
 from axon.routes import sandbox as sandbox_routes
 from axon.routes import sandbox_images as sandbox_images_routes
+from axon.routes import discovery as discovery_routes
 from axon.routes import plugins as plugins_routes
 from axon.routes import skills as skills_routes
 from axon.routes import user_prefs as user_prefs_routes
@@ -334,6 +336,17 @@ async def lifespan(app: FastAPI):
     from axon.scheduler import scheduler
     scheduler.start()
 
+    # Warm vault caches in background threads so lazy-load doesn't block the
+    # event loop later (which would starve Discord/Slack heartbeats).
+    vault_warm_tasks = []
+    for org in registry.org_registry.values():
+        for agent in org.agent_registry.values():
+            if hasattr(agent, "vault") and agent.vault is not None:
+                vault_warm_tasks.append(agent.vault.warm_cache())
+    if vault_warm_tasks:
+        await asyncio.gather(*vault_warm_tasks, return_exceptions=True)
+        logger.info("Vault caches warmed for %d agent(s)", len(vault_warm_tasks))
+
     # Start Discord and Slack bots if configured (also supports hot-start later)
     from axon.bot_manager import set_discord_bot, set_slack_bot
 
@@ -481,6 +494,7 @@ app.include_router(worker_setup_routes.org_router, prefix="/api/orgs/{org_id}/wo
 app.include_router(worker_control_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(sandbox_images_routes.org_router, prefix="/api/orgs/{org_id}/sandbox/images", tags=["sandbox-images"])
 app.include_router(sandbox_routes.org_router, prefix="/api/orgs/{org_id}/sandbox", tags=["sandbox"])
+app.include_router(discovery_routes.org_router, prefix="/api/orgs/{org_id}/discovery", tags=["discovery"])
 app.include_router(plugins_routes.org_router, prefix="/api/orgs/{org_id}/plugins", tags=["plugins"])
 app.include_router(skills_routes.org_router, prefix="/api/orgs/{org_id}/skills", tags=["skills"])
 app.include_router(usage_routes.org_router, prefix="/api/orgs/{org_id}/usage", tags=["usage"])

@@ -21,6 +21,7 @@ COMMAND_REGISTRY: dict[str, dict[str, Any]] = {
     "recall": {"description": "Search memory and surface results", "has_args": True, "arg_hint": "<query>"},
     "tasks": {"description": "Show running/pending tasks", "has_args": False},
     "status": {"description": "Agent status and memory stats", "has_args": False},
+    "discover": {"description": "Search available capabilities", "has_args": True, "arg_hint": "<query>"},
 }
 
 
@@ -276,6 +277,57 @@ async def _cmd_status(agent: Any, args: str, ws: WebSocket) -> None:
         await _send_result(ws, agent.id, "status", f"Failed to get status: {e}", success=False)
 
 
+# ── /discover — search available capabilities ──────────────────
+
+async def _cmd_discover(agent: Any, args: str, ws: WebSocket) -> None:
+    if not args.strip():
+        await _send_result(ws, agent.id, "discover", "Usage: /discover <query>", success=False)
+        return
+
+    try:
+        from axon.discovery.searcher import search_capabilities
+        from axon.discovery.store import list_requests
+        from axon.discovery.models import RequestStatus
+
+        config = agent.config
+        matches = search_capabilities(
+            query=args.strip(),
+            enabled_plugins=config.plugins.enabled if config.plugins else [],
+            enabled_skills=config.skills.enabled if config.skills else [],
+            enabled_integrations=config.integrations.enabled if config.integrations else [],
+        )
+
+        lines: list[str] = []
+        if matches:
+            lines.append(f"Capabilities matching '{args.strip()}' ({len(matches)} results):\n")
+            for m in matches:
+                status = "ENABLED" if m.is_enabled else "available"
+                creds = " [needs credentials]" if m.requires_credentials else ""
+                sandbox = f" [sandbox: {m.sandbox_type}]" if m.sandbox_type else ""
+                lines.append(f"  [{m.type.value:11s}] {m.name:30s} ({status}){creds}{sandbox}")
+                if m.description:
+                    lines.append(f"               {m.description[:80]}")
+        else:
+            lines.append(f"No capabilities found matching '{args.strip()}'.")
+            lines.append("The agent can use request_new_capability to submit a gap request.")
+
+        # Show pending requests for this agent
+        org_id = getattr(agent, "_org_id", "")
+        if org_id:
+            pending = list_requests(org_id, status=RequestStatus.PENDING, agent_id=agent.id)
+            if pending:
+                lines.append(f"\nPending requests from this agent ({len(pending)}):")
+                for r in pending[:5]:
+                    label = r.capability_name or r.description[:50]
+                    gap = " [GAP]" if r.is_gap else ""
+                    lines.append(f"  {r.id}: {label}{gap}")
+
+        await _send_result(ws, agent.id, "discover", "\n".join(lines))
+    except Exception as e:
+        logger.error("Slash /discover failed: %s", e, exc_info=True)
+        await _send_result(ws, agent.id, "discover", f"Discovery failed: {e}", success=False)
+
+
 # ── Handler map ──────────────────────────────────────────────────
 
 _HANDLERS: dict[str, Callable[..., Awaitable[None]]] = {
@@ -285,4 +337,5 @@ _HANDLERS: dict[str, Callable[..., Awaitable[None]]] = {
     "recall": _cmd_recall,
     "tasks": _cmd_tasks,
     "status": _cmd_status,
+    "discover": _cmd_discover,
 }

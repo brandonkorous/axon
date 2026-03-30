@@ -27,6 +27,7 @@ export interface Approval {
   comms_payload?: string; // JSON string of CommsPayload
   // Recruitment-specific fields (present when type === "recruitment")
   role?: string;
+  agent_name?: string;
   reason?: string;
   requested_by?: string;
   system_prompt?: string;

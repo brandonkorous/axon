@@ -136,9 +136,9 @@ class AxonAgent(Agent):
         base_prompt = self.config.load_system_prompt(self.config.vault.path)
         self.system_prompt = f"{base_prompt}\n\n{routing_section}"
 
-    def _build_tool_list(self) -> list:
+    def _build_tool_list(self, tool_groups: list[str] | None = None) -> list:
         """Add routing and pipeline tools to the standard vault tools."""
-        tools = super()._build_tool_list()
+        tools = super()._build_tool_list(tool_groups)
         tools.extend(ROUTING_TOOLS)
         tools.extend(PIPELINE_TOOLS)
         return tools
@@ -148,6 +148,8 @@ class AxonAgent(Agent):
         messages: list[dict[str, Any]],
         tool_calls: dict[int, dict],
         response_so_far: str,
+        *,
+        depth: int = 0,
     ) -> AsyncIterator[StreamChunk]:
         """Override to intercept routing tool calls."""
         for tc_data in tool_calls.values():
@@ -189,7 +191,7 @@ class AxonAgent(Agent):
                 return
 
         # For non-routing tools, use the parent handler
-        async for chunk in super()._handle_tool_calls(messages, tool_calls, response_so_far):
+        async for chunk in super()._handle_tool_calls(messages, tool_calls, response_so_far, depth=depth):
             yield chunk
 
     async def _run_pipeline(
