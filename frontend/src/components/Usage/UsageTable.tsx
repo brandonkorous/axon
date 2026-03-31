@@ -1,4 +1,5 @@
 import type { UsageRecord } from "../../stores/usageStore";
+import { formatCost } from "../../utils/format";
 
 interface Props {
   records: UsageRecord[];
@@ -6,11 +7,6 @@ interface Props {
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
-}
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
 }
 
 function formatTime(ts: string): string {

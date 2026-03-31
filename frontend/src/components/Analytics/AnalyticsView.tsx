@@ -38,7 +38,7 @@ export function AnalyticsView() {
 
       {error && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm">
-          Failed to load analytics data.
+          Could not load analytics data. Check your connection and try again.
           <button onClick={fetchAnalytics} className="btn btn-ghost btn-xs text-error">
             Retry
           </button>

@@ -15,7 +15,7 @@ VAULT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "vault_read",
+            "name": "memory_read",
             "description": "Read a file from the agent's memory vault. Returns the file content with frontmatter.",
             "parameters": {
                 "type": "object",
@@ -32,7 +32,7 @@ VAULT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "vault_write",
+            "name": "memory_write",
             "description": "Write or update a file in the agent's memory vault with YAML frontmatter.",
             "parameters": {
                 "type": "object",
@@ -74,7 +74,7 @@ VAULT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "vault_search",
+            "name": "memory_search",
             "description": "Search across all vault files for a query. Returns matching files with snippets.",
             "parameters": {
                 "type": "object",
@@ -91,7 +91,7 @@ VAULT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "vault_list",
+            "name": "memory_list",
             "description": "List all files in a vault branch/directory.",
             "parameters": {
                 "type": "object",
@@ -108,7 +108,7 @@ VAULT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "vault_backlinks",
+            "name": "memory_backlinks",
             "description": "Find all files that link to a given file. Useful for understanding relationships.",
             "parameters": {
                 "type": "object",
@@ -128,7 +128,7 @@ LEARNING_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "vault_link_outcome",
+            "name": "memory_link_outcome",
             "description": (
                 "Link a known outcome to prior decisions or advice. "
                 "Updates confidence on related entries based on whether "
@@ -163,7 +163,7 @@ DELEGATION_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "delegate_task",
-            "description": "Send a task to another agent for execution. The task will appear in their inbox.",
+            "description": "Send a task to another agent for execution. Creates a tracked task in the shared vault.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -197,8 +197,8 @@ DELEGATION_TOOLS: list[dict[str, Any]] = [
                         "type": "string",
                         "enum": ["async", "sync"],
                         "description": (
-                            "async (default): fire-and-forget — task goes to inbox, "
-                            "results arrive later. sync: wait for the agent to complete "
+                            "async (default): fire-and-forget — task is created in the shared vault, "
+                            "results arrive later via task activity. sync: wait for the agent to complete "
                             "and return the result inline."
                         ),
                         "default": "async",
@@ -280,7 +280,7 @@ DISCOVERY_TOOLS: list[dict[str, Any]] = [
             "description": (
                 "Search the organization's agent registry. Returns agents matching "
                 "the given filters. Use this to discover agents beyond your immediate "
-                "team — e.g., workers, sub-agents, or specialists deeper in the org."
+                "team — e.g., sub-agents or specialists deeper in the org."
             ),
             "parameters": {
                 "type": "object",
@@ -291,7 +291,7 @@ DISCOVERY_TOOLS: list[dict[str, Any]] = [
                     },
                     "type": {
                         "type": "string",
-                        "enum": ["advisor", "external"],
+                        "enum": ["advisor"],
                         "description": "Filter by agent type",
                     },
                     "parent_id": {
@@ -410,6 +410,9 @@ class ToolExecutor:
         from axon.research.executor import ResearchToolExecutor
         self._research_executor = ResearchToolExecutor()
 
+        # Plugin executor — set by Agent after init when plugins are enabled
+        self._plugin_executor: Any = None
+
         # Shared vault executor for task/issue/knowledge tools
         self._shared_executor: "SharedVaultToolExecutor | None" = None
         if shared_vault:
@@ -480,6 +483,12 @@ class ToolExecutor:
             self._log_audit(tool_name, arguments, result)
             return result
 
+        # Route plugin tools to the plugin executor
+        if self._plugin_executor and self._plugin_executor.can_handle(tool_name):
+            result = await self._plugin_executor.execute(tool_name, arguments)
+            self._log_audit(tool_name, arguments, result)
+            return result
+
         # Route shared vault tools to the shared executor
         if self._shared_executor and tool_name.startswith(self._SHARED_TOOL_PREFIXES):
             result = await self._shared_executor.execute(tool_name, arguments)
@@ -498,12 +507,12 @@ class ToolExecutor:
             return f"Error: Invalid JSON arguments: {arguments}"
 
         handlers = {
-            "vault_read": self._vault_read,
-            "vault_write": self._vault_write,
-            "vault_search": self._vault_search,
-            "vault_list": self._vault_list,
-            "vault_backlinks": self._vault_backlinks,
-            "vault_link_outcome": self._vault_link_outcome,
+            "memory_read": self._memory_read,
+            "memory_write": self._memory_write,
+            "memory_search": self._memory_search,
+            "memory_list": self._memory_list,
+            "memory_backlinks": self._memory_backlinks,
+            "memory_link_outcome": self._memory_link_outcome,
             "delegate_task": self._delegate_task,
             "request_agent": self._request_agent,
             "find_agents": self._find_agents,
@@ -539,7 +548,7 @@ class ToolExecutor:
         except Exception:
             pass  # Never let audit failure break tool execution
 
-    async def _vault_read(self, args: dict) -> str:
+    async def _memory_read(self, args: dict) -> str:
         path = args["path"]
         try:
             content = self.vault.read_file_raw(path)
@@ -547,7 +556,7 @@ class ToolExecutor:
         except FileNotFoundError:
             return f"File not found: {path}"
 
-    async def _vault_write(self, args: dict) -> str:
+    async def _memory_write(self, args: dict) -> str:
         path = args["path"]
         metadata = {
             "name": args.get("name", ""),
@@ -569,7 +578,7 @@ class ToolExecutor:
 
         return f"Written: {path}"
 
-    async def _vault_search(self, args: dict) -> str:
+    async def _memory_search(self, args: dict) -> str:
         results = self.vault.search(args["query"])
         if not results:
             return "No results found."
@@ -578,20 +587,20 @@ class ToolExecutor:
             lines.append(f"- **{r['title']}** (`{r['path']}`): {r['snippet'][:150]}...")
         return "\n".join(lines)
 
-    async def _vault_list(self, args: dict) -> str:
+    async def _memory_list(self, args: dict) -> str:
         files = self.vault.list_branch(args["branch"])
         if not files:
             return f"No files in branch: {args['branch']}"
         lines = [f"- [[{f['name']}]] — {f['description']}" for f in files]
         return "\n".join(lines)
 
-    async def _vault_backlinks(self, args: dict) -> str:
+    async def _memory_backlinks(self, args: dict) -> str:
         backlinks = self.vault.get_backlinks(args["path"])
         if not backlinks:
             return f"No files link to: {args['path']}"
         return "\n".join(f"- {bl}" for bl in backlinks)
 
-    async def _vault_link_outcome(self, args: dict) -> str:
+    async def _memory_link_outcome(self, args: dict) -> str:
         if not self._memory_manager:
             return "Error: Learning engine is not enabled for this agent."
         return await self._memory_manager.link_outcome(
@@ -676,67 +685,52 @@ class ToolExecutor:
 
             return f"[Result from {to_agent}]:\n\n{result_text}"
 
-        # ── Async mode (default): write to inbox + shared vault ──
+        # ── Async mode (default): create task in shared vault ──
         return await self._delegate_task_async(args, target, to_agent)
 
     async def _delegate_task_async(self, args: dict, target: Any, to_agent: str) -> str:
-        """Async delegation — write task to inbox for scheduler pickup."""
+        """Async delegation — create a tracked task in the shared vault."""
         today_str = str(date.today())
-        slug = args.get("task_description", "task")[:40].lower().replace(" ", "-")
-        task_path = f"inbox/{today_str}-{slug}.md"
 
-        metadata = {
-            "from": self.agent_id,
-            "date": today_str,
-            "priority": args.get("priority", "medium"),
-            "status": "pending",
-            "type": args.get("type", "research"),
-        }
         content = (
             f"## Task\n{args['task_description']}\n\n"
             f"## Context\n{args['context']}\n\n"
             f"## Expected Output\n{args['expected_output']}"
         )
 
-        # Write to the TARGET agent's vault inbox (not our own)
-        target.vault.write_file(task_path, metadata, content)
+        if not self._shared_executor:
+            return f"Error: No shared vault available for delegation to {to_agent}."
 
-        # Also create a trackable shared vault task for scheduler pickup
-        if self._shared_executor:
-            from axon.agents.shared_tools import _slugify
-            shared_slug = _slugify(args["task_description"][:80])
-            shared_path = f"tasks/{today_str}-{shared_slug}.md"
-            priority_map = {"high": "p1", "medium": "p2", "low": "p3"}
-            conv_id = (
-                self.conversation_manager.active_id
-                if hasattr(self, "conversation_manager") and self.conversation_manager
-                else ""
-            )
-            # External agents (workers) pick up "pending" tasks via REST polling;
-            # regular agents pick up "in_progress" tasks via the scheduler.
-            is_target_external = getattr(target, "is_external", False)
-            task_status = "pending" if is_target_external else "in_progress"
-            shared_meta = {
-                "name": args["task_description"][:80],
-                "type": "task",
-                "assignee": to_agent,
-                "status": task_status,
-                "priority": priority_map.get(args.get("priority", "medium"), "p2"),
-                "delegation_ref": task_path,
-                "created_by": self.agent_id,
-                "conversation_id": conv_id,
-                "ws_target": self.agent_id,
-                "created_at": datetime.utcnow().isoformat() + "Z",
-                "updated_at": datetime.utcnow().isoformat() + "Z",
-            }
-            shared_content = (
-                f"# {args['task_description'][:80]}\n\n{content}"
-            )
-            self._shared_executor.vault.write_file(
-                shared_path, shared_meta, shared_content,
-            )
+        from axon.agents.shared_tools import _slugify
+        shared_slug = _slugify(args["task_description"][:80])
+        shared_path = f"tasks/{today_str}-{shared_slug}.md"
+        priority_map = {"high": "p1", "medium": "p2", "low": "p3"}
+        conv_id = (
+            self.conversation_manager.active_id
+            if hasattr(self, "conversation_manager") and self.conversation_manager
+            else ""
+        )
+        task_status = "in_progress"
+        shared_meta = {
+            "name": args["task_description"][:80],
+            "type": "task",
+            "assignee": to_agent,
+            "status": task_status,
+            "priority": priority_map.get(args.get("priority", "medium"), "p2"),
+            "created_by": self.agent_id,
+            "conversation_id": conv_id,
+            "ws_target": self.agent_id,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+        shared_content = (
+            f"# {args['task_description'][:80]}\n\n{content}"
+        )
+        self._shared_executor.vault.write_file(
+            shared_path, shared_meta, shared_content,
+        )
 
-        return f"Task delegated to {to_agent} (async): {task_path}"
+        return f"Task delegated to {to_agent} (async): {shared_path}"
 
     async def _emit_stream_event(self, chunk: Any) -> None:
         """Emit a stream event via the callback (set by Agent)."""
@@ -833,32 +827,51 @@ class ToolExecutor:
 
             # Refine via LLM
             _log.info("[RECRUIT] Refining prompt for '%s'...", role)
-            name, system_prompt, domains = await self._refine_recruitment_prompt(
+            refined = await self._refine_recruitment_prompt(
                 role=role,
                 reason=reason,
                 description=description,
                 requested_by=self.agent_id,
                 team_roster=roster_context,
             )
-            if not name:
-                # Fallback name from role
-                name = role.split("-")[0].strip() if "-" in role else role
-            _log.info("[RECRUIT] Refinement complete for '%s' (name: %s) — %d domains, %d chars",
-                       role, name, len(domains), len(system_prompt))
 
-            # Update the vault entry with the refined prompt and name
+            # Extract fields with fallbacks
+            # name is a personal name (never the role title)
+            name = refined.get("name", "")
+            if not name:
+                name = await self._generate_agent_name(role, roster_context)
+            title = refined.get("title") or role
+            title_tag = refined.get("title_tag", "")[:4]
+            tagline = refined.get("tagline") or role
+            color = refined.get("color") or "#6B7280"
+            sparkle_color = refined.get("sparkle_color") or "#9CA3AF"
+            system_prompt = refined.get("system_prompt") or description
+            domains = refined.get("domains") or []
+
+            _log.info("[RECRUIT] Refinement complete for '%s' → name=%s, title=%s, tag=%s, %d domains",
+                       role, name, title, title_tag, len(domains))
+
+            # Update the vault entry with the full refined persona
             if task_path and self._shared_executor:
                 meta, _body = self._shared_executor.vault.read_file(task_path)
                 meta["system_prompt"] = system_prompt
                 meta["domains"] = domains
                 meta["agent_name"] = name
+                meta["agent_title"] = title
+                meta["agent_title_tag"] = title_tag
+                meta["agent_tagline"] = tagline
+                meta["agent_color"] = color
+                meta["agent_sparkle_color"] = sparkle_color
                 meta["status"] = "awaiting_approval"
-                meta["name"] = f"Recruit: {name} ({role})"
+                meta["name"] = f"Recruit: {name} ({title})"
                 domain_str = ", ".join(domains)
                 body = (
-                    f"# Recruitment Request: {name} — {role}\n\n"
+                    f"# Recruitment Request: {name} — {title}\n\n"
                     f"**Name:** {name}\n"
-                    f"**Role:** {role}\n"
+                    f"**Title:** {title}\n"
+                    f"**Tag:** {title_tag}\n"
+                    f"**Tagline:** {tagline}\n"
+                    f"**Color:** {color} · Sparkle: {sparkle_color}\n"
                     f"**Requested by:** {self.agent_id}\n"
                     f"**Reason:** {reason}\n"
                 )
@@ -888,10 +901,11 @@ class ToolExecutor:
         description: str,
         requested_by: str,
         team_roster: str,
-    ) -> tuple[str, str, list[str]]:
+    ) -> dict:
         """Use an LLM to refine a recruitment brief into a full agent persona.
 
-        Returns (name, system_prompt, domains).
+        Returns a dict with keys: name, title, title_tag, tagline, color,
+        sparkle_color, system_prompt, domains.
         """
         from axon.agents.provider import complete
         from axon.config import settings
@@ -899,23 +913,32 @@ class ToolExecutor:
 
         refinement_system = (
             "You are an agent architect. Your job is to take a rough hiring brief and "
-            "produce a polished, detailed agent persona.\n\n"
+            "produce a complete, polished agent persona ready to be deployed.\n\n"
             "You will receive:\n"
             "- The requested role and why it's needed\n"
             "- A brief description from the requesting agent\n"
             "- The current team roster (so you know who exists and can reference them)\n\n"
-            "Produce a JSON object with exactly three keys:\n"
+            "Produce a JSON object with ALL of these keys:\n\n"
             '- "name": A human first name for this agent (e.g., "Alex", "Priya", "Jordan"). '
-            "  If the brief already includes a name, use it. Otherwise, invent one that feels "
-            "  natural. This becomes the agent's identity — never use the role title as the name. "
-            "  The name must be unique across the existing team roster.\n"
+            "  If the brief already includes a name, use it. Otherwise, invent one. "
+            "  Never use the role title as the name. Must be unique across the team roster.\n"
+            '- "title": The formal role title (e.g., "Design Lead", "Data Analyst", '
+            '"UI/UX Designer"). This is the agent\'s job title.\n'
+            '- "title_tag": A 2-4 character uppercase abbreviation (e.g., "DSGN", "DATA", '
+            '"UIXD", "MKTG"). Must be unique across the team.\n'
+            '- "tagline": A one-line description of what this agent does '
+            '(e.g., "Owns design strategy and brand consistency across all products").\n'
+            '- "color": A hex color for this agent\'s UI theme (e.g., "#8B5CF6"). '
+            "Choose a color that feels appropriate for the role and is visually distinct "
+            "from existing team members' colors.\n"
+            '- "sparkle_color": A hex color for accent/sparkle effects, usually a lighter or '
+            "complementary shade of the main color.\n"
             '- "system_prompt": A well-structured persona prompt (string) that includes:\n'
             "  1. A clear identity statement using the name — who they are and their role\n"
             "  2. Core responsibilities (5-8 bullet points, specific to the role)\n"
             "  3. How they operate — principles, approach, what makes them effective\n"
             "  4. Coordination points — which existing team members they work with and on what\n"
             "  Write it in second person (\"You are...\"). Be specific, not generic. "
-            "  A Design Lead needs different instructions than a Data Analyst. "
             "  Do NOT include instructions about vault usage, tool usage, or team building — "
             "  those are injected automatically by the system.\n"
             '- "domains": An array of 3-6 advisory domain strings that define this agent\'s '
@@ -953,13 +976,44 @@ class ToolExecutor:
                 json_match = re.search(r"```(?:json)?\s*\n?(.*?)```", content, re.DOTALL)
                 if json_match:
                     content = json_match.group(1).strip()
-            parsed = _json.loads(content)
-            name = parsed.get("name", "")
-            return name, parsed.get("system_prompt", description), parsed.get("domains", [])
+            return _json.loads(content)
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning("Recruitment prompt refinement failed: %s", e)
-            return "", description, []
+            return {}
+
+    async def _generate_agent_name(self, role: str, team_roster: str) -> str:
+        """Generate a unique human name for an agent via LLM."""
+        from axon.agents.provider import complete
+        from axon.config import settings
+        import asyncio as _asyncio
+
+        try:
+            response = await _asyncio.wait_for(
+                complete(
+                    model=settings.default_model,
+                    messages=[
+                        {"role": "system", "content": (
+                            "Generate a single human first name for a new AI agent. "
+                            "The name should feel natural and be easy to remember. "
+                            "It must NOT match any name already on the team. "
+                            "Return ONLY the name, nothing else."
+                        )},
+                        {"role": "user", "content": (
+                            f"Role: {role}\n\nExisting team:\n{team_roster}"
+                        )},
+                    ],
+                    max_tokens=10,
+                    temperature=1.0,
+                ),
+                timeout=10,
+            )
+            return response.get("content", "Agent").strip().split()[0]
+        except Exception:
+            # Last resort — use role initials + random suffix
+            import random
+            initials = "".join(w[0].upper() for w in role.split()[:2])
+            return f"Agent-{initials}{random.randint(10, 99)}"
 
     async def _find_agents(self, args: dict) -> str:
         """Search the org agent registry with optional filters."""

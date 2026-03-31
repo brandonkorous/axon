@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useSandboxStore, type SandboxImageInfo } from "../../stores/sandboxStore";
+import { useSandboxStore, type SandboxImageInfo, type RunningInstance } from "../../stores/sandboxStore";
 import { StatusBarPopover } from "./StatusBarPopover";
 
 const STATUS_DOT: Record<string, string> = {
@@ -16,7 +17,31 @@ const STATUS_LABEL: Record<string, string> = {
     error: "Error",
 };
 
-function SandboxItem({ image }: { image: SandboxImageInfo }) {
+function RunningItem({ instance }: { instance: RunningInstance }) {
+    const { stopInstance } = useSandboxStore();
+
+    return (
+        <li className="flex flex-row items-center justify-between gap-2 px-3 py-1.5 hover:bg-base-content/5 rounded-lg">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="w-2 h-2 rounded-full flex-shrink-0 bg-success animate-pulse motion-reduce:animate-none" />
+                <span className="text-sm text-base-content truncate">
+                    {instance.instance_name || instance.instance_id}
+                </span>
+                <span className="text-xs text-base-content/40 truncate">
+                    {instance.agents.join(", ")}
+                </span>
+            </div>
+            <button
+                onClick={() => stopInstance(instance.instance_id)}
+                className="btn btn-error btn-soft btn-xs flex-shrink-0"
+            >
+                Stop
+            </button>
+        </li>
+    );
+}
+
+function ImageItem({ image }: { image: SandboxImageInfo }) {
     const { buildImage, removeImage } = useSandboxStore();
 
     return (
@@ -58,18 +83,32 @@ function SandboxItem({ image }: { image: SandboxImageInfo }) {
 
 export function StatusBarSandboxes({ buildingCount }: { buildingCount: number }) {
     const images = useSandboxStore((s) => s.images);
+    const runningInstances = useSandboxStore((s) => s.runningInstances);
+    const fetchRunningInstances = useSandboxStore((s) => s.fetchRunningInstances);
+
+    useEffect(() => {
+        fetchRunningInstances();
+        const interval = setInterval(fetchRunningInstances, 15000);
+        return () => clearInterval(interval);
+    }, [fetchRunningInstances]);
+
+    const runningCount = runningInstances.length;
+    const totalCount = runningCount + buildingCount;
+    const hasActivity = totalCount > 0;
 
     return (
         <StatusBarPopover
-            label={`${buildingCount} sandbox builds in progress`}
+            label={`${runningCount} running, ${buildingCount} building`}
             trigger={
                 <>
                     <span
-                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${buildingCount > 0 ? "bg-warning" : "bg-neutral/50"}${buildingCount > 0 ? " animate-pulse motion-reduce:animate-none" : ""}`}
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            hasActivity ? "bg-success" : "bg-neutral/50"
+                        }${runningCount > 0 ? " animate-pulse motion-reduce:animate-none" : ""}`}
                     />
-                    <span>{buildingCount}</span>
+                    <span>{totalCount}</span>
                     <span className="hidden sm:inline">
-                        {buildingCount === 1 ? "Sandbox" : "Sandboxes"}
+                        {totalCount === 1 ? "Sandbox" : "Sandboxes"}
                     </span>
                 </>
             }
@@ -82,14 +121,31 @@ export function StatusBarSandboxes({ buildingCount }: { buildingCount: number })
             </div>
 
             <ul className="overflow-y-auto flex-1 p-1 space-y-0.5">
-                {images.length === 0 && (
+                {/* Running instances */}
+                {runningInstances.length > 0 && (
+                    <>
+                        <li className="px-3 py-1 text-xs font-semibold text-base-content/50">Running</li>
+                        {runningInstances.map((inst) => (
+                            <RunningItem key={inst.instance_id} instance={inst} />
+                        ))}
+                    </>
+                )}
+
+                {/* Images */}
+                {images.length > 0 && (
+                    <>
+                        <li className="px-3 py-1 text-xs font-semibold text-base-content/50 mt-1">Images</li>
+                        {images.map((image) => (
+                            <ImageItem key={image.type} image={image} />
+                        ))}
+                    </>
+                )}
+
+                {runningInstances.length === 0 && images.length === 0 && (
                     <li className="px-3 py-3 text-xs text-base-content/50 text-center">
                         No sandbox images configured
                     </li>
                 )}
-                {images.map((image) => (
-                    <SandboxItem key={image.type} image={image} />
-                ))}
             </ul>
         </StatusBarPopover>
     );

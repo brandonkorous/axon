@@ -14,6 +14,7 @@ services:
       - DEFAULT_MODEL=${DEFAULT_MODEL:-anthropic/claude-sonnet-4-20250514}
       - OLLAMA_BASE_URL=http://ollama:11434
       - AXON_ORGS_DIR=/orgs
+      - AXON_ORGS_HOST_PATH=${AXON_ORGS_DIR:-./orgs}
       - AXON_LOG_LEVEL=${AXON_LOG_LEVEL:-INFO}
       - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY:-}
       - AXON_SANDBOX_IMAGE_SOURCE=local  # Dev: build from local Dockerfiles
@@ -72,13 +73,17 @@ services:
       - |
         echo "Waiting for Ollama to be ready..."
         until curl -s http://ollama:11434/api/tags > /dev/null 2>&1; do sleep 1; done
-        echo "Pulling navigator model (llama3)..."
-        curl -s http://ollama:11434/api/pull -d '{"name":"llama3"}' | head -1
+        echo "Pulling navigator model (${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b})..."
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b}\"}" | head -1
+        echo "Pulling memory model (${OLLAMA_MEMORY_MODEL:-llama3:8b})..."
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MEMORY_MODEL:-llama3:8b}\"}" | head -1
         echo "Pulling reasoning model (${OLLAMA_MODEL:-qwen2.5:14b})..."
         curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MODEL:-qwen2.5:14b}\"}" | head -1
         echo "Models ready."
     environment:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:14b}
+      - OLLAMA_NAVIGATOR_MODEL=${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b}
+      - OLLAMA_MEMORY_MODEL=${OLLAMA_MEMORY_MODEL:-llama3:8b}
 
 volumes:
   ollama_models:

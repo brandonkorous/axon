@@ -62,6 +62,31 @@ class SandboxManager:
         except Exception:
             return False
 
+    async def rediscover(self) -> int:
+        """Re-populate _containers from running Docker containers with axon labels.
+
+        Call on startup to recover tracking after a backend restart.
+        """
+        from axon.sandbox.containers import LABEL_PREFIX
+
+        try:
+            sandboxes = await self.provider.list_sandboxes(
+                label_filter={f"{LABEL_PREFIX}.managed": "true"},
+            )
+        except Exception:
+            return 0
+
+        recovered = 0
+        for sb in sandboxes:
+            if sb.status != "running":
+                continue
+            key = sb.labels.get(f"{LABEL_PREFIX}.key", "")
+            if key and key not in self._containers:
+                self._containers[key] = sb.sandbox_id
+                recovered += 1
+                logger.info("Rediscovered sandbox: %s (id=%s)", key, sb.sandbox_id[:12])
+        return recovered
+
     async def resolve_and_ensure(self, required_types: list[str]) -> str:
         """Resolve sandbox type from requirements and ensure the image exists."""
         from axon.sandbox.types import resolve_sandbox_type
@@ -80,12 +105,18 @@ class SandboxManager:
         instance_id: str | None = None,
         git_repos: list[dict] | None = None,
         git_credentials: dict[str, dict] | None = None,
+        plugin_mode: bool = False,
     ) -> str:
         """Create and start a sandbox. Returns the sandbox ID."""
         instance_id = instance_id or uuid.uuid4().hex[:8]
         key = f"{org_id}/{agent_id}/{instance_id}"
         if key in self._containers:
-            raise RuntimeError(f"Sandbox already exists: {key}")
+            # Destroy existing sandbox before recreating
+            try:
+                await self.provider.destroy_sandbox(self._containers[key])
+            except Exception:
+                pass
+            del self._containers[key]
 
         # Ensure the image is available
         from axon.sandbox.types import SandboxType
@@ -107,6 +138,7 @@ class SandboxManager:
             org_id, agent_id, instance_id,
             runner_dir, workspace_dir, config, merged_env,
             init_script=init_script,
+            plugin_mode=plugin_mode,
         )
         self._containers[key] = sandbox_id
         logger.info("Sandbox created: %s (id=%s)", key, sandbox_id[:12])

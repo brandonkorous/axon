@@ -1,15 +1,5 @@
 import type { AnalyticsData } from "../../stores/analyticsStore";
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
-  return String(tokens);
-}
+import { formatCost, formatTokens } from "../../utils/format";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (

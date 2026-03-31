@@ -22,15 +22,7 @@ export function PersonaEditor({
   const [tagline, setTagline] = useState(agent.tagline);
   const [color, setColor] = useState(agent.ui.color);
   const [sparkleColor, setSparkleColor] = useState(agent.ui.sparkle_color);
-  const [commsEnabled, setCommsEnabled] = useState(agent.comms_enabled ?? false);
-  const [emailAlias, setEmailAlias] = useState(agent.email_alias ?? "");
-  const [actionBias, setActionBias] = useState(agent.action_bias ?? "proactive");
   const [systemPrompt, setSystemPrompt] = useState("");
-
-  // Derive the domain from the current email address
-  const emailDomain = agent.email?.includes("@")
-    ? agent.email.split("@")[1]
-    : null;
 
   // Load full detail (including system_prompt) on mount
   useEffect(() => {
@@ -54,12 +46,6 @@ export function PersonaEditor({
     if (sparkleColor !== agent.ui.sparkle_color)
       update.sparkle_color = sparkleColor;
     if (systemPrompt) update.system_prompt = systemPrompt;
-    if (commsEnabled !== (agent.comms_enabled ?? false))
-      update.comms_enabled = commsEnabled;
-    if (emailAlias !== (agent.email_alias ?? ""))
-      update.email_alias = emailAlias;
-    if (actionBias !== (agent.action_bias ?? "proactive"))
-      update.action_bias = actionBias as PersonaUpdate["action_bias"];
 
     try {
       await updatePersona(agent.id, update);
@@ -115,55 +101,6 @@ export function PersonaEditor({
           placeholder="Short description of this agent's role"
           className="input input-sm input-bordered w-full"
         />
-      </label>
-
-      <div className="form-control">
-        <label className="label cursor-pointer justify-start gap-3">
-          <input
-            type="checkbox"
-            checked={commsEnabled}
-            onChange={(e) => setCommsEnabled(e.target.checked)}
-            className="toggle toggle-sm toggle-primary"
-          />
-          <span className="label-text text-xs">
-            Comms enabled
-            <span className="text-base-content/60 ml-1">(email &amp; Discord)</span>
-          </span>
-        </label>
-      </div>
-
-      {(commsEnabled || agent.email) && emailDomain && (
-        <label className="form-control">
-          <span className="label-text text-xs mb-1">Email address</span>
-          <div className="flex items-center gap-0">
-            <input
-              type="text"
-              value={emailAlias}
-              onChange={(e) => setEmailAlias(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))}
-              placeholder={agent.id}
-              className="input input-sm input-bordered rounded-r-none w-full font-mono"
-            />
-            <span className="bg-base-100 border border-l-0 border-neutral/30 rounded-r-lg px-3 py-1.5 text-xs text-base-content/60 font-mono whitespace-nowrap">
-              @{emailDomain}
-            </span>
-          </div>
-          <div className="text-[11px] text-base-content/60 mt-1">
-            Leave empty to use default ({agent.id})
-          </div>
-        </label>
-      )}
-
-      <label className="form-control">
-        <span className="label-text text-xs mb-1">Action Bias</span>
-        <select
-          value={actionBias}
-          onChange={(e) => setActionBias(e.target.value as "proactive" | "balanced" | "deliberative")}
-          className="select select-sm select-bordered w-full"
-        >
-          <option value="proactive">Proactive — Act first, explain after</option>
-          <option value="balanced">Balanced — Act on clear requests, clarify ambiguous ones</option>
-          <option value="deliberative">Deliberative — Think before high-stakes actions</option>
-        </select>
       </label>
 
       <div className="flex gap-3">

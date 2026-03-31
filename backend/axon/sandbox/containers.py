@@ -14,6 +14,10 @@ LABEL_PREFIX = "axon.sandbox"
 # Default command when no init script is provided
 _DEFAULT_CMD = ["bun", "run", "/runner/runner.js"]
 
+# Keep-alive command for plugin sandboxes (no runner process)
+_PLUGIN_CMD = ["sleep", "infinity"]
+
+
 # Command template when a git init script is present
 _INIT_CMD = ["bash", "-c", "bash /runner/git_init.sh && exec bun run /runner/runner.js"]
 
@@ -28,11 +32,11 @@ def create_container(
     config: SandboxConfig,
     env: dict[str, str],
     init_script: str | None = None,
+    plugin_mode: bool = False,
 ) -> Any:
     """Create and start a Docker container (synchronous, runs in thread)."""
     key = f"{org_id}/{agent_id}/{instance_id}"
     res = config.resources
-    mounts = build_mounts(runner_dir, workspace_dir, config.extra_mounts)
     container_name = f"axon-sandbox-{org_id}-{agent_id}-{instance_id[:8]}"
 
     labels = {
@@ -43,11 +47,23 @@ def create_container(
         f"{LABEL_PREFIX}.managed": "true",
     }
 
-    command = _DEFAULT_CMD
-    if init_script:
-        script_path = Path(runner_dir) / "git_init.sh"
-        script_path.write_text(init_script, encoding="utf-8")
-        command = _INIT_CMD
+    if plugin_mode:
+        command = _PLUGIN_CMD
+        mounts = build_mounts_plugin(workspace_dir, config.extra_mounts)
+    else:
+        mounts = build_mounts(runner_dir, workspace_dir, config.extra_mounts)
+        command = _DEFAULT_CMD
+        if init_script:
+            script_path = Path(runner_dir) / "git_init.sh"
+            script_path.write_text(init_script, encoding="utf-8")
+            command = _INIT_CMD
+
+    # Remove stale container with same name (e.g. after backend restart)
+    try:
+        old = client.containers.get(container_name)
+        old.remove(force=True)
+    except Exception:
+        pass
 
     container = client.containers.create(
         image=config.image,
@@ -65,6 +81,21 @@ def create_container(
     )
     container.start()
     return container
+
+
+def build_mounts_plugin(
+    workspace_dir: str,
+    extra: list[str],
+) -> dict[str, dict[str, str]]:
+    """Build Docker volume mount spec for plugin sandboxes (no runner dir)."""
+    mounts: dict[str, dict[str, str]] = {}
+    if workspace_dir:
+        mounts[workspace_dir] = {"bind": "/workspace", "mode": "rw"}
+    for mount_spec in extra:
+        parts = mount_spec.split(":", 1)
+        if len(parts) == 2:
+            mounts[parts[0]] = {"bind": parts[1], "mode": "rw"}
+    return mounts
 
 
 def build_mounts(
@@ -97,3 +128,5 @@ def build_mounts(
         if len(parts) == 2:
             mounts[parts[0]] = {"bind": parts[1], "mode": "rw"}
     return mounts
+
+

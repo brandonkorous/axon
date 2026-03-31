@@ -151,7 +151,7 @@ export function MemoryBrowserView() {
         <div className="flex-1 overflow-y-auto p-2">
           {error ? (
             <div className="p-3 text-center">
-              <p className="text-error text-xs mb-1">Failed to load vault.</p>
+              <p className="text-error text-xs mb-1">Could not load vault. Check your connection and try again.</p>
               <button onClick={() => { setError(false); fetch(`${orgApiPath("vaults")}/${selectedAgentId}/graph`).then((r) => r.json()).then((data) => { setNodes(data.nodes || []); setEdges(data.edges || []); }).catch(() => setError(true)); }} className="btn btn-ghost btn-xs text-error">Retry</button>
             </div>
           ) : searchQuery && searchResults.length > 0 ? (

@@ -156,14 +156,33 @@ class DockerProvider:
         config: SandboxConfig,
         env: dict[str, str],
         init_script: str | None = None,
+        plugin_mode: bool = False,
     ) -> str:
         container = await asyncio.to_thread(
             create_container, self._get_client(),
             org_id, agent_id, instance_id,
             runner_dir, workspace_dir, config, env,
             init_script=init_script,
+            plugin_mode=plugin_mode,
         )
         return container.id
+
+    async def exec_command(
+        self, sandbox_id: str, command: list[str], *, timeout: int = 120,
+    ) -> tuple[int, str, str]:
+        """Execute a command inside a running Docker container."""
+
+        def _exec() -> tuple[int, str, str]:
+            client = self._get_client()
+            container = client.containers.get(sandbox_id)
+            result = container.exec_run(command, workdir="/workspace")
+            output = result.output.decode(errors="replace") if result.output else ""
+            return result.exit_code, output, ""
+
+        return await asyncio.wait_for(
+            asyncio.to_thread(_exec),
+            timeout=timeout,
+        )
 
     async def stop_sandbox(self, sandbox_id: str, timeout: int = 10) -> None:
         c = self._get_client().containers.get(sandbox_id)

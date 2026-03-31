@@ -1,6 +1,6 @@
-"""Memory splitter — enforces word limits on memory fragments.
+"""Memory splitter — enforces character limits on memory fragments.
 
-When a memory exceeds the configured word limit, splits it into smaller
+When a memory exceeds the configured character limit, splits it into smaller
 linked fragments. Each fragment is a self-contained partial with wikilinks
 to its siblings, enabling associative recall.
 """
@@ -10,12 +10,10 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_WORDS = 150
+MAX_BODY_CHARS = 200
 # Split target is ~75% of max to leave room for linking text
 SPLIT_TARGET_RATIO = 0.75
 
@@ -31,15 +29,21 @@ class MemoryFragment:
     sibling_names: list[str]  # other fragments from the same split
 
 
-def count_words(text: str) -> int:
-    """Count words in text, ignoring frontmatter and wikilinks."""
-    clean = re.sub(r"\[\[.*?\]\]", "", text)
-    return len(clean.split())
+def _truncate_at_word(text: str, max_chars: int) -> str:
+    """Truncate text to max_chars, walking back to the last space."""
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars]
+    # Walk back to last space to avoid mid-word split
+    last_space = truncated.rfind(" ")
+    if last_space > 0:
+        return truncated[:last_space]
+    return truncated
 
 
-def needs_splitting(text: str, max_words: int = DEFAULT_MAX_WORDS) -> bool:
-    """Check if a memory text exceeds the word limit."""
-    return count_words(text) > max_words
+def needs_splitting(text: str, max_chars: int = MAX_BODY_CHARS) -> bool:
+    """Check if a memory text exceeds the character limit."""
+    return len(text) > max_chars
 
 
 def split_memory(
@@ -47,21 +51,21 @@ def split_memory(
     name: str,
     tags: str = "",
     related_files: list[str] | None = None,
-    max_words: int = DEFAULT_MAX_WORDS,
+    max_chars: int = MAX_BODY_CHARS,
 ) -> list[MemoryFragment]:
     """Split an oversized memory into linked fragments.
 
-    Each fragment stays under max_words and includes wikilinks to siblings.
+    Each fragment stays under max_chars and includes wikilinks to siblings.
     If the text is already within limits, returns a single fragment.
     """
-    if not needs_splitting(text, max_words):
+    if not needs_splitting(text, max_chars):
         return [MemoryFragment(
             name=name, body=text, tags=tags,
             related_files=related_files or [], sibling_names=[],
         )]
 
-    target_words = int(max_words * SPLIT_TARGET_RATIO)
-    chunks = _split_into_chunks(text, target_words)
+    target_chars = int(max_chars * SPLIT_TARGET_RATIO)
+    chunks = _split_into_chunks(text, target_chars)
 
     if len(chunks) == 1:
         return [MemoryFragment(
@@ -90,76 +94,59 @@ def split_memory(
     return fragments
 
 
-def _split_into_chunks(text: str, target_words: int) -> list[str]:
-    """Split text into chunks of roughly target_words size.
+def _split_into_chunks(text: str, target_chars: int) -> list[str]:
+    """Split text into chunks of roughly target_chars size.
 
-    Prefers splitting at paragraph boundaries, then sentence boundaries.
+    Prefers splitting at sentence boundaries, then word boundaries.
     """
-    paragraphs = re.split(r"\n\s*\n", text.strip())
+    text = text.strip()
 
-    if len(paragraphs) >= 2:
-        return _group_paragraphs(paragraphs, target_words)
-
-    # Single paragraph — split by sentences
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    # Try sentence-level splitting first
+    sentences = re.split(r"(?<=[.!?])\s+", text)
     if len(sentences) >= 2:
-        return _group_sentences(sentences, target_words)
+        return _group_segments(sentences, target_chars, " ")
 
-    # Can't split cleanly — force split by words
-    return _force_split(text, target_words)
+    # Fall back to word-boundary splitting
+    return _force_split(text, target_chars)
 
 
-def _group_paragraphs(paragraphs: list[str], target_words: int) -> list[str]:
-    """Group paragraphs into chunks close to target_words."""
+def _group_segments(
+    segments: list[str], target_chars: int, joiner: str,
+) -> list[str]:
+    """Group segments (sentences) into chunks close to target_chars."""
     chunks: list[str] = []
     current: list[str] = []
-    current_words = 0
+    current_len = 0
 
-    for para in paragraphs:
-        para_words = len(para.split())
-        if current_words + para_words > target_words and current:
-            chunks.append("\n\n".join(current))
-            current = [para]
-            current_words = para_words
+    for segment in segments:
+        seg_len = len(segment)
+        join_cost = len(joiner) if current else 0
+        if current_len + join_cost + seg_len > target_chars and current:
+            chunks.append(joiner.join(current))
+            current = [segment]
+            current_len = seg_len
         else:
-            current.append(para)
-            current_words += para_words
+            current.append(segment)
+            current_len += join_cost + seg_len
 
     if current:
-        chunks.append("\n\n".join(current))
+        chunks.append(joiner.join(current))
 
     return chunks
 
 
-def _group_sentences(sentences: list[str], target_words: int) -> list[str]:
-    """Group sentences into chunks close to target_words."""
+def _force_split(text: str, target_chars: int) -> list[str]:
+    """Force-split text at word boundaries when no sentence breaks exist."""
     chunks: list[str] = []
-    current: list[str] = []
-    current_words = 0
+    remaining = text
 
-    for sentence in sentences:
-        sent_words = len(sentence.split())
-        if current_words + sent_words > target_words and current:
-            chunks.append(" ".join(current))
-            current = [sentence]
-            current_words = sent_words
-        else:
-            current.append(sentence)
-            current_words += sent_words
-
-    if current:
-        chunks.append(" ".join(current))
-
-    return chunks
-
-
-def _force_split(text: str, target_words: int) -> list[str]:
-    """Force-split text by word count when no natural boundaries exist."""
-    words = text.split()
-    chunks: list[str] = []
-
-    for i in range(0, len(words), target_words):
-        chunks.append(" ".join(words[i:i + target_words]))
+    while remaining:
+        if len(remaining) <= target_chars:
+            chunks.append(remaining)
+            break
+        chunk = _truncate_at_word(remaining, target_chars)
+        chunks.append(chunk)
+        remaining = remaining[len(chunk):].lstrip()
 
     return chunks
 

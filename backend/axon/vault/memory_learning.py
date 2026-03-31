@@ -4,8 +4,8 @@ Extracts memories from conversation turns into tiered storage:
 - short-term: working context (5-7 day TTL)
 - long-term: validated insights (persistent)
 
-Each memory is kept to 100-200 words. Oversized extractions are split
-into linked fragments for associative recall.
+Each memory body is kept to 200 characters or fewer. Oversized
+extractions are split into linked fragments for associative recall.
 """
 
 from __future__ import annotations
@@ -87,9 +87,9 @@ async def extract_learnings(
         "LEARN — saving: %d short-term, %d long-term, %d updates, %d contradictions",
         len(short_term), len(long_term), len(updates), len(contradictions),
     )
-    max_words = config.max_memory_words
-    _write_short_term(vault, short_term, today, conversation_id, max_words)
-    _write_long_term(vault, long_term, today, max_words)
+    max_chars = config.max_memory_chars
+    _write_short_term(vault, short_term, today, conversation_id, max_chars)
+    _write_long_term(vault, long_term, today, max_chars)
     _apply_confidence_updates(vault, updates, today)
     _apply_contradictions(vault, contradictions, today)
     logger.debug("LEARN — all writes complete")
@@ -219,7 +219,7 @@ def _write_short_term(
     memories: list[dict[str, Any]],
     today: str,
     conversation_id: str,
-    max_words: int,
+    max_chars: int,
 ) -> None:
     """Write short-term memory fragments to memory/short-term/."""
     if not memories:
@@ -233,7 +233,7 @@ def _write_short_term(
 
         tags = mem_data.get("tags", "")
         related = mem_data.get("related_files", [])
-        fragments = split_memory(text, text[:80], tags, related, max_words)
+        fragments = split_memory(text, text[:80], tags, related, max_chars)
 
         for fragment in fragments:
             slug = fragment.name[:50].lower().replace(" ", "-")
@@ -265,7 +265,7 @@ def _write_long_term(
     vault: VaultManager,
     memories: list[dict[str, Any]],
     today: str,
-    max_words: int,
+    max_chars: int,
 ) -> None:
     """Write long-term memory fragments to memory/long-term/."""
     if not memories:
@@ -281,7 +281,7 @@ def _write_long_term(
         confidence = mem_data.get("confidence", 0.6)
         tags = mem_data.get("tags", "")
         related = mem_data.get("related_files", [])
-        fragments = split_memory(text, text[:80], tags, related, max_words)
+        fragments = split_memory(text, text[:80], tags, related, max_chars)
 
         for fragment in fragments:
             slug = fragment.name[:50].lower().replace(" ", "-")

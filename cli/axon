@@ -523,11 +523,14 @@ services:
         echo "Waiting for Ollama..."
         until curl -s http://ollama:11434/api/tags > /dev/null 2>&1; do sleep 1; done
         echo "Pulling models..."
-        curl -s http://ollama:11434/api/pull -d '{"name":"llama3"}'
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b}\"}"
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MEMORY_MODEL:-llama3:8b}\"}"
         curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MODEL:-qwen2.5:14b}\"}"
         echo "Models ready."
     environment:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:14b}
+      - OLLAMA_NAVIGATOR_MODEL=${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b}
+      - OLLAMA_MEMORY_MODEL=${OLLAMA_MEMORY_MODEL:-llama3:8b}
 
 volumes:
   ollama_models:
@@ -680,7 +683,7 @@ select_local_model() {
   esac
 
   ok "Selected model: ${LOCAL_MODEL}"
-  info "llama3:8b will also be pulled as the navigator model"
+  info "qwen2.5:7b (navigator) and llama3:8b (memory) will also be pulled"
 }
 
 # ── axon init <name> ────────────────────────────────────────────────────────

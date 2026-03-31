@@ -10,7 +10,7 @@ from axon.config import PersonaConfig
 
 if TYPE_CHECKING:
     from axon.audit import AuditLogger
-    from axon.org import OrgCommsConfig
+    from axon.org import OrgCommsConfig, OrgModelConfig
     from axon.usage import UsageTracker
     from axon.vault.vault import VaultManager
 
@@ -106,6 +106,7 @@ class AxonAgent(Agent):
         usage_tracker: "UsageTracker | None" = None,
         org_id: str = "",
         org_comms_config: "OrgCommsConfig | None" = None,
+        org_model_config: "OrgModelConfig | None" = None,
     ):
         super().__init__(
             config, data_dir,
@@ -114,6 +115,7 @@ class AxonAgent(Agent):
             usage_tracker=usage_tracker,
             org_id=org_id,
             org_comms_config=org_comms_config,
+            org_model_config=org_model_config,
         )
         self.available_agents = available_agents
         self._update_system_prompt()

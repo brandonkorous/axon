@@ -14,10 +14,6 @@ const OrgChartView = lazy(() => import("./components/OrgChart/OrgChartView").the
 const TaskBoardView = lazy(() => import("./components/Tasks/TaskBoardView").then(m => ({ default: m.TaskBoardView })));
 const UsageView = lazy(() => import("./components/Usage/UsageView").then(m => ({ default: m.UsageView })));
 const ApprovalsView = lazy(() => import("./components/Approvals/ApprovalsView").then(m => ({ default: m.ApprovalsView })));
-const InboxView = lazy(() => import("./components/Inbox/InboxView").then(m => ({ default: m.InboxView })));
-const WorkerListView = lazy(() => import("./components/Workers/WorkerListView").then(m => ({ default: m.WorkerListView })));
-const WorkerDetailView = lazy(() => import("./components/Workers/WorkerDetailView").then(m => ({ default: m.WorkerDetailView })));
-const WorkerSetupView = lazy(() => import("./components/Workers/WorkerSetupView").then(m => ({ default: m.WorkerSetupView })));
 const DocumentView = lazy(() => import("./components/Documents/DocumentView").then(m => ({ default: m.DocumentView })));
 const PluginBrowser = lazy(() => import("./components/Plugins/PluginBrowser").then(m => ({ default: m.PluginBrowser })));
 const PluginCreateView = lazy(() => import("./components/Plugins/PluginCreateView").then(m => ({ default: m.PluginCreateView })));
@@ -40,7 +36,6 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardView />} />
           <Route path="/tasks" element={<TaskBoardView />} />
           <Route path="/calendar" element={<CalendarView />} />
-          <Route path="/inbox" element={<InboxView />} />
           <Route path="/approvals" element={<ApprovalsView />} />
           <Route path="/issues" element={<IssueListView />} />
           <Route path="/achievements" element={<AchievementsView />} />
@@ -56,9 +51,6 @@ export default function App() {
           <Route path="/sandboxes" element={<SandboxImagesView />} />
           <Route path="/repos" element={<GitRepoList />} />
           <Route path="/artifacts" element={<ArtifactViewer />} />
-          <Route path="/workers" element={<WorkerListView />} />
-          <Route path="/workers/new" element={<WorkerSetupView />} />
-          <Route path="/workers/:agentId" element={<WorkerDetailView />} />
           <Route path="/analytics" element={<AnalyticsView />} />
           <Route path="/docs/:vaultId/*" element={<DocumentView />} />
         </Route>

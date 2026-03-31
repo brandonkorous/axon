@@ -70,7 +70,7 @@ def _scan_vault_decisions(vaults_dir: Path, limit: int = 10) -> list[dict[str, A
 
 
 def _scan_vault_pending_actions(vaults_dir: Path) -> list[dict[str, Any]]:
-    """Find pending action items and inbox tasks across vault directories."""
+    """Find pending action items across vault directories."""
     actions: list[dict[str, Any]] = []
     if not vaults_dir.exists():
         return []
@@ -78,27 +78,6 @@ def _scan_vault_pending_actions(vaults_dir: Path) -> list[dict[str, Any]]:
     for vault_dir in vaults_dir.iterdir():
         if not vault_dir.is_dir():
             continue
-
-        # Check inbox
-        inbox_dir = vault_dir / "inbox"
-        if inbox_dir.exists():
-            for md_file in inbox_dir.glob("*.md"):
-                if md_file.name == "README.md":
-                    continue
-                try:
-                    content = md_file.read_text(encoding="utf-8")
-                    metadata, _ = parse_frontmatter(content)
-                    if metadata.get("status") == "pending":
-                        actions.append({
-                            "vault": vault_dir.name,
-                            "path": str(md_file.relative_to(vault_dir)),
-                            "type": "inbox_task",
-                            "from": metadata.get("from", ""),
-                            "priority": metadata.get("priority", "medium"),
-                            "date": metadata.get("date", ""),
-                        })
-                except Exception:
-                    continue
 
         # Check action-items
         actions_dir = vault_dir / "action-items"

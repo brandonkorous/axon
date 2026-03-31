@@ -52,7 +52,7 @@ export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
       onClose();
       window.location.reload();
     } else {
-      setError("Failed to create organization. ID may already exist.");
+      setError("Could not create organization. An organization with this name may already exist.");
     }
     setCreating(false);
   };

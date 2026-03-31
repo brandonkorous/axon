@@ -41,6 +41,7 @@ TOOL_GROUP_WEB = "web"
 TOOL_GROUP_RESEARCH = "research"
 TOOL_GROUP_BROWSER = "browser"
 TOOL_GROUP_MEDIA = "media"
+TOOL_GROUP_PLUGINS = "plugins"
 
 # Always included — minimal baseline
 ALWAYS_INCLUDED = [TOOL_GROUP_VAULT]
@@ -184,6 +185,20 @@ _INTENT_RULES: list[dict[str, Any]] = [
         "tool_groups": [TOOL_GROUP_ACHIEVEMENT],
         "cognitive_patterns": [],
         "confidence": 0.7,
+    },
+    {
+        "name": "shell_filesystem",
+        "patterns": [
+            r"\b(list files|list dir|directory|folder|file system|filesystem|workspace)\b",
+            r"\b(shell|terminal|command|execute|exec|run|sandbox|container)\b",
+            r"\b(read file|write file|create file|delete file|edit file)\b",
+            r"\b(git|node|python|npm|pip|cargo|make)\b",
+            r"\b(shell_exec|shell_list_dir|shell_read_file|shell_write_file)\b",
+            r"\b(sandbox_exec|sandbox_list_dir|sandbox_read_file|sandbox_write_file)\b",
+        ],
+        "tool_groups": [TOOL_GROUP_PLUGINS, TOOL_GROUP_TASKS],
+        "cognitive_patterns": [],
+        "confidence": 0.9,
     },
 ]
 

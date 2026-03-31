@@ -19,13 +19,25 @@ export interface SandboxImageInfo {
   error?: string | null;
 }
 
+export interface RunningInstance {
+  instance_id: string;
+  instance_name: string;
+  plugin: string;
+  agents: string[];
+  sandbox_id: string;
+  status: "running" | "stopped";
+}
+
 interface SandboxStore {
   images: SandboxImageInfo[];
+  runningInstances: RunningInstance[];
   loading: boolean;
   buildProgress: Record<string, string[]>;
   activeSockets: Record<string, WebSocket>;
 
   fetchImages: () => Promise<void>;
+  fetchRunningInstances: () => Promise<void>;
+  stopInstance: (instanceId: string) => Promise<boolean>;
   buildImage: (type: string) => Promise<boolean>;
   removeImage: (type: string) => Promise<boolean>;
   subscribeBuildProgress: (type: string, onComplete?: () => void) => void;
@@ -34,9 +46,37 @@ interface SandboxStore {
 
 export const useSandboxStore = create<SandboxStore>((set, get) => ({
   images: [],
+  runningInstances: [],
   loading: false,
   buildProgress: {},
   activeSockets: {},
+
+  fetchRunningInstances: async () => {
+    try {
+      const res = await fetch(orgApiPath("sandbox/running"));
+      const data = await res.json();
+      set({ runningInstances: data.instances || [] });
+    } catch {
+      // ignore
+    }
+  },
+
+  stopInstance: async (instanceId) => {
+    try {
+      const res = await fetch(orgApiPath(`sandbox/running/${instanceId}/stop`), {
+        method: "POST",
+      });
+      if (res.ok) {
+        set((s) => ({
+          runningInstances: s.runningInstances.filter((i) => i.instance_id !== instanceId),
+        }));
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
 
   fetchImages: async () => {
     const hadImages = get().images.length > 0;

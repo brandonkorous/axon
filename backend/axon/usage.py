@@ -46,7 +46,7 @@ class UsageTracker:
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
-            "cost": round(cost, 8),
+            "cost": round(cost, 10),
             "agent_id": agent_id,
             "org_id": org_id,
             "call_type": call_type,
@@ -62,7 +62,7 @@ class UsageTracker:
                 f.write(line)
 
         logger.debug(
-            "Usage: model=%s tokens=%d cost=$%.6f agent=%s",
+            "Usage: model=%s tokens=%d cost=$%.10f agent=%s",
             model, total_tokens, cost, agent_id,
         )
 
@@ -151,15 +151,15 @@ class UsageTracker:
             by_agent[a]["count"] += 1
 
         return {
-            "total_cost": round(total_cost, 6),
+            "total_cost": round(total_cost, 10),
             "total_tokens": total_tokens,
             "total_requests": total_requests,
             "by_model": {
-                k: {**v, "cost": round(v["cost"], 6)}
+                k: {**v, "cost": round(v["cost"], 10)}
                 for k, v in sorted(by_model.items(), key=lambda x: -x[1]["cost"])
             },
             "by_agent": {
-                k: {**v, "cost": round(v["cost"], 6)}
+                k: {**v, "cost": round(v["cost"], 10)}
                 for k, v in sorted(by_agent.items(), key=lambda x: -x[1]["cost"])
             },
         }

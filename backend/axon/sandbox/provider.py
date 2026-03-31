@@ -66,6 +66,7 @@ class SandboxProvider(Protocol):
         config: SandboxConfig,
         env: dict[str, str],
         init_script: str | None = None,
+        plugin_mode: bool = False,
     ) -> str:
         """Create and start a sandbox. Returns a runtime-specific ID."""
         ...
@@ -84,6 +85,12 @@ class SandboxProvider(Protocol):
 
     async def get_logs(self, sandbox_id: str, tail: int = 100) -> list[str]:
         """Get recent log lines from a sandbox."""
+        ...
+
+    async def exec_command(
+        self, sandbox_id: str, command: list[str], *, timeout: int = 120,
+    ) -> tuple[int, str, str]:
+        """Execute a command inside a running sandbox. Returns (exit_code, stdout, stderr)."""
         ...
 
     async def list_sandboxes(

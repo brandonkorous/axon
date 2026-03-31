@@ -80,7 +80,7 @@ export function SandboxImagesView() {
                 {/* Inline remove confirmation */}
                 {confirmRemove === image.type && (
                   <div className="flex items-center gap-2 mt-1 ml-4">
-                    <span className="text-xs text-error">Remove this image?</span>
+                    <span className="text-xs text-error">Remove "{image.type}"? This cannot be undone.</span>
                     <button
                       onClick={() => handleRemove(image.type)}
                       className="btn btn-error btn-xs"

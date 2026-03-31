@@ -3,8 +3,8 @@ interface ToolUsagePanelProps {
 }
 
 const TOOL_COLORS: Record<string, string> = {
-  vault_write: "bg-accent",
-  vault_read: "bg-info",
+  memory_write: "bg-accent",
+  memory_read: "bg-info",
   file_write: "bg-accent",
   file_read: "bg-info",
   code_execute: "bg-warning",

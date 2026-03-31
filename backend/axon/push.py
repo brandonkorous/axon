@@ -48,7 +48,7 @@ def build_notification_payload(
     template = NOTIFICATION_MAP.get(event_type, NOTIFICATION_MAP["agent_result"])
     title = template["title"].format(agent_name=agent_name, task_title=task_title)
     body = template["body"].format(agent_name=agent_name, task_title=task_title)
-    url = f"/agent/{agent_id}" if agent_id else "/inbox"
+    url = f"/agent/{agent_id}" if agent_id else "/"
 
     return {
         "title": title,

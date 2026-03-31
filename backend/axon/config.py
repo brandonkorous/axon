@@ -31,7 +31,6 @@ class AgentType(str, Enum):
     ADVISOR = "advisor"
     ORCHESTRATOR = "orchestrator"
     HUDDLE = "huddle"
-    EXTERNAL = "external"
 
 
 class Settings(BaseSettings):
@@ -135,8 +134,8 @@ class LearningConfig(BaseModel):
     - long-term: validated insights and persistent knowledge
     - deep: forgotten memories awaiting user review before deletion
 
-    Each memory fragment is kept to 100-200 words. Larger extractions are
-    split into linked fragments for associative recall.
+    Each memory fragment body is kept to 200 characters or fewer. Larger
+    extractions are split into linked fragments for associative recall.
     """
 
     enabled: bool = True
@@ -152,7 +151,7 @@ class LearningConfig(BaseModel):
 
     # Memory tiers
     short_term_ttl_days: int = 7  # short-term memories expire after this
-    max_memory_words: int = 150  # target 100-200 words per fragment
+    max_memory_chars: int = 200  # max characters per memory fragment body
     promotion_confidence: float = 0.7  # confidence needed to promote to long-term
     deep_review_interval_days: int = 30  # surface deep memories for user review
 
@@ -250,8 +249,13 @@ def _resolve_vault_ref(ref: str, vaults_base: Path) -> str:
     return ref
 
 
-def _load_agent_yaml(yaml_path: Path, vault_dir: Path) -> PersonaConfig:
+def _load_agent_yaml(
+    yaml_path: Path,
+    vault_dir: Path,
+    org_model_config: "OrgModelConfig | None" = None,
+) -> PersonaConfig:
     """Load an agent.yaml from inside a vault directory."""
+    from axon.org import OrgModelConfig  # noqa: F811 — deferred to avoid circular import
     vaults_base = vault_dir.parent  # sibling vaults live here
 
     with open(yaml_path, encoding="utf-8") as f:
@@ -274,10 +278,6 @@ def _load_agent_yaml(yaml_path: Path, vault_dir: Path) -> PersonaConfig:
 
     data["vault"] = vault_data
 
-    # Map legacy external flag to type
-    if data.get("external", False) and "type" not in data:
-        data["type"] = AgentType.EXTERNAL
-
     config = PersonaConfig(**data)
 
     # Auto-wire child delegation: ensure child accepts work from parent
@@ -285,18 +285,26 @@ def _load_agent_yaml(yaml_path: Path, vault_dir: Path) -> PersonaConfig:
         if config.parent_id not in config.delegation.accepts_from and "*" not in config.delegation.accepts_from:
             config.delegation.accepts_from.append(config.parent_id)
 
-    # Resolve empty models to the global default
-    default = settings.default_model
-    if not config.model.reasoning:
-        config.model.reasoning = default
-    if not config.model.navigator:
-        config.model.navigator = default
+    # Resolve models: agent → org roles → settings.default_model (legacy fallback)
+    if org_model_config and org_model_config.roles:
+        org_roles = org_model_config.roles
+        if not config.model.reasoning:
+            config.model.reasoning = org_roles.reasoning or org_roles.agent or settings.default_model
+        if not config.model.navigator:
+            config.model.navigator = org_roles.navigator or org_roles.agent or settings.default_model
+    else:
+        default = settings.default_model
+        if not config.model.reasoning:
+            config.model.reasoning = default
+        if not config.model.navigator:
+            config.model.navigator = default
 
     return config
 
 
 def discover_agents_from_vaults(
     vaults_dir: str | Path,
+    org_model_config: "OrgModelConfig | None" = None,
 ) -> dict[str, PersonaConfig]:
     """Discover agents by scanning vault folders for agent.yaml.
 
@@ -315,7 +323,7 @@ def discover_agents_from_vaults(
         if not agent_yaml.exists():
             continue
         try:
-            config = _load_agent_yaml(agent_yaml, child)
+            config = _load_agent_yaml(agent_yaml, child, org_model_config=org_model_config)
             agents[config.id] = config
             logger.debug("Discovered agent '%s' from %s", config.id, child)
         except Exception:

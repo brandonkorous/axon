@@ -1,0 +1,11 @@
+{
+  "name": "@axon/host-agent",
+  "version": "1.0.0",
+  "description": "Lightweight host service for Axon — provides filesystem and executable access",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "manager": "node manager.js"
+  },
+  "dependencies": {}
+}

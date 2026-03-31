@@ -7,7 +7,7 @@ const STATUSES = [
   { key: "in_progress", label: "In Progress" },
   { key: "blocked", label: "Blocked" },
   { key: "done", label: "Done" },
-  { key: "failed", label: "Failed" },
+  { key: "accepted", label: "Accepted" },
   { key: "closed", label: "Closed" },
 ] as const;
 

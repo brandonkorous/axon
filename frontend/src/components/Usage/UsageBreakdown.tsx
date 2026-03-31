@@ -1,20 +1,10 @@
 import type { BreakdownEntry } from "../../stores/usageStore";
+import { formatCost, formatTokens } from "../../utils/format";
 
 interface Props {
   title: string;
   data: Record<string, BreakdownEntry>;
   totalCost: number;
-}
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
-  return String(tokens);
 }
 
 export function UsageBreakdown({ title, data, totalCost }: Props) {

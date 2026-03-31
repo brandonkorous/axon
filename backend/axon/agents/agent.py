@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from axon.agents.conversation import Conversation, ConversationManager
 
 if TYPE_CHECKING:
-    from axon.org import OrgCommsConfig
+    from axon.org import OrgCommsConfig, OrgModelConfig
     from axon.usage import UsageTracker
 from axon.agents.provider import complete, stream_completion
-from axon.agents.shared_tools import ACHIEVEMENT_TOOLS, ISSUE_TOOLS, KNOWLEDGE_TOOLS, TASK_TOOLS, SharedVaultToolExecutor
+from axon.agents.shared_tools import ISSUE_TOOLS, KNOWLEDGE_TOOLS, TASK_TOOLS, SharedVaultToolExecutor
 from axon.agents.tools import (
     DELEGATION_TOOLS,
     DISCOVERY_TOOLS,
@@ -91,6 +91,7 @@ class Agent:
         usage_tracker: "UsageTracker | None" = None,
         org_id: str = "",
         org_comms_config: "OrgCommsConfig | None" = None,
+        org_model_config: "OrgModelConfig | None" = None,
     ):
         self.config = config
         self.id = config.id
@@ -107,7 +108,12 @@ class Agent:
         if config.learning.enabled:
             from axon.vault.memory_manager import MemoryManager
 
-            memory_model = config.learning.memory_model or config.model.navigator
+            # Resolve memory model: agent config → org memory role → navigator
+            memory_model = config.learning.memory_model
+            if not memory_model and org_model_config and org_model_config.roles.memory:
+                memory_model = org_model_config.roles.memory
+            if not memory_model:
+                memory_model = config.model.navigator
             self.memory_manager = MemoryManager(
                 vault=self.vault,
                 config=config.learning,
@@ -219,6 +225,12 @@ class Agent:
         )
         self.tool_executor._stream_callback = self._buffer_tool_stream_event
         self._pending_tool_events: list[StreamChunk] = []
+
+        # Plugin executor — routes tool calls to enabled plugins
+        self._plugin_executor = self._build_plugin_executor()
+        if self._plugin_executor:
+            self.tool_executor._plugin_executor = self._plugin_executor
+
         self.tools = self._build_tool_list()
 
         # Lifecycle (persisted to data/agent-state/)
@@ -497,7 +509,20 @@ class Agent:
             routing.tool_groups, routing.pattern_names,
         )
         routed_tools = self._build_tool_list(routing.tool_groups)
-        messages = self._build_messages(user_message, vault_context, routing.pattern_names)
+
+        # 2b. Use navigator model to further filter tools and generate instruction
+        tool_instruction = ""
+        if self.config.model.navigator and len(routed_tools) > 8:
+            from axon.agents.tool_router import route_tools
+            routed_tools, tool_instruction = await route_tools(
+                navigator_model=self.config.model.navigator,
+                user_message=user_message,
+                available_tools=routed_tools,
+            )
+            if tool_instruction:
+                logger.debug("[%s] Tool instruction: %s", self.id, tool_instruction[:100])
+
+        messages = self._build_messages(user_message, vault_context, routing.pattern_names, tool_instruction=tool_instruction)
 
         # 3. Add user message to history (skip for scheduler-triggered tasks)
         if save_history:
@@ -630,33 +655,6 @@ class Agent:
         except Exception as e:
             logger.debug("Learning extraction failed (non-critical): %s", e)
 
-    def _get_inbox_summary(self, max_items: int = 5) -> str:
-        """Read recent pending inbox items for injection into conversation context."""
-        inbox_dir = Path(self.vault.vault_path) / "inbox"
-        if not inbox_dir.exists():
-            return ""
-
-        items = []
-        for md_file in sorted(inbox_dir.glob("*.md"), reverse=True):
-            if md_file.name.endswith("-index.md"):
-                continue
-            if len(items) >= max_items:
-                break
-            try:
-                metadata, body = self.vault.read_file(f"inbox/{md_file.name}")
-                if metadata.get("status") != "pending":
-                    continue
-                item_type = metadata.get("type", "")
-                # Only surface actionable notifications
-                if item_type not in ("plan_ready", "task_completed", "task_failed", "memory_nudge"):
-                    continue
-                from_agent = metadata.get("from", "unknown")
-                items.append(f"### From {from_agent} ({item_type})\n{body[:2000]}")
-            except Exception:
-                continue
-
-        return "\n".join(items)
-
     def _get_active_output_fields(self, user_message: str) -> list | None:
         """Get output fields from active skills for this message."""
         if not hasattr(self.config, "skills") or not self.config.skills or not self.config.skills.enabled:
@@ -681,20 +679,21 @@ class Agent:
     def _build_messages(
         self, user_message: str, vault_context: str,
         routed_patterns: list[str] | None = None,
+        tool_instruction: str = "",
     ) -> list[dict[str, Any]]:
         """Build the full message array for the LLM."""
         # Inject agent identity and org context
         identity = (
             f"## Agent Identity\n"
             f"You are **{self.name}** (agent ID: `{self.id}`). "
-            f"When you see tasks, inbox items, or references assigned to "
+            f"When you see tasks or references assigned to "
             f"`{self.id}`, those are assigned to **you** — act on them directly.\n\n"
             f"## Personal Vault\n"
             f"You have a personal knowledge vault. Use it actively:\n"
             f"- **Before responding**, check your vault for relevant context "
-            f"(`vault_search`, `vault_list`).\n"
+            f"(`memory_search`, `memory_list`).\n"
             f"- **After learning something important**, store it "
-            f"(`vault_write`) so you can reference it later.\n"
+            f"(`memory_write`) so you can reference it later.\n"
             f"- Your vault is your memory across conversations — "
             f"decisions, research, insights, and working notes belong there.\n\n"
         )
@@ -714,7 +713,7 @@ class Agent:
                 "   Example: `task_update(path='tasks/2026-03-22-pricing.md', status='in_progress')`\n"
                 "3. `task_create` — create new tasks and assign to agents by ID.\n"
                 "4. `issue_create` / `issue_list` — for bugs and problems.\n"
-                "5. `vault_list('inbox')` — check your inbox for delegated work.\n\n"
+                "5. `task_list(assignee='" + self.id + "')` — check for assigned tasks.\n\n"
                 "### Rules\n"
                 "- **When asked about your tasks**: call `task_list(assignee='" + self.id + "')` first.\n"
                 "- **Tasks assigned to you are YOUR responsibility.** "
@@ -752,16 +751,16 @@ class Agent:
             "## Capability Self-Awareness\n"
             "You have access to capability discovery tools. **Use them.**\n\n"
             "### When to discover\n"
-            "- When someone asks what tools you have or need — call `discover_capabilities` "
+            "- When someone asks what tools you have or need — call `plugins_discover` "
             "to see what's **actually available**, not just what you currently have.\n"
             "- When you realize you **can't** do something (browse a site, generate a PDF, "
             "run code, process images) — search for a capability that would let you.\n"
             "- When asked to inspect, audit, or interact with external resources and you "
             "lack the tools — don't just say \"I can't\". Search first.\n\n"
             "### When to request\n"
-            "- If `discover_capabilities` finds something you need but don't have enabled, "
-            "use `request_capability` to enable it.\n"
-            "- If nothing exists for what you need, use `request_new_capability` to flag the gap.\n\n"
+            "- If `plugins_discover` finds something you need but don't have enabled, "
+            "use `plugins_enable` to enable it.\n"
+            "- If nothing exists for what you need, use `plugins_request` to flag the gap.\n\n"
             "### Critical rule\n"
             "**Never say \"I have everything I need\" without checking.** If your role "
             "implies you should be able to do something (e.g., a design lead should be able "
@@ -870,6 +869,9 @@ class Agent:
         if pattern_prompt:
             prompt += f"\n\n{pattern_prompt}"
 
+        if tool_instruction:
+            prompt += f"\n\n## Tool Guidance\n{tool_instruction}"
+
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": prompt},
         ]
@@ -884,23 +886,6 @@ class Agent:
         # (short-term + long-term). The memory manager extracts and stores
         # relevant context from each turn, so the agent has continuity
         # without burning tokens on full chat replay.
-
-        # Inject unread inbox notifications
-        inbox_summary = self._get_inbox_summary()
-        logger.debug("[%s] Inbox summary: %d chars", self.id, len(inbox_summary))
-        if inbox_summary:
-            messages.append({
-                "role": "user",
-                "content": (
-                    "[SYSTEM: Inbox Notifications — unread updates from other agents]\n\n"
-                    + inbox_summary
-                    + "\n\n[Reference these updates when responding. They are current and authoritative.]"
-                ),
-            })
-            messages.append({
-                "role": "assistant",
-                "content": "Noted — I see the inbox updates and will factor them into my response.",
-            })
 
         # Add current user message
         messages.append({"role": "user", "content": user_message})
@@ -991,6 +976,52 @@ class Agent:
 
         return protocol
 
+    def _build_plugin_executor(self) -> "PluginToolExecutor | None":
+        """Create a PluginToolExecutor from org-level plugin instances."""
+        from axon.plugins.executor import PluginToolExecutor
+        from axon.plugins.registry import PLUGIN_REGISTRY
+        import axon.registry as reg
+
+        # Collect instances assigned to this agent from org config
+        org = reg.org_registry.get(self._org_id)
+        if not org or not org.config.plugin_instances:
+            return None
+
+        my_instances = [
+            inst for inst in org.config.plugin_instances
+            if self.id in inst.agents
+        ]
+        if not my_instances:
+            return None
+
+        # Build instance_map: {plugin_name: [(instance_id, plugin_obj), ...]}
+        instance_map: dict[str, list[tuple[str, "BasePlugin"]]] = {}
+        for inst in my_instances:
+            cls = PLUGIN_REGISTRY.get(inst.plugin)
+            if not cls:
+                continue
+            try:
+                plugin_obj = cls(
+                    agent_id=self.id,
+                    org_id=self._org_id,
+                    instance_id=inst.id,
+                    **inst.config,
+                )
+                plugin_obj.on_load()
+                instance_map.setdefault(inst.plugin, []).append(
+                    (inst.id, plugin_obj),
+                )
+            except Exception as e:
+                logger.warning(
+                    "[%s] Failed to load plugin instance '%s': %s",
+                    self.id, inst.id, e,
+                )
+
+        if not instance_map:
+            return None
+
+        return PluginToolExecutor(instance_map)
+
     def _build_tool_list(self, tool_groups: list[str] | None = None) -> list[dict[str, Any]]:
         """Build the tool list based on agent capabilities and intent routing.
 
@@ -998,11 +1029,12 @@ class Agent:
         for the specified groups. Otherwise includes all available tools.
         """
         from axon.agents.intent_router import (
-            TOOL_GROUP_ACHIEVEMENT, TOOL_GROUP_BROWSER, TOOL_GROUP_COMMS,
+            TOOL_GROUP_BROWSER, TOOL_GROUP_COMMS,
             TOOL_GROUP_DELEGATION, TOOL_GROUP_DISCOVERY, TOOL_GROUP_ISSUES,
             TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_LEARNING, TOOL_GROUP_MEDIA,
-            TOOL_GROUP_PERFORMANCE, TOOL_GROUP_REASONING, TOOL_GROUP_RECRUITMENT,
-            TOOL_GROUP_RESEARCH, TOOL_GROUP_TASKS, TOOL_GROUP_VAULT, TOOL_GROUP_WEB,
+            TOOL_GROUP_PERFORMANCE, TOOL_GROUP_PLUGINS, TOOL_GROUP_REASONING,
+            TOOL_GROUP_RECRUITMENT, TOOL_GROUP_RESEARCH, TOOL_GROUP_TASKS,
+            TOOL_GROUP_VAULT, TOOL_GROUP_WEB,
         )
 
         def _want(group: str) -> bool:
@@ -1045,6 +1077,10 @@ class Agent:
         if tool_groups is None and self._integration_executor:
             tools.extend(self._integration_executor.get_tools())
 
+        # Plugin tools
+        if _want(TOOL_GROUP_PLUGINS) and self._plugin_executor:
+            tools.extend(self._plugin_executor.tools)
+
         if _want(TOOL_GROUP_DISCOVERY):
             tools.extend(DISCOVERY_TOOLS)
             tools.extend(CAPABILITY_TOOLS)
@@ -1057,8 +1093,6 @@ class Agent:
                 tools.extend(TASK_TOOLS)
             if _want(TOOL_GROUP_ISSUES):
                 tools.extend(ISSUE_TOOLS)
-            if _want(TOOL_GROUP_ACHIEVEMENT):
-                tools.extend(ACHIEVEMENT_TOOLS)
             if _want(TOOL_GROUP_KNOWLEDGE):
                 tools.extend(KNOWLEDGE_TOOLS)
             if _want(TOOL_GROUP_PERFORMANCE):

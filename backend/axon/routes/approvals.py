@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -181,18 +181,21 @@ async def approve_task(org_id: str, task_path: str):
     if metadata.get("type") == "recruitment":
         from axon.routes.recruitment import ApproveRequest, approve_recruitment
 
-        # Use the agent_name from refinement, fall back to role
+        # Use refined fields, fall back to role-based defaults
         agent_name = metadata.get("agent_name") or metadata.get("role", "New Agent")
-        role = metadata.get("role", "")
         agent_id = agent_name.lower().replace(" ", "_").replace("-", "_")
         requested_by = metadata.get("requested_by", "")
         body_req = ApproveRequest(
             name=agent_name,
             agent_id=agent_id,
+            title=metadata.get("agent_title") or metadata.get("role", ""),
+            title_tag=metadata.get("agent_title_tag", ""),
+            tagline=metadata.get("agent_tagline") or metadata.get("role", ""),
+            color=metadata.get("agent_color", "#6B7280"),
+            sparkle_color=metadata.get("agent_sparkle_color", "#9CA3AF"),
             parent_id=requested_by,
             system_prompt=metadata.get("system_prompt", ""),
             domains=metadata.get("domains", []),
-            tagline=role,
         )
         return await approve_recruitment(org_id, task_path, body_req)
 
@@ -226,26 +229,5 @@ async def decline_task(org_id: str, task_path: str, data: DeclineRequest | None 
         metadata["decline_reason"] = data.reason
     metadata["updated_at"] = datetime.utcnow().isoformat() + "Z"
     vault.write_file(task_path, metadata, body)
-
-    # Notify delegating agent
-    delegated_by = metadata.get("created_by", "")
-    if delegated_by:
-        delegating_agent = org.agent_registry.get(delegated_by)
-        if delegating_agent and hasattr(delegating_agent, "vault"):
-            today_str = str(date.today())
-            notif_path = f"inbox/{today_str}-plan-declined.md"
-            notif_meta = {
-                "from": "user",
-                "date": today_str,
-                "type": "plan_declined",
-                "status": "pending",
-                "task_ref": task_path,
-            }
-            reason_text = f"\n\n**Reason:** {data.reason}" if data and data.reason else ""
-            notif_body = (
-                f"## Plan Declined\n\n"
-                f"**Task:** {metadata.get('name', task_path)}{reason_text}\n"
-            )
-            delegating_agent.vault.write_file(notif_path, notif_meta, notif_body)
 
     return {"status": "declined", "task_path": task_path}

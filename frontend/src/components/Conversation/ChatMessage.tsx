@@ -78,10 +78,10 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
 
             <div
                 className={`max-w-[80%] rounded-xl px-4 py-3 ${isUser
-                    ? "bg-neutral/30 border border-neutral text-neutral"
+                    ? "bg-base-300/30 border border-base-300 text-base-content"
                     : isAck
-                        ? "bg-base-300/30 text-base-content/60 border border-base-300/50 italic"
-                        : "bg-base-300/50 text-base-content border border-base-300"
+                        ? "bg-primary/30 text-primary/60 border border-primary/50 italic"
+                        : "bg-primary/30 text-primary border border-primary"
                     }`}
             >
                 {!isUser && !isAck && (

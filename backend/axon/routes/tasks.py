@@ -47,6 +47,7 @@ class TaskUpdate(BaseModel):
     estimated_hours: float | None = None
     labels: list[str] | None = None
     body: str | None = None
+    message: str | None = None
 
 
 class TaskRespond(BaseModel):
@@ -184,8 +185,31 @@ def _update_task(org_id: str, task_path: str, data: TaskUpdate):
     if data.body is not None:
         body = data.body
 
+    # Record activity message
+    if data.message:
+        activity_entry = {
+            "from": "user",
+            "content": data.message,
+            "attachments": [],
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "type": "status_change",
+            "status_to": data.status or "",
+        }
+        if "responses" not in metadata:
+            metadata["responses"] = []
+        metadata["responses"].append(activity_entry)
+
     metadata["updated_at"] = datetime.utcnow().isoformat() + "Z"
     vault.write_file(task_path, metadata, body)
+
+    # Auto-generate achievement for accepted parent tasks
+    if data.status == "accepted":
+        from axon.agents.shared_tools import SharedVaultToolExecutor
+
+        executor = SharedVaultToolExecutor(vault, "system")
+        asyncio.create_task(
+            executor._maybe_create_achievement(task_path, {**metadata, "body": body})
+        )
 
     return {**metadata, "path": task_path, "body": body}
 

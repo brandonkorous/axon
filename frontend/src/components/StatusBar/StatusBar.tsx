@@ -2,7 +2,6 @@ import { useStatusBarData } from "../../hooks/useStatusBarData";
 import { useVoiceChatStore } from "../../stores/voiceChatStore";
 import type { VoiceState } from "../../stores/voiceChatStore";
 import { StatusBarAgents } from "./StatusBarAgents";
-import { StatusBarWorkers } from "./StatusBarWorkers";
 import { StatusBarSandboxes } from "./StatusBarSandboxes";
 import { StatusBarApprovals } from "./StatusBarApprovals";
 import { StatusBarUsage } from "./StatusBarUsage";
@@ -36,10 +35,6 @@ export function StatusBar() {
           <StatusBarAgents
             activeCount={data.activeAgents}
             thinkingCount={data.thinkingAgents}
-          />
-          <StatusBarWorkers
-            runningCount={data.runningWorkers}
-            totalCount={data.totalWorkers}
           />
           <StatusBarSandboxes buildingCount={data.buildingSandboxes} />
         </div>

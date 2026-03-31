@@ -21,20 +21,20 @@ def logger(tmp_path: Path) -> AuditLogger:
 
 class TestLog:
     def test_creates_md_file(self, logger: AuditLogger, tmp_path: Path):
-        rel = logger.log(agent_id="marcus", action="file_read", tool="vault_read")
+        rel = logger.log(agent_id="marcus", action="file_read", tool="memory_read")
         full_path = tmp_path / rel
         assert full_path.exists()
         assert full_path.suffix == ".md"
 
     def test_returns_relative_path_under_audit_branch(self, logger: AuditLogger):
-        rel = logger.log(agent_id="marcus", action="file_read", tool="vault_read")
+        rel = logger.log(agent_id="marcus", action="file_read", tool="memory_read")
         assert rel.startswith(f"{AUDIT_BRANCH}/")
 
     def test_file_contains_frontmatter_fields(self, logger: AuditLogger, tmp_path: Path):
         rel = logger.log(
             agent_id="marcus",
             action="file_write",
-            tool="vault_write",
+            tool="memory_write",
             context="testing",
             arguments='{"path": "/foo"}',
             result_summary="ok",
@@ -42,7 +42,7 @@ class TestLog:
         content = (tmp_path / rel).read_text(encoding="utf-8")
         assert "agent_id: marcus" in content
         assert "action: file_write" in content
-        assert "tool: vault_write" in content
+        assert "tool: memory_write" in content
         assert "## Context" in content
         assert "## Arguments" in content
         assert "## Result" in content
@@ -73,9 +73,9 @@ class TestLog:
 class TestListEntries:
     def _seed(self, logger: AuditLogger):
         """Create several audit entries."""
-        logger.log(agent_id="marcus", action="read", tool="vault_read")
-        logger.log(agent_id="raj", action="write", tool="vault_write")
-        logger.log(agent_id="marcus", action="delete", tool="vault_delete")
+        logger.log(agent_id="marcus", action="read", tool="memory_read")
+        logger.log(agent_id="raj", action="write", tool="memory_write")
+        logger.log(agent_id="marcus", action="delete", tool="memory_delete")
 
     def test_lists_all_entries(self, logger: AuditLogger):
         self._seed(logger)

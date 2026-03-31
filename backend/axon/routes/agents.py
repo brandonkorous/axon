@@ -67,7 +67,18 @@ def _agent_email(agent, email_domain: str) -> str | None:
     return None
 
 
-def _list_agents_for_registry(agent_reg: dict, email_domain: str = "") -> list[dict]:
+def _plugin_names_for_agent(org_id: str, agent_id: str) -> list[str]:
+    """Derive plugin names from org-level instances for this agent."""
+    org = registry.get_org(org_id)
+    if not org or not org.config.plugin_instances:
+        return []
+    return list({
+        inst.plugin for inst in org.config.plugin_instances
+        if agent_id in inst.agents
+    })
+
+
+def _list_agents_for_registry(agent_reg: dict, email_domain: str = "", org_id: str = "") -> list[dict]:
     """Build agent list from a registry dict."""
     agents = []
     for agent_id, agent in agent_reg.items():
@@ -91,12 +102,18 @@ def _list_agents_for_registry(agent_reg: dict, email_domain: str = "") -> list[d
             "email_alias": getattr(agent.config.comms, "email_alias", "") if hasattr(agent.config, "comms") else "",
             "parent_id": agent.config.parent_id,
             "action_bias": agent.config.behavior.action_bias.value,
+            "plugins": {
+                "enabled": agent.config.plugins.enabled if agent.config.plugins else [],
+                "config": agent.config.plugins.config if agent.config.plugins and agent.config.plugins.config else {},
+            },
+            "plugin_names": _plugin_names_for_agent(org_id, agent_id),
         })
     return agents
 
 
-def _get_agent_detail(agent, email_domain: str = "") -> dict:
+def _get_agent_detail(agent, email_domain: str = "", org_id: str = "") -> dict:
     """Build agent detail dict."""
+    p_names = _plugin_names_for_agent(org_id, agent.id) if org_id else []
     return {
         "id": agent.id,
         "name": agent.name,
@@ -123,6 +140,7 @@ def _get_agent_detail(agent, email_domain: str = "") -> dict:
         "email": _agent_email(agent, email_domain),
         "parent_id": agent.config.parent_id,
         "action_bias": agent.config.behavior.action_bias.value,
+        "plugin_names": p_names,
     }
 
 
@@ -132,7 +150,7 @@ def _get_agent_detail(agent, email_domain: str = "") -> dict:
 @router.get("")
 async def list_agents():
     """List all available agents with their status."""
-    return {"agents": _list_agents_for_registry(registry.agent_registry)}
+    return {"agents": _list_agents_for_registry(registry.agent_registry, org_id=registry.default_org_id or "")}
 
 
 @router.get("/{agent_id}")
@@ -141,7 +159,7 @@ async def get_agent(agent_id: str):
     agent = registry.agent_registry.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
-    return _get_agent_detail(agent)
+    return _get_agent_detail(agent, org_id=registry.default_org_id or "")
 
 
 # ── Org-scoped routes ───────────────────────────────────────────────
@@ -154,7 +172,7 @@ async def list_org_agents(org_id: str):
     if not org:
         raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
     email_domain = org.config.comms.email_domain if org.config.comms else ""
-    return {"agents": _list_agents_for_registry(org.agent_registry, email_domain)}
+    return {"agents": _list_agents_for_registry(org.agent_registry, email_domain, org_id=org_id)}
 
 
 @org_router.get("/{agent_id}")
@@ -167,7 +185,7 @@ async def get_org_agent(org_id: str, agent_id: str):
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id} in org {org_id}")
     email_domain = org.config.comms.email_domain if org.config.comms else ""
-    return _get_agent_detail(agent, email_domain)
+    return _get_agent_detail(agent, email_domain, org_id=org_id)
 
 
 @org_router.patch("/{agent_id}")
@@ -240,7 +258,7 @@ async def update_agent_persona(org_id: str, agent_id: str, body: PersonaUpdateRe
 
     logger.info("Agent '%s' persona updated in org '%s'", agent_id, org_id)
     email_domain = org.config.comms.email_domain if org.config.comms else ""
-    return _get_agent_detail(agent, email_domain)
+    return _get_agent_detail(agent, email_domain, org_id=org_id)
 
 
 def _get_agent_or_404(org_id: str, agent_id: str):

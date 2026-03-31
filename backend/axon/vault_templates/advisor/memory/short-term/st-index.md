@@ -6,5 +6,5 @@ type: index
 
 # Short-Term Memory
 
-Recent working context. Each entry is 100-200 words — a fragment, not a document.
+Recent working context. Each entry is up to 200 characters — a fragment, not a document.
 Entries are promoted to long-term when validated, or sink to deep memory when expired.

@@ -93,7 +93,7 @@ export function HuddleView() {
                     const taskTitle = data.task_title as string;
                     const status = data.status as string;
                     const taskAgentId = (data.agent_id as string) || AGENT_ID;
-                    if (status === "in_progress" || status === "executing") {
+                    if (status === "in_progress") {
                         rs.addRunningTask(taskAgentId, {
                             path: tPath,
                             title: taskTitle,

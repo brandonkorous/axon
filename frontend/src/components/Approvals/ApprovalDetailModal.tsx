@@ -8,7 +8,7 @@ function CommsPreview({ channel, payload: raw }: { channel?: string; payload: st
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return <p className="text-xs text-error">Invalid message payload</p>;
+    return <p className="text-xs text-error">Could not parse message content. The payload may be malformed.</p>;
   }
 
   if (channel === "email") {

@@ -7,7 +7,8 @@ export type SettingsTab =
   | "agents"
   | "voice"
   | "credentials"
-  | "extensions";
+  | "extensions"
+  | "host-agents";
 
 interface Preferences {
   theme: string;

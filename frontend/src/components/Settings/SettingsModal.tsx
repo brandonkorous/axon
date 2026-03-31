@@ -7,6 +7,7 @@ import { AgentsTab } from "./AgentsTab";
 import { VoiceTab } from "./VoiceTab";
 import { CredentialsTab } from "./CredentialsTab";
 import { ExtensionsTab } from "./ExtensionsTab";
+import { HostAgentsTab } from "./HostAgentsTab";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
@@ -16,6 +17,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "voice", label: "Voice" },
   { id: "credentials", label: "Credentials" },
   { id: "extensions", label: "Extensions" },
+  { id: "host-agents", label: "Host Agents" },
 ];
 
 const TAB_COMPONENTS: Record<SettingsTab, React.FC> = {
@@ -26,6 +28,7 @@ const TAB_COMPONENTS: Record<SettingsTab, React.FC> = {
   voice: VoiceTab,
   credentials: CredentialsTab,
   extensions: ExtensionsTab,
+  "host-agents": HostAgentsTab,
 };
 
 export function SettingsModal() {

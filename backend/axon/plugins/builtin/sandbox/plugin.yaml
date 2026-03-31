@@ -1,0 +1,14 @@
+name: sandbox
+version: "1.0.0"
+description: "Grants agent access to a containerized execution environment with a mounted directory and allowlisted executables. Lower trust than shell_access — runs isolated in Docker."
+author: "axon"
+category: "system"
+icon: "box"
+auto_load: false
+triggers: []
+tools:
+  - sandbox_exec
+  - sandbox_read_file
+  - sandbox_write_file
+  - sandbox_list_dir
+sandbox_type: code

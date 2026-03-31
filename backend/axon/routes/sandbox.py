@@ -41,6 +41,57 @@ async def sandbox_availability():
     }
 
 
+@org_router.get("/running")
+async def list_running_instances(org_id: str):
+    """List all running sandbox containers for this org."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(404, f"Org not found: {org_id}")
+
+    prefix = f"{org_id}/"
+    running = []
+    for key, sandbox_id in sandbox_manager._containers.items():
+        if not key.startswith(prefix):
+            continue
+        parts = key.split("/", 2)
+        instance_id = parts[2] if len(parts) > 2 else ""
+        # Find the plugin instance config for display name
+        inst_cfg = next(
+            (i for i in org.config.plugin_instances if i.id == instance_id),
+            None,
+        )
+        running.append({
+            "instance_id": instance_id,
+            "instance_name": inst_cfg.name if inst_cfg else instance_id,
+            "plugin": inst_cfg.plugin if inst_cfg else "sandbox",
+            "agents": inst_cfg.agents if inst_cfg else [],
+            "sandbox_id": sandbox_id[:12],
+            "status": "running",
+        })
+    return {"instances": running}
+
+
+@org_router.post("/running/{instance_id}/stop")
+async def stop_running_instance(org_id: str, instance_id: str):
+    """Stop a running sandbox container by instance ID."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(404, f"Org not found: {org_id}")
+
+    # Find any key matching this instance_id
+    target_key = None
+    for key in sandbox_manager._containers:
+        if key.startswith(f"{org_id}/") and key.endswith(f"/{instance_id}"):
+            target_key = key
+            break
+    if not target_key:
+        raise HTTPException(404, f"No running instance: {instance_id}")
+
+    parts = target_key.split("/", 2)
+    await sandbox_manager.destroy(parts[0], parts[1], parts[2])
+    return {"stopped": instance_id}
+
+
 @org_router.get("/{agent_id}")
 async def sandbox_status(org_id: str, agent_id: str, instance_id: str | None = None):
     """Get sandbox container status for a worker."""

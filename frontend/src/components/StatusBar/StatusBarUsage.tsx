@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useUsageStore, type Period } from "../../stores/usageStore";
+import { formatCost, formatTokens } from "../../utils/format";
 import { StatusBarPopover } from "./StatusBarPopover";
 
 const PERIOD_LABEL: Record<Period, string> = {
@@ -9,17 +10,6 @@ const PERIOD_LABEL: Record<Period, string> = {
   "30d": "30 days",
   all: "All time",
 };
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return "<$0.01";
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
-  return String(tokens);
-}
 
 export function StatusBarUsage() {
   const { summary, period, setPeriod, fetchSummary } = useUsageStore();

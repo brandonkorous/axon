@@ -19,7 +19,6 @@ from axon.config import (
 )
 from axon.agents.agent import Agent
 from axon.agents.axon_agent import AxonAgent
-from axon.agents.external_agent import ExternalAgent
 from axon.agents.huddle import Huddle
 from axon.org import (
     OrgConfig,
@@ -44,16 +43,14 @@ from axon.routes import tasks as tasks_routes
 from axon.routes import vaults as vaults_routes
 from axon.routes import orgs as orgs_routes
 from axon.routes import voices as voices_routes
-from axon.routes import external_agents as external_agents_routes
 from axon.routes import approvals as approvals_routes
 from axon.routes import recruitment as recruitment_routes
 from axon.routes import usage as usage_routes
-from axon.routes import worker_control as worker_control_routes
-from axon.routes import worker_setup as worker_setup_routes
 from axon.routes import credentials as credentials_routes
 from axon.routes import sandbox as sandbox_routes
 from axon.routes import sandbox_images as sandbox_images_routes
 from axon.routes import discovery as discovery_routes
+from axon.routes import plugin_instances as plugin_instances_routes
 from axon.routes import plugins as plugins_routes
 from axon.routes import skills as skills_routes
 from axon.routes import user_prefs as user_prefs_routes
@@ -61,6 +58,8 @@ from axon.routes import teams_webhook as teams_webhook_routes
 from axon.routes import zoom_webhook as zoom_webhook_routes
 from axon.routes import push as push_routes
 from axon.routes import git_repos as git_repos_routes
+from axon.routes import models as models_routes
+from axon.routes import host_agents as host_agents_routes
 from axon.routes import pipelines as pipelines_routes
 from axon.routes import performance as performance_routes
 from axon.routes import analytics as analytics_routes
@@ -109,7 +108,7 @@ def _init_org_agents(
     vaults_dir = org_dir / "vaults"
 
     # Discover agents from vault folders containing agent.yaml
-    agents = discover_agents_from_vaults(vaults_dir)
+    agents = discover_agents_from_vaults(vaults_dir, org_model_config=org_config.models)
 
     # Auto-wire parent delegation: parent can_delegate_to children
     for agent_id, config in agents.items():
@@ -117,16 +116,6 @@ def _init_org_agents(
             parent_cfg = agents[config.parent_id]
             if agent_id not in parent_cfg.delegation.can_delegate_to and "*" not in parent_cfg.delegation.can_delegate_to:
                 parent_cfg.delegation.can_delegate_to.append(agent_id)
-
-    # Auto-wire accepts_from → can_delegate_to for external agents
-    for agent_id, config in agents.items():
-        if config.type != AgentType.EXTERNAL:
-            continue
-        for parent_id in config.delegation.accepts_from:
-            if parent_id in agents:
-                parent_cfg = agents[parent_id]
-                if agent_id not in parent_cfg.delegation.can_delegate_to and "*" not in parent_cfg.delegation.can_delegate_to:
-                    parent_cfg.delegation.can_delegate_to.append(agent_id)
 
     logger.debug(f"[{org_config.id}] Loaded {len(agents)} agents: {list(agents.keys())}")
 
@@ -159,18 +148,17 @@ def _init_org_agents(
     for persona_id, config in agents.items():
         if config.type in (AgentType.ORCHESTRATOR, AgentType.HUDDLE):
             continue
-        is_external = config.type == AgentType.EXTERNAL
-        AgentClass = ExternalAgent if is_external else Agent
-        agent = AgentClass(
+        agent = Agent(
             config, data_dir=data_dir,
             shared_vault=shared_vault,
             audit_logger=audit_logger,
             usage_tracker=usage_tracker,
             org_id=org_config.id,
             org_comms_config=org_comms,
+            org_model_config=org_config.models,
         )
         org.agent_registry[persona_id] = agent
-        if not is_external and not config.parent_id:
+        if not config.parent_id:
             specialists[persona_id] = config
 
     # Initialize orchestrators
@@ -184,6 +172,7 @@ def _init_org_agents(
             usage_tracker=usage_tracker,
             org_id=org_config.id,
             org_comms_config=org_comms,
+            org_model_config=org_config.models,
         )
         org.agent_registry[persona_id] = axon
 
@@ -210,6 +199,14 @@ def _init_org_agents(
     # Auto-create huddle if advisors exist but no huddle persona was defined
     if not org.huddle:
         ensure_huddle(org, settings.axon_orgs_dir)
+
+    # Migrate legacy per-agent plugin configs → org-level instances
+    if not org_config.plugin_instances:
+        from axon.plugins.migration import migrate_plugin_configs, persist_instances_to_org
+        instances = migrate_plugin_configs(org_dir, org.agent_registry)
+        if instances:
+            org_config.plugin_instances = instances
+            persist_instances_to_org(org_dir, instances)
 
     # Build peer rosters — each agent learns about its immediate teammates
     for agent_id, agent in org.agent_registry.items():
@@ -298,6 +295,15 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
     init_orgs()
 
+    # Rediscover running sandbox containers from Docker (survives backend restart)
+    from axon.sandbox.manager import sandbox_manager
+    try:
+        recovered = await sandbox_manager.rediscover()
+        if recovered:
+            logger.info("Rediscovered %d running sandbox container(s)", recovered)
+    except Exception:
+        pass
+
     # Initialize database (SQLite by default, Postgres via DATABASE_URL)
     from axon.db import init_db, shutdown_db
     await init_db()
@@ -328,10 +334,6 @@ async def lifespan(app: FastAPI):
             if hasattr(agent, "setup"):
                 await agent.setup()
 
-    # Clean up stale runner PIDs from previous backend runs
-    from axon.runner_manager import runner_manager
-    runner_manager.cleanup_stale_pids()
-
     # Start agent scheduler (proactive checks heartbeat)
     from axon.scheduler import scheduler
     scheduler.start()
@@ -346,6 +348,34 @@ async def lifespan(app: FastAPI):
     if vault_warm_tasks:
         await asyncio.gather(*vault_warm_tasks, return_exceptions=True)
         logger.info("Vault caches warmed for %d agent(s)", len(vault_warm_tasks))
+
+    # Generate host manager startup scripts in the orgs directory
+    from axon.routes.host_agents import _write_manager_scripts
+    _write_manager_scripts()
+
+    # Warm local LLM models (navigator, memory) so first request isn't slow
+    async def _warm_local_models() -> None:
+        """Send a tiny prompt to each local model so Ollama loads them into memory."""
+        warmed: set[str] = set()
+        for org in registry.org_registry.values():
+            if not org.config.models:
+                continue
+            roles = org.config.models.roles
+            for model_id in [roles.navigator, roles.memory]:
+                if not model_id or not model_id.startswith("ollama/") or model_id in warmed:
+                    continue
+                try:
+                    from axon.agents.provider import complete
+                    await asyncio.wait_for(
+                        complete("hi", model=model_id, max_tokens=1, temperature=0),
+                        timeout=60,
+                    )
+                    warmed.add(model_id)
+                    logger.info("[WARMUP] Loaded %s into memory", model_id)
+                except Exception as e:
+                    logger.warning("[WARMUP] Failed to warm %s: %s", model_id, e)
+
+    asyncio.create_task(_warm_local_models())
 
     # Start Discord and Slack bots if configured (also supports hot-start later)
     from axon.bot_manager import set_discord_bot, set_slack_bot
@@ -443,10 +473,6 @@ async def lifespan(app: FastAPI):
             if hasattr(agent, "vault"):
                 agent.vault.shutdown()
 
-    # Stop all managed runner processes
-    from axon.runner_manager import runner_manager
-    await runner_manager.shutdown_all()
-
     await scheduler.stop()
     if email_poller:
         await email_poller.stop()
@@ -487,15 +513,15 @@ app.include_router(audit_routes.org_router, prefix="/api/orgs/{org_id}/audit", t
 app.include_router(lifecycle_routes.org_router, prefix="/api/orgs/{org_id}/lifecycle", tags=["lifecycle"])
 app.include_router(achievements_routes.org_router, prefix="/api/orgs/{org_id}/achievements", tags=["achievements"])
 app.include_router(org_chart_routes.org_router, prefix="/api/orgs/{org_id}/org-chart", tags=["org-chart"])
-app.include_router(external_agents_routes.org_router, prefix="/api/orgs/{org_id}/external", tags=["external-agents"])
 app.include_router(approvals_routes.org_router, prefix="/api/orgs/{org_id}/approvals", tags=["approvals"])
 app.include_router(recruitment_routes.org_router, prefix="/api/orgs/{org_id}/recruitment", tags=["recruitment"])
-app.include_router(worker_setup_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
-app.include_router(worker_control_routes.org_router, prefix="/api/orgs/{org_id}/workers", tags=["workers"])
 app.include_router(sandbox_images_routes.org_router, prefix="/api/orgs/{org_id}/sandbox/images", tags=["sandbox-images"])
 app.include_router(sandbox_routes.org_router, prefix="/api/orgs/{org_id}/sandbox", tags=["sandbox"])
 app.include_router(discovery_routes.org_router, prefix="/api/orgs/{org_id}/discovery", tags=["discovery"])
+app.include_router(models_routes.org_router, prefix="/api/orgs/{org_id}/models", tags=["models"])
+app.include_router(host_agents_routes.org_router, prefix="/api/orgs/{org_id}/host-agents", tags=["host-agents"])
 app.include_router(plugins_routes.org_router, prefix="/api/orgs/{org_id}/plugins", tags=["plugins"])
+app.include_router(plugin_instances_routes.org_router, prefix="/api/orgs/{org_id}/plugins", tags=["plugin-instances"])
 app.include_router(skills_routes.org_router, prefix="/api/orgs/{org_id}/skills", tags=["skills"])
 app.include_router(usage_routes.org_router, prefix="/api/orgs/{org_id}/usage", tags=["usage"])
 app.include_router(credentials_routes.org_router, prefix="/api/orgs/{org_id}/credentials", tags=["credentials"])
@@ -570,10 +596,7 @@ async def debug_scheduler():
                 hasattr(agent, "_processing_lock") and agent._processing_lock.locked()
             )
             tasks = AgentScheduler._find_agent_tasks(agent, agent_id)
-            has_pending_inbox = (
-                AgentScheduler._has_pending_inbox(agent)
-                if hasattr(agent, "vault") else False
-            )
+            has_pending_inbox = False  # Inbox concept removed — kept for API compat
             result["agents"][agent_id] = {
                 "proactive_checks": [
                     {"action": c.action, "trigger": c.trigger} for c in checks

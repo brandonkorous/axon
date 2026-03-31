@@ -74,7 +74,7 @@ async def _agent_metrics(agent, org) -> dict[str, Any]:
                 usage["tokens"] += rec.get("total_tokens", 0)
                 usage["requests"] += 1
 
-    usage["cost"] = round(usage["cost"], 6)
+    usage["cost"] = round(usage["cost"], 10)
 
     return {
         "id": agent.id,
@@ -212,7 +212,7 @@ async def _build_analytics(org_id: str) -> dict[str, Any]:
         "agents": agent_metrics,
         "totals": {
             "total_agents": len(agent_metrics),
-            "total_cost": round(total_cost, 6),
+            "total_cost": round(total_cost, 10),
             "total_tokens": total_tokens,
             "total_requests": total_requests,
             "total_vault_files": total_files,

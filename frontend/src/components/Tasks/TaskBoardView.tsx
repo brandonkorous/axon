@@ -11,9 +11,10 @@ const COLUMNS: { key: Task["status"]; label: string; color: string }[] = [
     { key: "in_progress", label: "In Progress", color: "border-info" },
     { key: "blocked", label: "Blocked", color: "border-error" },
     { key: "done", label: "Done", color: "border-success" },
+    { key: "accepted", label: "Accepted", color: "border-primary" },
 ];
 
-const CLOSEABLE_STATUSES = new Set(["done", "failed"]);
+const CLOSEABLE_STATUSES = new Set(["done", "accepted"]);
 
 
 function TaskCard({
@@ -34,8 +35,7 @@ function TaskCard({
         <div
             draggable
             onDragStart={handleDragStart}
-            className={`group card bg-base-200 border hover:border-neutral-content/40 transition-colors cursor-grab active:cursor-grabbing ${task.status === "failed" ? "border-error/40" : "border-secondary"
-                }`}
+            className="group card bg-base-200 border border-secondary hover:border-neutral-content/40 transition-colors cursor-grab active:cursor-grabbing"
         >
             <div className="card-body p-3 gap-2">
                 <div className="flex items-start justify-between gap-2">
@@ -64,11 +64,6 @@ function TaskCard({
                         >
                             {task.priority}
                         </span>
-                        {task.status === "failed" && (
-                            <span className="badge badge-soft badge-warning badge-xs font-bold">
-                                Failed
-                            </span>
-                        )}
                     </div>
                 </div>
 
@@ -87,7 +82,7 @@ function TaskCard({
                         <span>{task.assignee || "Unassigned"}</span>
                         {task.responses?.length > 0 && (
                             <span className="badge badge-ghost badge-xs" title={`${task.responses.length} response(s)`}>
-                                {task.responses.length} reply
+                                {task.responses.length} {task.responses.length === 1 ? "reply" : "replies"}
                             </span>
                         )}
                     </div>
@@ -250,7 +245,7 @@ function ClosedTasksList({
                             </span>
                             {task.responses?.length > 0 && (
                                 <span className="badge badge-ghost badge-xs shrink-0">
-                                    {task.responses.length} reply
+                                    {task.responses.length} {task.responses.length === 1 ? "reply" : "replies"}
                                 </span>
                             )}
                             <button
@@ -352,11 +347,7 @@ export function TaskBoardView() {
 
     const grouped = COLUMNS.map((col) => ({
         ...col,
-        tasks: filtered.filter((t) =>
-            col.key === "blocked"
-                ? t.status === "blocked" || t.status === "failed"
-                : t.status === col.key
-        ),
+        tasks: filtered.filter((t) => t.status === col.key),
     }));
 
     return (
@@ -390,7 +381,7 @@ export function TaskBoardView() {
             ) : error ? (
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                        <p className="text-sm text-error mb-2">Failed to load tasks</p>
+                        <p className="text-sm text-error mb-2">Could not load tasks. Check your connection and try again.</p>
                         <button onClick={() => fetchTasks()} className="link link-accent text-xs">
                             Try again
                         </button>

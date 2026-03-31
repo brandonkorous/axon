@@ -49,7 +49,7 @@ async def stream_completion(
         if delta is None:
             # Final chunk may carry usage with no choices
             if hasattr(chunk, "usage") and chunk.usage:
-                usage = _extract_stream_usage(model, chunk.usage)
+                usage = _extract_stream_usage(model, chunk)
                 if usage:
                     yield {"type": "usage", **usage}
             continue
@@ -76,7 +76,7 @@ async def stream_completion(
 
         # Usage attached to a chunk with choices
         if hasattr(chunk, "usage") and chunk.usage:
-            usage = _extract_stream_usage(model, chunk.usage)
+            usage = _extract_stream_usage(model, chunk)
             if usage:
                 yield {"type": "usage", **usage}
 
@@ -135,31 +135,59 @@ async def complete(
             "completion_tokens": response.usage.completion_tokens or 0,
             "total_tokens": response.usage.total_tokens or 0,
         }
-        try:
-            usage["cost"] = litellm.completion_cost(completion_response=response)
-        except Exception as exc:
-            logger.warning("Could not calculate cost for model=%s: %s", response.model, exc)
-            usage["cost"] = 0.0
+        usage["cost"] = _extract_cost(response, model, usage["prompt_tokens"], usage["completion_tokens"])
         result["usage"] = usage
 
     return result
 
 
-def _extract_stream_usage(model: str, usage: Any) -> dict[str, Any] | None:
-    """Extract usage dict from a streaming chunk's usage object."""
+def _extract_cost(response: Any, model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    """Extract cost from a LiteLLM response, trying multiple sources.
+
+    Priority:
+    1. response._hidden_params["response_cost"] — litellm's own calculation
+    2. litellm.completion_cost(completion_response=response) — full response object
+    3. litellm.completion_cost(model, prompt_tokens, completion_tokens) — manual calc
+    """
+    # 1. Hidden params (most reliable — litellm computes this internally)
+    hidden = getattr(response, "_hidden_params", None)
+    if hidden and isinstance(hidden, dict):
+        rc = hidden.get("response_cost")
+        if rc is not None and rc > 0:
+            return float(rc)
+
+    # 2. Full response cost calculation
+    try:
+        cost = litellm.completion_cost(completion_response=response)
+        if cost and cost > 0:
+            return float(cost)
+    except Exception:
+        pass
+
+    # 3. Token-based calculation
+    try:
+        cost = litellm.completion_cost(
+            model=model, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+        )
+        if cost and cost > 0:
+            return float(cost)
+    except Exception as exc:
+        logger.warning("Could not calculate cost for model=%s: %s", model, exc)
+
+    return 0.0
+
+
+def _extract_stream_usage(model: str, chunk: Any) -> dict[str, Any] | None:
+    """Extract usage dict from a streaming chunk."""
+    usage = chunk.usage
     prompt = getattr(usage, "prompt_tokens", 0) or 0
     completion = getattr(usage, "completion_tokens", 0) or 0
     total = getattr(usage, "total_tokens", 0) or 0
     if total == 0 and prompt == 0 and completion == 0:
         return None
-    cost = 0.0
-    try:
-        cost = litellm.completion_cost(
-            model=model, prompt_tokens=prompt, completion_tokens=completion,
-        )
-    except Exception as exc:
-        logger.warning("Could not calculate cost for model=%s: %s", model, exc)
-        cost = 0.0
+
+    cost = _extract_cost(chunk, model, prompt, completion)
+
     return {
         "prompt_tokens": prompt,
         "completion_tokens": completion,

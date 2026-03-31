@@ -11,6 +11,7 @@ export const STATUS_BADGE: Record<string, string> = {
   pending: "badge-warning",
   in_progress: "badge-info",
   done: "badge-success",
+  accepted: "badge-success",
   blocked: "badge-error",
   open: "badge-warning",
   resolved: "badge-success",

@@ -79,8 +79,12 @@ TASK_TOOLS: list[dict[str, Any]] = [
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["pending", "in_progress", "planned", "awaiting_approval", "approved", "declined", "executing", "done", "blocked", "failed"],
+                        "enum": ["pending", "in_progress", "done", "blocked", "accepted"],
                         "description": "New status for the task",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Required message explaining why this status change is happening. This gets recorded in task activity.",
                     },
                     "assignee": {
                         "type": "string",
@@ -92,7 +96,7 @@ TASK_TOOLS: list[dict[str, Any]] = [
                         "description": "New priority level",
                     },
                 },
-                "required": ["path"],
+                "required": ["path", "message"],
             },
         },
     },
@@ -106,7 +110,7 @@ TASK_TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "status": {
                         "type": "string",
-                        "enum": ["pending", "in_progress", "planned", "awaiting_approval", "approved", "declined", "executing", "done", "blocked", "failed"],
+                        "enum": ["pending", "in_progress", "done", "blocked", "accepted"],
                         "description": "Filter by status (optional — omit to list all)",
                     },
                     "assignee": {
@@ -148,7 +152,7 @@ TASK_TOOLS: list[dict[str, Any]] = [
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["pending", "in_progress", "done", "blocked"],
+                        "enum": ["pending", "in_progress", "done", "blocked", "accepted"],
                         "description": "Optionally update task status with your response",
                     },
                 },
@@ -278,46 +282,6 @@ ISSUE_TOOLS: list[dict[str, Any]] = [
     },
 ]
 
-ACHIEVEMENT_TOOLS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "achievement_create",
-            "description": "Record an achievement or milestone for the organization. Use when a significant goal is reached, a project ships, or a notable outcome occurs.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": "Short title for the achievement",
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "What was achieved and why it matters",
-                    },
-                    "impact": {
-                        "type": "string",
-                        "description": "Business impact or significance (e.g., 'Projected 20% revenue increase')",
-                    },
-                    "agents_involved": {
-                        "type": "string",
-                        "description": "Comma-separated agent IDs who contributed (e.g., 'marcus, raj')",
-                    },
-                    "linked_tasks": {
-                        "type": "string",
-                        "description": "Comma-separated wikilinks to related tasks (optional)",
-                    },
-                    "linked_issues": {
-                        "type": "string",
-                        "description": "Comma-separated wikilinks to related issues (optional)",
-                    },
-                },
-                "required": ["title", "description"],
-            },
-        },
-    },
-]
-
 KNOWLEDGE_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -389,7 +353,10 @@ KNOWLEDGE_TOOLS: list[dict[str, Any]] = [
 
 
 class SharedVaultToolExecutor:
-    """Executes task, issue, achievement, and knowledge tool calls against the shared org vault."""
+    """Executes task, issue, and knowledge tool calls against the shared org vault.
+
+    Achievements are auto-generated when a parent task reaches 'accepted' status.
+    """
 
     def __init__(
         self,
@@ -424,7 +391,6 @@ class SharedVaultToolExecutor:
             "issue_comment": self._issue_comment,
             "knowledge_share": self._knowledge_share,
             "issue_list": self._issue_list,
-            "achievement_create": self._achievement_create,
         }
 
         handler = handlers.get(tool_name)
@@ -509,6 +475,21 @@ class SharedVaultToolExecutor:
                 metadata[field] = args[field]
                 changes.append(f"{field}: {old_val} → {args[field]}")
 
+        # Record activity message for status changes
+        message = args.get("message", "")
+        if message:
+            activity_entry = {
+                "from": self.agent_id,
+                "content": message,
+                "attachments": [],
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "type": "status_change",
+                "status_to": args.get("status", ""),
+            }
+            if "responses" not in metadata:
+                metadata["responses"] = []
+            metadata["responses"].append(activity_entry)
+
         metadata["updated_at"] = datetime.utcnow().isoformat() + "Z"
         self.vault.write_file(path, metadata, body)
 
@@ -517,6 +498,10 @@ class SharedVaultToolExecutor:
         assignee = metadata.get("assignee", "")
         if new_status == "in_progress" and assignee:
             await self._trigger_task_execution(assignee)
+
+        # Auto-generate achievement for accepted parent tasks
+        if args.get("status") == "accepted":
+            await self._maybe_create_achievement(path, metadata)
 
         return f"Task updated: {path} ({', '.join(changes)})"
 
@@ -608,9 +593,8 @@ class SharedVaultToolExecutor:
         lines = []
         for t in tasks[:20]:
             status_icon = {
-                "pending": "⏳", "in_progress": "🔄", "planned": "📋",
-                "awaiting_approval": "🔔", "approved": "✅", "declined": "❌",
-                "executing": "⚙️", "done": "✅", "blocked": "🚫", "failed": "💥",
+                "pending": "⏳", "in_progress": "🔄", "done": "✅",
+                "blocked": "🚫", "accepted": "✅",
             }.get(t.get("status", ""), "")
             assignee = t.get("assignee", "unassigned") or "unassigned"
             # Flag tasks assigned to the requesting agent
@@ -739,43 +723,116 @@ class SharedVaultToolExecutor:
             )
         return "\n".join(lines)
 
-    # ── Achievements ─────────────────────────────────────────────────
+    # ── Achievements (auto-generated) ──────────────────────────────────
 
-    async def _achievement_create(self, args: dict) -> str:
-        title = args["title"]
+    async def _maybe_create_achievement(self, task_path: str, task_metadata: dict) -> None:
+        """Auto-create an achievement if this is a parent task with completed children."""
+        tasks_dir = Path(self.vault.vault_path) / "tasks"
+        if not tasks_dir.exists():
+            return
+
+        children = []
+        for md_file in tasks_dir.glob("*.md"):
+            if md_file.name.endswith("-index.md"):
+                continue
+            try:
+                meta, _ = self.vault.read_file(f"tasks/{md_file.name}")
+                if meta.get("parent_task") == task_path:
+                    children.append(meta)
+            except Exception:
+                continue
+
+        if not children:
+            return  # Leaf task — no achievement
+
+        title = task_metadata.get("name", "Untitled")
         slug = _slugify(title)
         today_str = str(date.today())
-        path = f"achievements/{today_str}-{slug}.md"
+        achievement_path = f"achievements/{today_str}-{slug}.md"
 
-        agents_raw = args.get("agents_involved", "")
-        agents_involved = [a.strip() for a in agents_raw.split(",") if a.strip()] if agents_raw else []
+        # Collect agents involved
+        agents: set[str] = set()
+        agents.add(task_metadata.get("assignee", ""))
+        agents.add(task_metadata.get("owner", ""))
+        for child in children:
+            agents.add(child.get("assignee", ""))
+        agents.discard("")
 
-        linked_tasks_raw = args.get("linked_tasks", "")
-        linked_tasks = [t.strip() for t in linked_tasks_raw.split(",") if t.strip()] if linked_tasks_raw else []
+        # Collect linked task paths
+        linked_tasks = [task_path]
+        for md_file in tasks_dir.glob("*.md"):
+            if md_file.name.endswith("-index.md"):
+                continue
+            try:
+                meta, _ = self.vault.read_file(f"tasks/{md_file.name}")
+                if meta.get("parent_task") == task_path:
+                    linked_tasks.append(f"tasks/{md_file.name}")
+            except Exception:
+                continue
 
-        linked_issues_raw = args.get("linked_issues", "")
-        linked_issues = [i.strip() for i in linked_issues_raw.split(",") if i.strip()] if linked_issues_raw else []
+        # Generate LLM summary
+        summary = await self._generate_achievement_summary(title, task_metadata, children)
 
         metadata = {
             "name": title,
             "type": "achievement",
-            "agents_involved": agents_involved,
+            "agents_involved": sorted(agents),
             "linked_tasks": linked_tasks,
-            "linked_issues": linked_issues,
-            "impact": args.get("impact", ""),
+            "linked_issues": [],
+            "impact": "",
             "date": today_str,
-            "created_by": self.agent_id,
+            "created_by": "system",
             "created_at": datetime.utcnow().isoformat() + "Z",
+            "auto_generated": True,
         }
 
-        content = f"# {title}\n\n{args['description']}"
-        if args.get("impact"):
-            content += f"\n\n## Impact\n{args['impact']}"
-
-        self.vault.write_file(path, metadata, content)
+        self.vault.write_file(achievement_path, metadata, f"# {title}\n\n{summary}")
         self.vault._update_branch_index("achievements", slug, title)
 
-        return f"Achievement recorded: [[{path}]] — {title}"
+    async def _generate_achievement_summary(
+        self, title: str, parent: dict, children: list[dict],
+    ) -> str:
+        """Use internal LLM to generate a positive achievement summary."""
+        try:
+            from axon.agents.provider import complete
+            from axon.config import settings
+
+            child_summaries = []
+            for c in children[:10]:  # Cap context
+                child_summaries.append(
+                    f"- {c.get('name', '?')} (assigned to {c.get('assignee', '?')}, "
+                    f"status: {c.get('status', '?')})"
+                )
+
+            prompt = (
+                f"Write a brief, celebratory achievement summary (2-3 sentences) "
+                f"for this completed initiative.\n\n"
+                f"**Initiative:** {title}\n"
+                f"**Description:** {str(parent.get('body', 'No description'))[:500]}\n"
+                f"**Subtasks completed:**\n" + "\n".join(child_summaries) + "\n\n"
+                f"Frame it as a positive milestone — what was accomplished and why "
+                f"it matters. Be concise, specific, and celebratory. Do not use "
+                f"generic filler."
+            )
+
+            result = await complete(
+                model=settings.default_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.7,
+            )
+            return result.get("content", "").strip()
+        except Exception:
+            # Fallback if LLM unavailable
+            child_count = len(children)
+            assignees = sorted(
+                set(c.get("assignee", "?") for c in children if c.get("assignee"))
+            )
+            return (
+                f"Completed **{title}** — successfully delivered across "
+                f"{child_count} subtask{'s' if child_count != 1 else ''} "
+                f"with contributions from {', '.join(assignees)}."
+            )
 
     # ── Knowledge Sharing ────────────────────────────────────────────
 

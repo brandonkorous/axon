@@ -309,7 +309,7 @@ async def _cmd_discover(agent: Any, args: str, ws: WebSocket) -> None:
                     lines.append(f"               {m.description[:80]}")
         else:
             lines.append(f"No capabilities found matching '{args.strip()}'.")
-            lines.append("The agent can use request_new_capability to submit a gap request.")
+            lines.append("The agent can use plugins_request to submit a gap request.")
 
         # Show pending requests for this agent
         org_id = getattr(agent, "_org_id", "")

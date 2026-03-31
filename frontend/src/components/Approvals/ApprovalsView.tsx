@@ -169,7 +169,7 @@ export function ApprovalsView() {
                     <th>Title</th>
                     <th className="w-28">From</th>
                     <th className="w-28">Assignee</th>
-                    <th className="w-16">Pri</th>
+                    <th className="w-16">Priority</th>
                     <th className="w-28">Created</th>
                     <th className="w-40">Actions</th>
                   </tr>

@@ -20,11 +20,14 @@ org_router = APIRouter()
 
 
 class ApproveRequest(BaseModel):
-    name: str  # Agent display name
+    name: str  # Agent display name (e.g., "Alex")
     agent_id: str = ""  # Slug ID (derived from name if empty)
     template: str = "advisor"  # Vault template to scaffold from
-    tagline: str = ""
+    title: str = ""  # Full title (e.g., "Design Lead")
+    title_tag: str = ""  # Short tag, up to 4 chars (e.g., "DSGN")
+    tagline: str = ""  # One-line description
     color: str = "#6B7280"
+    sparkle_color: str = "#9CA3AF"
     parent_id: str = ""  # If set, creates a sub-agent under this parent
     system_prompt: str = ""  # Custom instructions (overwrites template instructions.md)
     domains: list[str] = []  # Advisory domains (written to agent.yaml guardrails)
@@ -102,21 +105,27 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
             vault_path,
             template=body.template,
             agent_name=body.name,
-            agent_title=body.name,
+            agent_title=body.title or body.name,
             agent_id=agent_id,
             agent_tagline=body.tagline or body.name,
         )
     except FileExistsError:
         raise HTTPException(status_code=409, detail=f"Vault already exists: {agent_id}")
 
-    # Override color, domains, and other fields in scaffolded agent.yaml
+    # Override all persona fields in scaffolded agent.yaml
     agent_yaml_path = vault_path / "agent.yaml"
     if agent_yaml_path.exists():
         with open(agent_yaml_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        data.setdefault("ui", {})["color"] = body.color
+        data["name"] = body.name
+        if body.title:
+            data["title"] = body.title
+        if body.title_tag:
+            data["title_tag"] = body.title_tag[:4]
         if body.tagline:
             data["tagline"] = body.tagline
+        data.setdefault("ui", {})["color"] = body.color
+        data.setdefault("ui", {})["sparkle_color"] = body.sparkle_color
         if body.parent_id:
             data["parent_id"] = body.parent_id
         if body.domains:
@@ -138,11 +147,8 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
         data_dir = str(org_dir / "data")
 
         from axon.agents.agent import Agent
-        from axon.agents.external_agent import ExternalAgent
 
-        is_external = config.type == AgentType.EXTERNAL
-        AgentClass = ExternalAgent if is_external else Agent
-        agent = AgentClass(
+        agent = Agent(
             config,
             data_dir=data_dir,
             shared_vault=org.shared_vault,

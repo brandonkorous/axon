@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -107,22 +107,5 @@ async def handle_comms_approval(
     metadata["updated_at"] = now
     metadata["send_result"] = result[:500]
     vault.write_file(task_path, metadata, body)
-
-    # Notify the originating agent via inbox
-    if created_by:
-        agent = org.agent_registry.get(created_by)
-        if agent and hasattr(agent, "vault"):
-            today_str = str(date.today())
-            status = "sent" if sent_ok else "failed"
-            notif_path = f"inbox/{today_str}-comms-{status}.md"
-            notif_meta = {
-                "from": "system",
-                "date": today_str,
-                "type": f"comms_{status}",
-                "status": "pending",
-                "task_ref": task_path,
-            }
-            notif_body = f"## Message {status.title()}\n\n{result}"
-            agent.vault.write_file(notif_path, notif_meta, notif_body)
 
     return {"status": "approved", "task_path": task_path, "sent": sent_ok, "result": result}

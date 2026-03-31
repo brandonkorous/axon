@@ -20,11 +20,11 @@ interface AuditResponse {
 }
 
 const ACTION_COLORS: Record<string, string> = {
-  vault_read: "text-info",
-  vault_write: "text-success",
-  vault_search: "text-info",
-  vault_list: "text-info",
-  vault_backlinks: "text-info",
+  memory_read: "text-info",
+  memory_write: "text-success",
+  memory_search: "text-info",
+  memory_list: "text-info",
+  memory_backlinks: "text-info",
   task_create: "text-accent",
   task_update: "text-accent",
   task_list: "text-accent",
@@ -99,7 +99,7 @@ export function AuditLogView() {
         </div>
       ) : error ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
-          <p className="text-error">Failed to load audit log.</p>
+          <p className="text-error">Could not load audit log. Check your connection and try again.</p>
           <button onClick={() => setPage(page)} className="btn btn-ghost btn-xs text-error">Retry</button>
         </div>
       ) : entries.length === 0 ? (

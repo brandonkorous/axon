@@ -32,6 +32,21 @@ export interface AgentInfo {
   comms_enabled?: boolean;
   email_alias?: string;
   action_bias?: "proactive" | "balanced" | "deliberative";
+  plugins?: {
+    shell_access?: {
+      enabled: boolean;
+      path: string;
+      executables: string[];
+    };
+    sandbox?: {
+      enabled: boolean;
+      path: string;
+      executables: string[];
+      image: string;
+    };
+  };
+  plugin_names?: string[];
+  runner_status?: "running" | "stopped" | "unknown";
 }
 
 export interface PersonaUpdate {
@@ -55,6 +70,8 @@ interface AgentStore {
   updatePersona: (agentId: string, update: PersonaUpdate) => Promise<void>;
   fetchAgentDetail: (agentId: string) => Promise<AgentInfo | null>;
   deleteAgent: (agentId: string) => Promise<void>;
+  startRunner: (agentId: string) => Promise<void>;
+  stopRunner: (agentId: string) => Promise<void>;
 }
 
 export const useAgentStore = create<AgentStore>((set) => ({
@@ -119,5 +136,43 @@ export const useAgentStore = create<AgentStore>((set) => ({
     // Refresh to get updated lifecycle state
     const { fetchAgents } = useAgentStore.getState();
     await fetchAgents();
+  },
+
+  startRunner: async (agentId) => {
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId ? { ...a, runner_status: "running" as const } : a,
+      ),
+    }));
+    try {
+      await fetch(orgApiPath(`agents/${agentId}/runner/start`), { method: "POST" });
+      const { fetchAgents } = useAgentStore.getState();
+      await fetchAgents();
+    } catch {
+      set((state) => ({
+        agents: state.agents.map((a) =>
+          a.id === agentId ? { ...a, runner_status: "stopped" as const } : a,
+        ),
+      }));
+    }
+  },
+
+  stopRunner: async (agentId) => {
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId ? { ...a, runner_status: "stopped" as const } : a,
+      ),
+    }));
+    try {
+      await fetch(orgApiPath(`agents/${agentId}/runner/stop`), { method: "POST" });
+      const { fetchAgents } = useAgentStore.getState();
+      await fetchAgents();
+    } catch {
+      set((state) => ({
+        agents: state.agents.map((a) =>
+          a.id === agentId ? { ...a, runner_status: "running" as const } : a,
+        ),
+      }));
+    }
   },
 }));

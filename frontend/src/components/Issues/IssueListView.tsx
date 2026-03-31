@@ -149,7 +149,7 @@ function IssueDetail({
               disabled={!comment.trim()}
               className="btn btn-primary btn-sm"
             >
-              Send
+              Post
             </button>
           </div>
         </div>
@@ -309,13 +309,13 @@ export function IssueListView() {
       ) : error ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-sm text-error mb-2">Failed to load issues</p>
+            <p className="text-sm text-error mb-2">Could not load issues. Check your connection and try again.</p>
             <button onClick={() => fetchIssues()} className="link link-accent text-xs">Try again</button>
           </div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-base-content/60">
-          No issues found
+          {statusFilter ? "No issues match this filter" : "No issues yet. Create one to get started."}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -326,9 +326,9 @@ export function IssueListView() {
                 <th className="w-16">#</th>
                 <th>Title</th>
                 <th className="w-28">Status</th>
-                <th className="w-16">Pri</th>
+                <th className="w-16">Priority</th>
                 <th className="w-28">Assignee</th>
-                <th className="w-16">Msgs</th>
+                <th className="w-16">Comments</th>
               </tr>
             </thead>
             <tbody>

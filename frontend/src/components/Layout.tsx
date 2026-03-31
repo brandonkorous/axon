@@ -4,11 +4,11 @@ import { useOrgStore } from "../stores/orgStore";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { VoiceChatOverlay } from "./VoiceChat/VoiceChatOverlay";
 import { SettingsModal } from "./Settings/SettingsModal";
+import { ModelOnboardingModal } from "./Settings/ModelOnboardingModal";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useApprovalStore } from "../stores/approvalStore";
-import { useInboxStore } from "../stores/inboxStore";
 import { useAgentStore } from "../stores/agentStore";
-import { useWorkerStore } from "../stores/workerStore";
+import { useModelStore } from "../stores/modelStore";
 import { StatusBar } from "./StatusBar/StatusBar";
 
 // Apply stored theme on load (GeneralTab manages it when settings are open)
@@ -21,15 +21,13 @@ if (storedTheme === "axon" || storedTheme === "axon-dark") {
 
 export function Layout() {
   const fetchAgents = useAgentStore((s) => s.fetchAgents);
-  const { fetchOrgs } = useOrgStore();
+  const { fetchOrgs, activeOrgId } = useOrgStore();
   const openSettings = useSettingsStore((s) => s.open);
   const approvalCount = useApprovalStore((s) => s.approvals.length);
   const fetchPending = useApprovalStore((s) => s.fetchPending);
-  const inboxPendingCount = useInboxStore(
-    (s) => s.items.filter((i) => i.status === "pending").length
-  );
-  const fetchInbox = useInboxStore((s) => s.fetchAll);
-  const fetchWorkers = useWorkerStore((s) => s.fetchWorkers);
+  const modelStatus = useModelStore((s) => s.status);
+  const fetchModelStatus = useModelStore((s) => s.fetchStatus);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
@@ -37,15 +35,13 @@ export function Layout() {
     fetchOrgs().then(() => fetchAgents());
   }, [fetchOrgs, fetchAgents]);
 
-  const orgLoading = useOrgStore((s) => s.loading);
-  const activeOrgId = useOrgStore((s) => s.activeOrgId);
+  useEffect(() => {
+    if (activeOrgId) fetchModelStatus();
+  }, [activeOrgId, fetchModelStatus]);
 
   useEffect(() => {
-    if (orgLoading) return;
-    fetchWorkers();
-    const interval = setInterval(fetchWorkers, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchWorkers, orgLoading, activeOrgId]);
+    if (modelStatus && !modelStatus.configured) setShowOnboarding(true);
+  }, [modelStatus]);
 
   useEffect(() => {
     fetchPending();
@@ -53,11 +49,6 @@ export function Layout() {
     return () => clearInterval(interval);
   }, [fetchPending]);
 
-  useEffect(() => {
-    fetchInbox();
-    const interval = setInterval(fetchInbox, 60_000);
-    return () => clearInterval(interval);
-  }, [fetchInbox]);
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {
@@ -111,16 +102,6 @@ export function Layout() {
             <li>
               <NavLink to="/huddle" className={({ isActive }) => isActive ? "menu-active" : ""}>
                 Huddle
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/inbox" className={({ isActive }) => isActive ? "menu-active" : ""}>
-                <span className="flex items-center justify-between w-full">
-                  Inbox
-                  {inboxPendingCount > 0 && (
-                    <span className="badge badge-info badge-xs">{inboxPendingCount}</span>
-                  )}
-                </span>
               </NavLink>
             </li>
             <li>
@@ -238,6 +219,9 @@ export function Layout() {
 
       <VoiceChatOverlay />
       <SettingsModal />
+      {showOnboarding && (
+        <ModelOnboardingModal onClose={() => setShowOnboarding(false)} />
+      )}
     </div>
   );
 }

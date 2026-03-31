@@ -9,6 +9,8 @@ interface StatusBarPopoverProps {
     label: string;
     /** Panel width class, e.g. "w-80" */
     width?: string;
+    /** Extra classes for the trigger button */
+    triggerClassName?: string;
 }
 
 export function StatusBarPopover({
@@ -16,6 +18,7 @@ export function StatusBarPopover({
     children,
     label,
     width = "w-80",
+    triggerClassName,
 }: StatusBarPopoverProps) {
     const id = useId();
     const popoverId = `sb-popover-${id}`;
@@ -24,7 +27,7 @@ export function StatusBarPopover({
     return (
         <>
             <button
-                className="px-2 h-full flex items-center gap-1.5 hover:bg-base-content/10 transition-colors text-base-content/70 hover:text-base-content focus-visible:outline focus-visible:outline-primary cursor-pointer"
+                className={`px-2 h-full flex items-center gap-1.5 transition-colors focus-visible:outline focus-visible:outline-primary cursor-pointer ${triggerClassName ?? "hover:bg-base-content/10 text-base-content/70 hover:text-base-content"}`}
                 aria-label={label}
                 popoverTarget={popoverId}
                 style={{ anchorName } as React.CSSProperties}

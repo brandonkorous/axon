@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useAgentStore, AgentInfo, LifecycleState } from "../../stores/agentStore";
 import { PersonaEditor } from "./PersonaEditor";
-import { ToolbeltPanel } from "./ToolbeltPanel";
 
 const STATUS_VARIANT: Record<string, string> = {
   active: "badge-success",
@@ -37,7 +36,6 @@ export function AgentControls({
   const { lifecycleAction, deleteAgent } = useAgentStore();
   const [showStrategy, setShowStrategy] = useState(false);
   const [showPersona, setShowPersona] = useState(false);
-  const [showToolbelt, setShowToolbelt] = useState(false);
   const [strategyPrompt, setStrategyPrompt] = useState(
     lifecycle.strategy_override || ""
   );
@@ -94,7 +92,6 @@ export function AgentControls({
               setShowStrategy(!showStrategy);
               if (!showStrategy) {
                 setShowPersona(false);
-                setShowToolbelt(false);
               }
             }}
             className="btn btn-soft btn-accent btn-xs"
@@ -106,24 +103,11 @@ export function AgentControls({
               setShowPersona(!showPersona);
               if (!showPersona) {
                 setShowStrategy(false);
-                setShowToolbelt(false);
               }
             }}
             className="btn btn-soft btn-info btn-xs"
           >
             Edit Persona
-          </button>
-          <button
-            onClick={() => {
-              setShowToolbelt(!showToolbelt);
-              if (!showToolbelt) {
-                setShowStrategy(false);
-                setShowPersona(false);
-              }
-            }}
-            className="btn btn-soft btn-secondary btn-xs"
-          >
-            Tools
           </button>
           {!confirmTerminate ? (
             <button
@@ -134,7 +118,7 @@ export function AgentControls({
             </button>
           ) : (
             <span className="flex items-center gap-1">
-              <span className="text-xs text-error">Are you sure?</span>
+              <span className="text-xs text-error">Terminate this agent?</span>
               <button
                 onClick={() => {
                   lifecycleAction(agentId, "terminate");
@@ -142,13 +126,13 @@ export function AgentControls({
                 }}
                 className="btn btn-error btn-xs"
               >
-                Yes
+                Terminate
               </button>
               <button
                 onClick={() => setConfirmTerminate(false)}
                 className="btn btn-ghost btn-xs"
               >
-                No
+                Cancel
               </button>
             </span>
           )}
@@ -211,7 +195,7 @@ export function AgentControls({
               disabled={!strategyPrompt.trim()}
               className="btn btn-primary btn-xs"
             >
-              Apply
+              Apply Strategy
             </button>
             {lifecycle.strategy_override && (
               <button
@@ -240,9 +224,6 @@ export function AgentControls({
         <PersonaEditor agent={agent} onClose={() => setShowPersona(false)} />
       )}
 
-      {showToolbelt && !isTerminated && (
-        <ToolbeltPanel agentId={agentId} onClose={() => setShowToolbelt(false)} />
-      )}
     </div>
   );
 }

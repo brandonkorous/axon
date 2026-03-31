@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useUsageStore, type Period } from "../../stores/usageStore";
+import { formatCost, formatTokens } from "../../utils/format";
 import { UsageBreakdown } from "./UsageBreakdown";
 import { UsageTable } from "./UsageTable";
 
@@ -9,17 +10,6 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: "30d", label: "30 days" },
   { value: "all", label: "All time" },
 ];
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
-  return String(tokens);
-}
 
 const PAGE_SIZE = 50;
 
@@ -76,7 +66,7 @@ export function UsageView() {
 
       {error && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm">
-          Failed to load usage data.
+          Could not load usage data. Check your connection and try again.
           <button
             onClick={() => {
               fetchSummary();
@@ -108,7 +98,7 @@ export function UsageView() {
               label="Requests"
               value={(summary?.total_requests ?? 0).toLocaleString()}
             />
-            <StatCard label="Avg Cost / Req" value={formatCost(avgCost)} />
+            <StatCard label="Avg Cost / Request" value={formatCost(avgCost)} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

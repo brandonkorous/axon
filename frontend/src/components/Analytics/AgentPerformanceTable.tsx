@@ -1,10 +1,6 @@
 import { Link } from "react-router-dom";
 import type { AgentMetrics } from "../../stores/analyticsStore";
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
+import { formatCost } from "../../utils/format";
 
 function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100);

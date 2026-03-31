@@ -7,8 +7,9 @@ import { ToolUseBadge } from "./ToolUseBadge";
 import { AgentActivityBadge } from "./AgentActivityBadge";
 import { WorkingIndicator } from "./WorkingIndicator";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
-import { AgentControls } from "../AgentControls/AgentControls";
-import { StatusBadge } from "../AgentControls/AgentControls";
+import { AgentControls, StatusBadge } from "../AgentControls/AgentControls";
+import { PluginBadges, PluginDetailSection } from "../AgentControls/PluginBadges";
+import { ToolbeltSidebar } from "../AgentControls/ToolbeltSidebar";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useAgentRuntimeStore, useAgentRuntime } from "../../stores/agentRuntimeStore";
@@ -122,7 +123,7 @@ export function AgentView() {
           const tPath = data.task_path as string;
           const taskTitle = data.task_title as string;
           const status = data.status as string;
-          if (status === "in_progress" || status === "executing") {
+          if (status === "in_progress") {
             rs.addRunningTask(agentId, {
               path: tPath,
               title: taskTitle,
@@ -305,6 +306,7 @@ export function AgentView() {
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-base-content">{agent.name}{agent.title_tag && <span className="text-base-content/50 font-normal text-sm ml-2">({agent.title_tag})</span>}</h2>
                 {agent.lifecycle && <StatusBadge status={agent.lifecycle.status} />}
+                <PluginBadges agent={agent} />
                 <ConversationSwitcher
                   conversations={conversations}
                   activeId={activeId}
@@ -322,57 +324,64 @@ export function AgentView() {
             <AgentControls agentId={agent.id} lifecycle={agent.lifecycle} agent={agent} />
           </div>
         )}
+        <PluginDetailSection agent={agent} />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {conversationMessages.map((msg) => {
-          const isFromHistory = msg.id.startsWith("hist-");
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {conversationMessages.map((msg) => {
+              const isFromHistory = msg.id.startsWith("hist-");
 
-          if (msg.metadata?.type === "tool_use") {
-            return (
-              <ToolUseBadge
-                key={msg.id}
-                tool={msg.metadata.tool as string}
-                agentId={agent.id}
-                live={!isFromHistory}
-              />
-            );
-          }
+              if (msg.metadata?.type === "tool_use") {
+                return (
+                  <ToolUseBadge
+                    key={msg.id}
+                    tool={msg.metadata.tool as string}
+                    agentId={agent.id}
+                    live={!isFromHistory}
+                  />
+                );
+              }
 
-          if (msg.metadata?.type === "agent_activated" || msg.metadata?.type === "agent_result") {
-            return (
-              <AgentActivityBadge
-                key={msg.id}
-                type={msg.metadata.type as "agent_activated" | "agent_result"}
-                agentId={(msg.metadata.target_agent || msg.metadata.source_agent) as string}
-                taskSummary={msg.content}
-                mode={msg.metadata.mode as string}
-                status={msg.metadata.status as string}
-                live={!isFromHistory}
-              />
-            );
-          }
+              if (msg.metadata?.type === "agent_activated" || msg.metadata?.type === "agent_result") {
+                return (
+                  <AgentActivityBadge
+                    key={msg.id}
+                    type={msg.metadata.type as "agent_activated" | "agent_result"}
+                    agentId={(msg.metadata.target_agent || msg.metadata.source_agent) as string}
+                    taskSummary={msg.content}
+                    mode={msg.metadata.mode as string}
+                    status={msg.metadata.status as string}
+                    live={!isFromHistory}
+                  />
+                );
+              }
 
-          return <ChatMessage key={msg.id} message={msg} onDocumentOpen={setOpenDocPath} />;
-        })}
-        {runtime.thinking && (
-          <ThinkingIndicator color={agent.ui.color} agentName={agent.name} />
-        )}
-        <div ref={messagesEndRef} />
+              return <ChatMessage key={msg.id} message={msg} onDocumentOpen={setOpenDocPath} />;
+            })}
+            {runtime.thinking && (
+              <ThinkingIndicator color={agent.ui.color} agentName={agent.name} />
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {runtime.runningTasks.length > 0 && (
+            <WorkingIndicator tasks={runtime.runningTasks} color={agent.ui.color} />
+          )}
+
+          <ChatInput
+            onSend={handleSend}
+            onCommand={handleCommand}
+            onAudio={handleAudio}
+            agents={agents}
+            placeholder={`Message ${agent.name}...`}
+            disabled={!connected}
+          />
+        </div>
+
+        <ToolbeltSidebar agentId={agent.id} />
       </div>
-
-      {runtime.runningTasks.length > 0 && (
-        <WorkingIndicator tasks={runtime.runningTasks} color={agent.ui.color} />
-      )}
-
-      <ChatInput
-        onSend={handleSend}
-        onCommand={handleCommand}
-        onAudio={handleAudio}
-        agents={agents}
-        placeholder={`Message ${agent.name}...`}
-        disabled={!connected}
-      />
 
       {openDocPath && agentId && (
         <DocumentDrawer

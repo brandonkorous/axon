@@ -1,7 +1,7 @@
 """AgentScheduler — background heartbeat for proactive agent behaviors.
 
 Wakes agents on their configured intervals (hourly/daily/weekly) to
-execute proactive checks like processing inbox tasks from delegation.
+execute proactive checks like processing assigned tasks.
 """
 
 from __future__ import annotations
@@ -33,27 +33,17 @@ INTERVAL_SECONDS = {
 
 # Built-in action prompts — what the agent "hears" when a check fires
 ACTION_PROMPTS = {
-    "process_inbox": (
-        "[SYSTEM] You have pending inbox notifications from other agents. "
-        "Review each notification and take appropriate action:\n"
-        "- **task_completed**: Acknowledge the result, extract key findings, "
-        "update your vault if the result changes your recommendations.\n"
-        "- **task_failed**: Assess whether to retry, re-delegate, or escalate.\n"
-        "- **plan_ready**: Review the proposed plan and approve or decline it.\n"
-        "- **memory_nudge**: Verify and save the information to your vault.\n"
-        "After processing each item, mark it as done in your inbox."
-    ),
     "work_on_tasks": (
         "[SYSTEM] You have an in_progress task to complete. Here are the details:\n\n"
         "{task_details}\n\n"
         "Execute the work described in the task:\n"
         "1. Do the research, analysis, or work described — be thorough and substantive\n"
-        "2. Write your findings to the vault using vault_write — this is the primary deliverable. "
+        "2. Write your findings to the vault using memory_write — this is the primary deliverable. "
         "Create a well-structured document with clear sections, specific details, data points, "
         "and actionable insights. The vault document IS the work product.\n"
         "3. Provide a brief conversational summary to the user highlighting key findings "
         "and linking to the vault document\n"
-        "4. Update the task status to 'done' via task_update with the exact path\n"
+        "4. Update the task status to 'done' via task_update with the exact path and a message summarizing what you accomplished\n"
         "The vault document should be comprehensive enough that someone reading it "
         "gets real value without needing to ask follow-up questions."
     ),
@@ -63,10 +53,10 @@ ACTION_PROMPTS = {
         "Review the shared knowledge document:\n"
         "1. Read the knowledge document from the shared vault using the path in the task\n"
         "2. Extract insights that are specifically relevant to YOUR domain and expertise\n"
-        "3. Save your key takeaways to your own vault under learnings/ using vault_write — "
+        "3. Save your key takeaways to your own vault under learnings/ using memory_write — "
         "focus on what matters for your role, not a generic summary\n"
         "4. If you spot concerns, gaps, or conflicts with your existing knowledge, note them\n"
-        "5. Update the task status to 'done' via task_update with the exact path\n"
+        "5. Update the task status to 'done' via task_update with the exact path and a message summarizing what you learned\n"
         "Be selective — only save what genuinely informs your future advice."
     ),
 }
@@ -159,19 +149,23 @@ class AgentScheduler:
                                 if fired:
                                     await asyncio.sleep(5)
 
-                        # Scan inbox for pending notifications (all agents with vaults)
-                        if hasattr(agent, "vault"):
-                            fired = await self._fire_inbox_scan(
-                                org_id, agent_id, agent, now,
-                            )
-                            if fired:
-                                await asyncio.sleep(5)
+                        # Check for tasks this agent created that are now done
+                        if agent.shared_vault:
+                            key_review = f"{org_id}:{agent_id}:review_done"
+                            last_review = self._last_run.get(key_review)
+                            interval = INTERVAL_SECONDS["frequent"]
+                            if not last_review or (now - last_review).total_seconds() >= interval:
+                                fired = await self._fire_review_done(
+                                    org_id, agent_id, agent, key_review, now,
+                                )
+                                if fired:
+                                    await asyncio.sleep(5)
 
                         # Run any additional configured proactive checks
                         checks = agent.config.behavior.proactive_checks
                         for check in checks:
-                            if check.action in ("work_on_tasks", "check_inbox"):
-                                continue  # Handled above / deprecated
+                            if check.action in ("work_on_tasks",):
+                                continue  # Handled above
                             fired = await self._maybe_fire(
                                 org_id, agent_id, agent, check, now,
                             )
@@ -251,176 +245,6 @@ class AgentScheduler:
             if chunk.type == "text":
                 response_text += chunk.content
         return response_text
-
-    ACTIONABLE_INBOX_TYPES = ("plan_ready", "task_completed", "task_failed", "memory_nudge")
-
-    # After this many failed processing attempts, escalate to an issue
-    INBOX_MAX_RETRIES = 2
-
-    @staticmethod
-    def _get_pending_inbox_items(agent: "Agent") -> list[str]:
-        """Return paths of pending actionable inbox items (without calling the LLM)."""
-        inbox_dir = Path(agent.vault.vault_path) / "inbox"
-        if not inbox_dir.exists():
-            return []
-
-        pending: list[str] = []
-        for md_file in inbox_dir.glob("*.md"):
-            if md_file.name.endswith("-index.md"):
-                continue
-            rel_path = f"inbox/{md_file.name}"
-            try:
-                metadata, _ = agent.vault.read_file(rel_path)
-                if metadata.get("status") != "pending":
-                    continue
-                if metadata.get("type") not in AgentScheduler.ACTIONABLE_INBOX_TYPES:
-                    continue
-                pending.append(rel_path)
-            except Exception:
-                continue
-        return pending
-
-    @staticmethod
-    def _has_pending_inbox(agent: "Agent") -> bool:
-        """Check if an agent has pending actionable inbox items."""
-        return len(AgentScheduler._get_pending_inbox_items(agent)) > 0
-
-    async def _fire_inbox_scan(
-        self,
-        org_id: str,
-        agent_id: str,
-        agent: "Agent",
-        now: datetime,
-    ) -> bool:
-        """Process pending inbox notifications for an agent.
-
-        Runs for ALL agents every tick — but the filesystem pre-check
-        means we only call the LLM when there are actual pending items.
-        After the LLM runs, items still pending get a retry bump.
-        Items exceeding INBOX_MAX_RETRIES are escalated to issues.
-        """
-        key = f"{org_id}:{agent_id}:inbox_scan"
-        last = self._last_run.get(key)
-        interval = INTERVAL_SECONDS["frequent"]
-        if last and (now - last).total_seconds() < interval:
-            return False
-
-        pending_paths = self._get_pending_inbox_items(agent)
-        if not pending_paths:
-            return False
-
-        logger.info(
-            "[SCHEDULER] Inbox scan for %s/%s — %d pending items",
-            org_id, agent_id, len(pending_paths),
-        )
-        self._last_run[key] = now
-
-        prompt = ACTION_PROMPTS["process_inbox"]
-        try:
-            response_text = await asyncio.wait_for(
-                self._consume_stream(agent, prompt, save_history=False),
-                timeout=TASK_TIMEOUT,
-            )
-            logger.info(
-                "[SCHEDULER] %s/%s inbox scan complete — %d chars response",
-                org_id, agent_id, len(response_text),
-            )
-        except asyncio.TimeoutError:
-            logger.error(
-                "[SCHEDULER] %s/%s inbox scan timed out after %ds",
-                org_id, agent_id, TASK_TIMEOUT,
-            )
-        except Exception as e:
-            logger.error(
-                "[SCHEDULER] %s/%s inbox scan failed: %s",
-                org_id, agent_id, e,
-            )
-
-        # Check which items the agent failed to resolve — bump retries or escalate
-        for path in pending_paths:
-            try:
-                metadata, body = agent.vault.read_file(path)
-                if metadata.get("status") != "pending":
-                    continue  # Agent handled it — good
-
-                retries = metadata.get("_retries", 0) + 1
-                metadata["_retries"] = retries
-
-                if retries > self.INBOX_MAX_RETRIES:
-                    # Escalate — create an issue and mark the item
-                    metadata["status"] = "escalated"
-                    agent.vault.write_file(path, metadata, body)
-                    await self._escalate_inbox_to_issue(
-                        org_id, agent_id, agent, path, metadata, body,
-                    )
-                else:
-                    agent.vault.write_file(path, metadata, body)
-                    logger.info(
-                        "[SCHEDULER] Inbox item %s retry %d/%d",
-                        path, retries, self.INBOX_MAX_RETRIES,
-                    )
-            except Exception:
-                continue
-
-        return True
-
-    @staticmethod
-    async def _escalate_inbox_to_issue(
-        org_id: str,
-        agent_id: str,
-        agent: "Agent",
-        inbox_path: str,
-        metadata: dict,
-        body: str,
-    ) -> None:
-        """Create an issue for an inbox item that couldn't be processed."""
-        shared_vault = agent.shared_vault
-        if not shared_vault:
-            logger.warning(
-                "[SCHEDULER] Cannot escalate %s — no shared vault", inbox_path,
-            )
-            return
-
-        from_agent = metadata.get("from", "unknown")
-        item_type = metadata.get("type", "unknown")
-        item_date = metadata.get("date", "unknown")
-        task_ref = metadata.get("task_ref", "")
-
-        today = datetime.now().strftime("%Y-%m-%d")
-        slug = inbox_path.split("/")[-1].replace(".md", "")[:60]
-        issue_path = f"issues/{today}-unprocessed-{slug}.md"
-
-        issue_meta = {
-            "name": f"Unprocessed inbox: {item_type} from {from_agent}",
-            "type": "issue",
-            "status": "open",
-            "priority": "p2",
-            "assignee": agent_id,
-            "labels": ["inbox", "unprocessed"],
-            "inbox_ref": inbox_path,
-            "created_at": datetime.now().isoformat() + "Z",
-        }
-        issue_body = (
-            f"# Unprocessed Inbox Item\n\n"
-            f"**Agent:** {agent_id}\n"
-            f"**From:** {from_agent}\n"
-            f"**Type:** {item_type}\n"
-            f"**Date:** {item_date}\n"
-            f"**Inbox path:** {inbox_path}\n"
-        )
-        if task_ref:
-            issue_body += f"**Task ref:** {task_ref}\n"
-        issue_body += f"\n## Original Content\n\n{body}\n"
-
-        try:
-            shared_vault.write_file(issue_path, issue_meta, issue_body)
-            logger.info(
-                "[SCHEDULER] Escalated inbox item %s → %s", inbox_path, issue_path,
-            )
-        except Exception as e:
-            logger.error(
-                "[SCHEDULER] Failed to escalate %s: %s", inbox_path, e,
-            )
 
     async def _fire_memory_consolidation(
         self,
@@ -557,6 +381,81 @@ class AgentScheduler:
         self._last_run[key] = now
         return True
 
+    async def _fire_review_done(
+        self,
+        org_id: str,
+        agent_id: str,
+        agent: "Agent",
+        key: str,
+        now: datetime,
+    ) -> bool:
+        """Check for tasks this agent created/owns that are now in 'done' status, and wake agent to review."""
+        shared_vault = agent.shared_vault
+        if not shared_vault:
+            return False
+
+        tasks_dir = Path(shared_vault.vault_path) / "tasks"
+        if not tasks_dir.exists():
+            return False
+
+        done_tasks = []
+        for md_file in tasks_dir.glob("*.md"):
+            if md_file.name.endswith("-index.md"):
+                continue
+            try:
+                metadata, body = shared_vault.read_file(f"tasks/{md_file.name}")
+                owner = metadata.get("owner", "") or metadata.get("created_by", "")
+                status = metadata.get("status", "")
+                if owner == agent_id and status == "done":
+                    done_tasks.append({
+                        **metadata,
+                        "path": f"tasks/{md_file.name}",
+                        "body": body,
+                    })
+            except Exception:
+                continue
+
+        if not done_tasks:
+            return False
+
+        logger.info(
+            "[SCHEDULER] review_done for %s/%s — %d tasks to review",
+            org_id, agent_id, len(done_tasks),
+        )
+        self._last_run[key] = now
+
+        # Build review prompt
+        task_summaries = []
+        for t in done_tasks[:5]:  # Cap at 5 per cycle
+            responses = t.get("responses", [])
+            last_response = responses[-1]["content"][:500] if responses else "No response recorded."
+            task_summaries.append(
+                f"- **{t.get('name', '?')}** (`{t['path']}`)\n"
+                f"  Assignee: {t.get('assignee', '?')}\n"
+                f"  Latest response: {last_response}"
+            )
+
+        prompt = (
+            "[SYSTEM] The following tasks you created have been marked as done and need your review.\n\n"
+            + "\n".join(task_summaries) + "\n\n"
+            "For each task:\n"
+            "1. Review the work and responses\n"
+            "2. If satisfied, update the task status to 'accepted' via task_update with a message confirming acceptance\n"
+            "3. If more work is needed, add a response via task_respond explaining what's missing, "
+            "then set the status back to 'in_progress' or 'pending' via task_update with a message\n"
+        )
+
+        try:
+            await asyncio.wait_for(
+                self._consume_stream(agent, prompt, save_history=False),
+                timeout=TASK_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error("[SCHEDULER] review_done timed out for %s/%s", org_id, agent_id)
+        except Exception as e:
+            logger.error("[SCHEDULER] review_done failed for %s/%s: %s", org_id, agent_id, e)
+        return True
+
     async def _process_local_task(
         self,
         agent: "Agent",
@@ -590,7 +489,7 @@ class AgentScheduler:
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
-                "status": "executing",
+                "status": "in_progress",
             })
 
             await ws_registry.push(agent_id, conversation_id, {
@@ -686,14 +585,14 @@ class AgentScheduler:
             )
             self._save_task_response(
                 agent, agent_id, task_path,
-                f"Task timed out after {TASK_TIMEOUT}s", status="error",
+                f"Task timed out after {TASK_TIMEOUT}s", status="blocked",
             )
             sent = await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
-                "status": "failed",
+                "status": "blocked",
             })
             if sent == 0:
                 from axon.push import fire_push_notification
@@ -707,14 +606,14 @@ class AgentScheduler:
             logger.error("[SCHEDULER] Task '%s' failed: %s", task_title, e)
             self._save_task_response(
                 agent, agent_id, task_path,
-                f"Task failed: {e}", status="error",
+                f"Task failed: {e}", status="blocked",
             )
             sent = await ws_registry.push(agent_id, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
-                "status": "failed",
+                "status": "blocked",
             })
             if sent == 0:
                 from axon.push import fire_push_notification
@@ -762,7 +661,7 @@ class AgentScheduler:
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
-                "status": "executing",
+                "status": "in_progress",
             })
 
             await ws_registry.push(ws_target, conversation_id, {
@@ -865,14 +764,14 @@ class AgentScheduler:
             )
             self._save_task_response(
                 agent, agent_id, task_path,
-                f"Task timed out after {TASK_TIMEOUT}s", status="error",
+                f"Task timed out after {TASK_TIMEOUT}s", status="blocked",
             )
             sent = await ws_registry.push(ws_target, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
-                "status": "failed",
+                "status": "blocked",
             })
             if sent == 0:
                 from axon.push import fire_push_notification
@@ -886,14 +785,14 @@ class AgentScheduler:
             logger.error("[SCHEDULER] External task '%s' failed: %s", task_title, e)
             self._save_task_response(
                 agent, agent_id, task_path,
-                f"Task failed: {e}", status="error",
+                f"Task failed: {e}", status="blocked",
             )
             sent = await ws_registry.push(ws_target, conversation_id, {
                 "type": "task_update",
                 "agent_id": agent_id,
                 "task_path": task_path,
                 "task_title": task_title,
-                "status": "failed",
+                "status": "blocked",
             })
             if sent == 0:
                 from axon.push import fire_push_notification
@@ -988,7 +887,7 @@ class AgentScheduler:
             return
         try:
             metadata, body = shared_vault.read_file(task_path)
-            if metadata.get("status") in ("pending", "in_progress", "executing"):
+            if metadata.get("status") in ("pending", "in_progress"):
                 metadata["status"] = "done"
                 metadata["updated_at"] = datetime.now().isoformat() + "Z"
                 shared_vault.write_file(task_path, metadata, body)
@@ -1025,7 +924,7 @@ class AgentScheduler:
                 status = metadata.get("status", "")
                 conv_id = metadata.get("conversation_id", "")
                 # Skip completed tasks early — no need to log or evaluate them
-                if status in ("done", "failed", "closed", "declined"):
+                if status in ("done", "accepted", "blocked"):
                     continue
                 logger.debug(
                     "[SCHEDULER] Task %s: assignee=%r status=%r conv_id=%r (want agent=%r)",

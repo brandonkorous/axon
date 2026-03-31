@@ -41,14 +41,14 @@ export function AchievementsView() {
         </div>
       ) : error ? (
         <div className="text-center py-12">
-          <p className="text-error mb-2">Failed to load achievements.</p>
+          <p className="text-error mb-2">Could not load achievements. Check your connection and try again.</p>
           <button onClick={() => { setLoading(true); setError(false); fetch(orgApiPath("achievements")).then((r) => r.json()).then((data) => { setAchievements(Array.isArray(data) ? data : []); setLoading(false); }).catch(() => { setLoading(false); setError(true); }); }} className="btn btn-ghost btn-xs text-error">Retry</button>
         </div>
       ) : achievements.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-base-content/60 mb-2">No achievements yet.</p>
           <p className="text-xs text-base-content/50">
-            Agents will record milestones here as they complete work.
+            Achievements are created automatically when parent tasks are accepted.
           </p>
         </div>
       ) : (

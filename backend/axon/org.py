@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+from axon.plugins.instance import PluginInstanceConfig
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent
@@ -58,6 +60,44 @@ class ZoomConfig(BaseModel):
     channel_mappings: dict[str, str] = {}  # Zoom Team Chat channel_id -> agent_id
 
 
+class RegisteredModel(BaseModel):
+    """A model registered for use in this org."""
+
+    id: str  # e.g. "anthropic/claude-sonnet-4-20250514"
+    provider: str = ""  # "anthropic", "openai", "ollama"
+    display_name: str = ""  # Human-friendly name
+    model_type: str = "cloud"  # "cloud" or "local"
+
+
+class ModelRoleAssignments(BaseModel):
+    """Org-level default model for each role."""
+
+    navigator: str = ""  # Tool routing, intent classification
+    reasoning: str = ""  # Main agent conversation
+    memory: str = ""  # Vault recall, memory consolidation
+    agent: str = ""  # Default for agent conversations
+
+
+class OrgModelConfig(BaseModel):
+    """Org-level model management."""
+
+    registered_models: list[RegisteredModel] = Field(default_factory=list)
+    roles: ModelRoleAssignments = ModelRoleAssignments()
+    api_keys: dict[str, str] = Field(default_factory=dict)  # provider → key
+
+
+class HostAgentConfig(BaseModel):
+    """A registered host agent service."""
+
+    id: str  # Unique identifier, e.g. "dev-environment"
+    name: str = ""  # Display name, e.g. "Dev Environment"
+    path: str  # Root directory on the host
+    port: int = 9100  # Port the host agent listens on
+    host: str = "host.docker.internal"  # How the backend reaches the host
+    executables: list[str] = Field(default_factory=list)
+    status: str = "stopped"  # "running", "stopped", "unknown"
+
+
 class OrgCommsConfig(BaseModel):
     """Organization-level communication settings."""
 
@@ -82,6 +122,9 @@ class OrgConfig(BaseModel):
     settings_overrides: dict[str, Any] = {}
     discord: DiscordConfig | None = None  # legacy — use comms.discord instead
     comms: OrgCommsConfig = OrgCommsConfig()
+    models: OrgModelConfig = OrgModelConfig()
+    host_agents: list[HostAgentConfig] = Field(default_factory=list)
+    plugin_instances: list[PluginInstanceConfig] = Field(default_factory=list)
 
 
 @dataclass
@@ -383,7 +426,7 @@ def ensure_huddle(org: "OrgInstance", orgs_dir: str | Path) -> bool:
 
     # Load the config and create the Huddle instance
     agent_yaml_path = huddle_vault_path / "agent.yaml"
-    config = _load_agent_yaml(agent_yaml_path, huddle_vault_path)
+    config = _load_agent_yaml(agent_yaml_path, huddle_vault_path, org_model_config=org.config.models)
 
     org.huddle = Huddle(
         config,

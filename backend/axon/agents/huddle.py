@@ -737,7 +737,7 @@ class Huddle:
                     "## Response format\n"
                     "Respond with a JSON array of actions:\n\n"
                     "Vault save:\n"
-                    '  {"action": "vault_write", "path": "reference/<slug>.md", '
+                    '  {"action": "memory_write", "path": "reference/<slug>.md", '
                     '"name": "...", "description": "...", "tags": "...", '
                     '"content": "..."}\n\n'
                     "Task creation:\n"
@@ -782,7 +782,7 @@ class Huddle:
 
             for action in actions:
                 action_type = action.get("action")
-                if action_type == "vault_write":
+                if action_type == "memory_write":
                     self._execute_vault_write(action)
                 elif action_type == "task_create":
                     await self._execute_task_create(action)
@@ -858,9 +858,9 @@ class Huddle:
             await scheduler.trigger_task_execution(self._org_id, assignee)
 
     def _execute_memory_nudge(self, action: dict[str, Any]) -> None:
-        """Drop a memory nudge into an advisor's inbox.
+        """Create a memory nudge task for an advisor in the shared vault.
 
-        The advisor will see this on their next conversation turn and
+        The advisor will pick up the task via the scheduler and
         verify/save the information to their personal vault.
         """
         agent_id = action.get("agent_id", "")
@@ -873,21 +873,30 @@ class Huddle:
             logger.warning("[HUDDLE] Memory nudge target not found: %s", agent_id)
             return
 
+        shared_vault = getattr(agent, "shared_vault", None)
+        if not shared_vault:
+            logger.warning("[HUDDLE] No shared vault for memory nudge to %s", agent_id)
+            return
+
         from datetime import datetime
 
         today_str = str(date.today())
         slug = f"huddle-memory-{today_str}-{id(action) % 10000:04d}"
-        inbox_path = f"inbox/{slug}.md"
+        task_path = f"tasks/{slug}.md"
 
         metadata = {
-            "from": "huddle",
-            "type": "memory_nudge",
-            "date": today_str,
-            "status": "pending",
+            "name": f"Memory nudge from huddle",
+            "type": "task",
+            "assignee": agent_id,
+            "status": "in_progress",
+            "priority": "p2",
+            "labels": ["memory-nudge"],
+            "created_by": "huddle",
             "created_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
         }
-        agent.vault.write_file(inbox_path, metadata, content)
-        logger.info("[HUDDLE] Memory nudge → %s: %s", agent_id, inbox_path)
+        shared_vault.write_file(task_path, metadata, content)
+        logger.info("[HUDDLE] Memory nudge task → %s: %s", agent_id, task_path)
 
     def _ingest_into_reasoning(self, transcript: str, topic: str) -> None:
         """Fire-and-forget: feed huddle conclusions to any advisor's reasoning engine."""

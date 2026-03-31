@@ -1,4 +1,4 @@
-"""Tool schemas for capability discovery — always available to agents."""
+"""Tool schemas for plugin discovery — always available to agents."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ CAPABILITY_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "discover_capabilities",
+            "name": "plugins_discover",
             "description": (
                 "Search for available plugins, skills, integrations, and sandbox "
-                "environments across the organization. Returns matching capabilities "
+                "environments across the organization. Returns matching plugins "
                 "with descriptions, whether they're currently enabled for you, and "
                 "what they require (credentials, sandbox type). Use this before "
                 "requesting access to understand what's available."
@@ -43,10 +43,10 @@ CAPABILITY_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "request_capability",
+            "name": "plugins_enable",
             "description": (
-                "Request access to an existing capability (plugin, skill, or "
-                "integration) that you found via discover_capabilities but don't "
+                "Request access to an existing plugin (plugin, skill, or "
+                "integration) that you found via plugins_discover but don't "
                 "currently have enabled. If no credentials are required, it will "
                 "be auto-enabled immediately. Otherwise, the request goes to a "
                 "human for approval."
@@ -61,7 +61,7 @@ CAPABILITY_TOOLS: list[dict[str, Any]] = [
                     },
                     "name": {
                         "type": "string",
-                        "description": "Exact name of the capability (from discover_capabilities results)",
+                        "description": "Exact name of the plugin (from plugins_discover results)",
                     },
                     "reason": {
                         "type": "string",
@@ -75,10 +75,10 @@ CAPABILITY_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "request_new_capability",
+            "name": "plugins_request",
             "description": (
-                "Request a capability that doesn't exist yet. Use this when "
-                "discover_capabilities returned no matches for what you need. "
+                "Request a plugin that doesn't exist yet. Use this when "
+                "plugins_discover returned no matches for what you need. "
                 "Creates a request that a human can approve and a builder agent "
                 "can scaffold into a new plugin or skill."
             ),

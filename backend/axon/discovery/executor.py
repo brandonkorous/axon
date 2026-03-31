@@ -1,4 +1,4 @@
-"""DiscoveryToolExecutor — handles discover/request capability tool calls."""
+"""DiscoveryToolExecutor — handles plugin discover/enable/request tool calls."""
 
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ class DiscoveryToolExecutor:
 
     def can_handle(self, tool_name: str) -> bool:
         return tool_name in (
-            "discover_capabilities",
-            "request_capability",
-            "request_new_capability",
+            "plugins_discover",
+            "plugins_enable",
+            "plugins_request",
         )
 
     async def execute(self, tool_name: str, arguments: str) -> str:
@@ -45,9 +45,9 @@ class DiscoveryToolExecutor:
             return json.dumps({"error": f"Invalid JSON: {arguments}"})
 
         handlers = {
-            "discover_capabilities": self._discover,
-            "request_capability": self._request_existing,
-            "request_new_capability": self._request_new,
+            "plugins_discover": self._discover,
+            "plugins_enable": self._request_existing,
+            "plugins_request": self._request_new,
         }
 
         handler = handlers.get(tool_name)
@@ -79,9 +79,9 @@ class DiscoveryToolExecutor:
 
         if not matches:
             return (
-                "No capabilities found matching your query. "
+                "No plugins found matching your query. "
                 "If you need something that doesn't exist yet, use "
-                "request_new_capability to describe what you need."
+                "plugins_request to describe what you need."
             )
 
         lines = [f"Found {len(matches)} matching capability(ies):\n"]
@@ -146,7 +146,7 @@ class DiscoveryToolExecutor:
         if not exists:
             return (
                 f"'{name}' not found in the {cap_type} registry. "
-                "Use discover_capabilities to search, or request_new_capability "
+                "Use plugins_discover to search, or plugins_request "
                 "if you need something that doesn't exist."
             )
 
@@ -218,7 +218,7 @@ class DiscoveryToolExecutor:
             return (
                 f"Before requesting something new — did you check '{top.name}' "
                 f"({top.type.value})? It might cover your needs: {top.description}\n\n"
-                "If it doesn't fit, call request_new_capability again with a more "
+                "If it doesn't fit, call plugins_request again with a more "
                 "specific description of what's missing."
             )
 

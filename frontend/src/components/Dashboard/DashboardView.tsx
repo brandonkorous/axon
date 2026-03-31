@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAgentStore } from "../../stores/agentStore";
 import { StatusBadge } from "../AgentControls/AgentControls";
+import { PluginBadges } from "../AgentControls/PluginBadges";
 import { orgApiPath } from "../../stores/orgStore";
 import { PRIORITY_BADGE, STATUS_BADGE } from "../../constants/badges";
 
@@ -75,8 +76,8 @@ interface DashboardData {
 
 
 const ACTION_COLORS: Record<string, string> = {
-  vault_write: "text-accent",
-  vault_read: "text-info",
+  memory_write: "text-accent",
+  memory_read: "text-info",
   task_create: "text-success",
   task_update: "text-warning",
   issue_create: "text-error",
@@ -114,7 +115,7 @@ export function DashboardView() {
       <h1 className="text-2xl font-bold text-base-content">Command Center</h1>
       {error && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm">
-          Failed to load dashboard data.
+          Could not load dashboard. Check your connection and try again.
           <button onClick={() => { setError(false); fetch(orgApiPath("dashboard")).then((r) => r.json()).then(setData).catch(() => setError(true)); }} className="btn btn-ghost btn-xs text-error">Retry</button>
         </div>
       )}
@@ -138,11 +139,12 @@ export function DashboardView() {
                     {agent.name[0]}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-base-content">{agent.name}{agent.title_tag && <span className="font-normal text-base-content/50 ml-1">({agent.title_tag})</span>}</span>
                       {agent.lifecycle && agent.lifecycle.status !== "active" && (
                         <StatusBadge status={agent.lifecycle.status} />
                       )}
+                      <PluginBadges agent={agent} size="compact" />
                     </div>
                     <div className="text-xs text-base-content/60">{agent.title}</div>
                   </div>

@@ -6,6 +6,7 @@ import logging
 import re
 import shutil
 from pathlib import Path
+from typing import Any
 
 import yaml
 from fastapi import APIRouter, HTTPException
@@ -63,15 +64,73 @@ def _get_plugin_dir(org_id: str, plugin_name: str) -> Path:
     return Path(settings.axon_orgs_dir) / org_id / "plugins" / plugin_name
 
 
+def _persist_plugin_config(agent, plugin_name: str, *, enabled: bool) -> None:
+    """Save plugin enabled state to agent.yaml."""
+    yaml_path = Path(agent.config.vault.path) / "agent.yaml"
+    if not yaml_path.exists():
+        return
+    try:
+        with open(yaml_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        if "plugins" not in data:
+            data["plugins"] = {}
+        if "enabled" not in data["plugins"]:
+            data["plugins"]["enabled"] = []
+
+        current = data["plugins"]["enabled"]
+        if enabled and plugin_name not in current:
+            current.append(plugin_name)
+        elif not enabled and plugin_name in current:
+            data["plugins"]["enabled"] = [p for p in current if p != plugin_name]
+
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    except Exception as e:
+        logger.warning("Failed to persist plugin config for %s: %s", agent.id, e)
+
+
+def _persist_plugin_config_data(agent, plugin_name: str, config_data: dict) -> None:
+    """Save per-plugin config to agent.yaml."""
+    yaml_path = Path(agent.config.vault.path) / "agent.yaml"
+    if not yaml_path.exists():
+        return
+    try:
+        with open(yaml_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        if "plugins" not in data:
+            data["plugins"] = {}
+        if "config" not in data["plugins"]:
+            data["plugins"]["config"] = {}
+
+        data["plugins"]["config"][plugin_name] = config_data
+
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    except Exception as e:
+        logger.warning("Failed to persist plugin config for %s/%s: %s", agent.id, plugin_name, e)
+
+
+def _rebuild_agent_plugins(agent) -> None:
+    """Rebuild plugin executor and tool list after enable/disable."""
+    if hasattr(agent, '_build_plugin_executor'):
+        agent._plugin_executor = agent._build_plugin_executor()
+        if agent._plugin_executor:
+            agent.tool_executor._plugin_executor = agent._plugin_executor
+        else:
+            agent.tool_executor._plugin_executor = None
+        agent.tools = agent._build_tool_list()
+
+
 def _agents_using_plugin(org, plugin_name: str) -> list[str]:
-    """Return agent IDs that have *plugin_name* enabled."""
-    result: list[str] = []
-    for aid, agent in org.agent_registry.items():
-        if hasattr(agent, "config") and hasattr(agent.config, "plugins"):
-            enabled = agent.config.plugins.enabled if agent.config.plugins else []
-            if plugin_name in enabled:
-                result.append(aid)
-    return result
+    """Return agent IDs that have *plugin_name* enabled (from org instances)."""
+    return list({
+        aid
+        for inst in org.config.plugin_instances
+        if inst.plugin == plugin_name
+        for aid in inst.agents
+    })
 
 
 def _disable_plugin_for_all(org, plugin_name: str) -> list[str]:
@@ -124,6 +183,11 @@ class PluginUpdateRequest(BaseModel):
     required_credentials: list[str] | None = None
 
 
+class PluginConfigRequest(BaseModel):
+    agent_id: str
+    config: dict[str, Any]
+
+
 # ---------------------------------------------------------------------------
 # Read endpoints
 # ---------------------------------------------------------------------------
@@ -148,6 +212,18 @@ async def get_plugin_detail(org_id: str, plugin_name: str):
     m = instance.manifest
     tools = instance.get_tools()
 
+    # Collect instances for this plugin from org config
+    instances = [
+        i.model_dump() for i in org.config.plugin_instances
+        if i.plugin == plugin_name
+    ]
+    # Derive agents_using from instances
+    agents_using = list({
+        aid for i in org.config.plugin_instances
+        if i.plugin == plugin_name
+        for aid in i.agents
+    })
+
     return {
         "name": m.name,
         "description": m.description,
@@ -164,7 +240,8 @@ async def get_plugin_detail(org_id: str, plugin_name: str):
         "required_credentials": m.required_credentials,
         "python_deps": m.python_deps,
         "sandbox_type": m.sandbox_type,
-        "agents_using": _agents_using_plugin(org, plugin_name),
+        "agents_using": agents_using,
+        "instances": instances,
         "is_builtin": PLUGIN_SOURCE.get(plugin_name, "builtin") != "external",
         "source": PLUGIN_SOURCE.get(plugin_name, "builtin"),
     }
@@ -193,6 +270,12 @@ async def enable_plugin(org_id: str, plugin_name: str, body: PluginToggleRequest
     if plugin_name not in config.plugins.enabled:
         config.plugins.enabled.append(plugin_name)
 
+    # Persist to agent.yaml
+    _persist_plugin_config(agent, plugin_name, enabled=True)
+
+    # Rebuild agent tools to include new plugin
+    _rebuild_agent_plugins(agent)
+
     return {"status": "enabled", "plugin": plugin_name, "agent": body.agent_id}
 
 
@@ -209,7 +292,58 @@ async def disable_plugin(org_id: str, plugin_name: str, body: PluginToggleReques
     if hasattr(config, "plugins") and config.plugins:
         config.plugins.enabled = [p for p in config.plugins.enabled if p != plugin_name]
 
+    # Persist to agent.yaml
+    _persist_plugin_config(agent, plugin_name, enabled=False)
+
+    # Rebuild agent tools to remove plugin
+    _rebuild_agent_plugins(agent)
+
     return {"status": "disabled", "plugin": plugin_name, "agent": body.agent_id}
+
+
+# ---------------------------------------------------------------------------
+# Per-plugin configuration
+# ---------------------------------------------------------------------------
+
+@org_router.get("/{plugin_name}/config/{agent_id}")
+async def get_plugin_config(org_id: str, plugin_name: str, agent_id: str):
+    """Get plugin configuration for a specific agent."""
+    org = _get_org_or_404(org_id)
+    agent = org.agent_registry.get(agent_id)
+    if not agent or not hasattr(agent, "config"):
+        raise HTTPException(404, f"Agent not found: {agent_id}")
+
+    plugin_config = {}
+    if agent.config.plugins and agent.config.plugins.config:
+        plugin_config = agent.config.plugins.config.get(plugin_name, {})
+
+    return {"plugin": plugin_name, "agent": agent_id, "config": plugin_config}
+
+
+@org_router.put("/{plugin_name}/config")
+async def set_plugin_config(org_id: str, plugin_name: str, body: PluginConfigRequest):
+    """Set plugin configuration for a specific agent."""
+    org = _get_org_or_404(org_id)
+    agent = org.agent_registry.get(body.agent_id)
+    if not agent or not hasattr(agent, "config"):
+        raise HTTPException(404, f"Agent not found: {body.agent_id}")
+
+    if not agent.config.plugins:
+        from axon.plugins.config import PluginsConfig
+        agent.config.plugins = PluginsConfig()
+
+    if not agent.config.plugins.config:
+        agent.config.plugins.config = {}
+
+    agent.config.plugins.config[plugin_name] = body.config
+
+    # Persist to agent.yaml
+    _persist_plugin_config_data(agent, plugin_name, body.config)
+
+    # Rebuild plugin executor with new config
+    _rebuild_agent_plugins(agent)
+
+    return {"status": "configured", "plugin": plugin_name, "agent": body.agent_id, "config": body.config}
 
 
 # ---------------------------------------------------------------------------

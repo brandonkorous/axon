@@ -1,8 +1,8 @@
 const TOOL_LABELS: Record<string, string> = {
-  vault_read: "Reading vault",
-  vault_write: "Writing to vault",
-  vault_search: "Searching vault",
-  vault_list: "Listing vault",
+  memory_read: "Reading memory",
+  memory_write: "Writing to memory",
+  memory_search: "Searching memory",
+  memory_list: "Listing memory",
   task_create: "Creating task",
   task_update: "Updating task",
   task_list: "Listing tasks",
@@ -10,11 +10,13 @@ const TOOL_LABELS: Record<string, string> = {
   issue_update: "Updating issue",
   issue_list: "Listing issues",
   issue_comment: "Adding comment",
-  achievement_create: "Recording achievement",
   delegate_task: "Delegating task",
   request_agent: "Requesting agent",
   route_to_agent: "Routing",
   open_huddle: "Starting huddle",
+  plugins_discover: "Searching plugins",
+  plugins_enable: "Enabling plugin",
+  plugins_request: "Requesting plugin",
 };
 
 interface Props {

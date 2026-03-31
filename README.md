@@ -68,10 +68,9 @@ Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define �
 
 |               | Feature                   | Description                                                                       |
 | ------------- | ------------------------- | --------------------------------------------------------------------------------- |
-| **Runner**    | Autonomous Runners        | Agent-spawned worker processes with sandboxed execution, lifecycle management, and real-time monitoring |
-| **Specialist**| Code Specialists          | Expert worker profiles for Python, Fastify, Next.js, Vite+React, .NET backend, and .NET frontend — auto-detected from your codebase |
+| **Plugins**   | Shell Access & Sandbox    | Grant agents host filesystem access (shell) or containerized execution (sandbox) via configurable plugins with executable allowlists |
 | **Sandbox**   | Isolated Sandboxes        | 8 sandbox image types (base, browser, code, data, ML, documents, media, full) with dependency chains and resource limits |
-| **Schedule**  | Proactive Scheduling      | Background heartbeat for inbox checks, task execution, and knowledge review at configurable intervals |
+| **Schedule**  | Proactive Scheduling      | Background heartbeat that picks up pending tasks and reviews completed work at configurable intervals |
 | **Research**  | Deep Research             | Two-tier LLM strategy (local compression + reasoning analysis), web scraping, YouTube transcript extraction, multi-source synthesis |
 | **Media**     | Media Processing          | YouTube transcript extraction and analysis with two-tier compression for cost-effective processing |
 
@@ -79,13 +78,13 @@ Run multiple AI advisors — CEO, CTO, COO, and any custom persona you define �
 
 |               | Feature                   | Description                                                                       |
 | ------------- | ------------------------- | --------------------------------------------------------------------------------- |
-| **Models**    | Multi-LLM Support         | Anthropic Claude, OpenAI, or fully local via Ollama — no API keys required for local operation |
+| **Models**    | Org-Level Model Management | Register models per org, assign roles (navigator, reasoning, memory, agent), with per-agent overrides. Supports Anthropic, OpenAI, DeepSeek, Google, Groq, xAI, or fully local via Ollama |
 | **K8s**       | Kubernetes Support        | Run sandboxes as Docker containers (local) or Kubernetes pods (production) — provider abstraction with pre-built images from ghcr.io |
 | **Orgs**      | Multi-Organization        | Isolated vaults, agents, and settings per organization with pre-built templates (Startup, Student, Job Hunt, Family, Creator) |
 | **Shield**    | Full Audit Trail          | Append-only, immutable audit logs filterable by date, agent, action, or tool — complete transparency |
 | **Extend**    | Plugins & Skills          | Plugin architecture with registry and 10 built-in skills (brainstorming, code review, debugging, decision analysis, etc.) |
 | **Secure**    | Encryption & Isolation    | AES encryption for stored credentials, container sandboxing for workers, network isolation via Docker or Kubernetes NetworkPolicies |
-| **Work**      | Task & Issue Management   | Tasks (P0-P3 priority), issues, threaded comments, approval workflows, and achievement tracking |
+| **Work**      | Task & Issue Management   | Tasks (P0-P3 priority) with parent-child relationships, activity threads, simplified lifecycle (pending/in progress/blocked/done/accepted), and auto-generated achievements |
 
 ---
 
@@ -193,7 +192,7 @@ Copy `.env.example` to `.env` and configure:
 | ------------------- | ------------------------------------------------ | ------------------- |
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude models              | If using Claude     |
 | `OPENAI_API_KEY`    | OpenAI API key                                   | If using OpenAI     |
-| `DEFAULT_MODEL`     | Default LLM model identifier                     | Yes                 |
+| `DEFAULT_MODEL`     | Fallback LLM model (prefer org-level model management) | No             |
 | `OLLAMA_BASE_URL`   | Ollama endpoint (default: `http://ollama:11434`) | If using local LLMs |
 | `DATABASE_URL`      | Database connection string (default: SQLite)     | No                  |
 | `VAULT_PATH`        | Path to the memory vault directory               | No                  |
@@ -237,16 +236,38 @@ No API keys needed. Run everything on your machine:
 docker compose --profile local-llm up
 ```
 
-This starts Ollama alongside the frontend and backend. Models are pulled automatically on first use.
+This starts Ollama alongside the frontend and backend. Three models are pulled on first start:
 
-Set your default model in `.env`:
+| Model | Size | Default Role |
+|-------|------|-------------|
+| `qwen2.5:7b` | ~4.5 GB | Navigator (tool routing, intent classification) |
+| `llama3:8b` | ~4.7 GB | Memory (vault recall, consolidation) |
+| `qwen2.5:14b` | ~9 GB | Reasoning (agent conversations) |
+
+Customize via environment variables:
 
 ```env
-DEFAULT_MODEL=ollama/llama3
-OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_NAVIGATOR_MODEL=qwen2.5:7b
+OLLAMA_MEMORY_MODEL=llama3:8b
+OLLAMA_MODEL=qwen2.5:14b
 ```
 
-Supported local models include `llama3`, `qwen2.5`, `mistral`, `codellama`, and any model available in the [Ollama library](https://ollama.com/library).
+To pull additional models or re-run after config changes:
+
+```bash
+# Force re-run model pulls
+docker compose --profile local-llm up ollama-init --force-recreate
+
+# Pull a specific model manually
+docker exec axon-ollama-1 ollama pull qwen2.5:7b
+
+# List available models
+docker exec axon-ollama-1 ollama list
+```
+
+On first load, Axon prompts you to **register models and assign roles** at the org level. Use "Discover Ollama Models" to auto-detect your local models.
+
+Supported local models include `qwen2.5`, `llama3`, `mistral`, and any model available in the [Ollama library](https://ollama.com/library).
 
 </details>
 
@@ -263,18 +284,19 @@ Supported local models include `llama3`, `qwen2.5`, `mistral`, `codellama`, and 
 - [x] Slack, Teams, Zoom, and Discord integrations
 - [x] Plugin system with registry and built-in web research
 - [x] Agent-to-agent delegation chains (sync and async)
-- [x] Scheduled agent behaviors (proactive inbox, task execution, knowledge review)
+- [x] Scheduled agent behaviors (task pickup, done review)
 - [x] Structured reasoning engine with decision graphs
 - [x] Memory consolidation and intelligent recall
-- [x] Autonomous runner framework with Docker sandboxing
+- [x] Shell access and sandbox plugins for agent execution
 - [x] Deep research with web scraping and YouTube transcripts
 - [x] Skills system (brainstorming, code review, debugging, decision analysis, etc.)
 - [x] Organization templates (Startup, Student, Job Hunt, Family, Creator)
-- [x] Task, issue, and approval management
+- [x] Simplified task lifecycle with parent-child tasks and auto-achievements
 - [x] Google Calendar and Linear integrations
-- [x] Specialist code workers with auto-detection (Python, Fastify, Next.js, Vite+React, .NET)
+- [x] Org-level model management with role assignments and curated catalog
 - [x] Kubernetes sandbox support with provider abstraction (Docker + K8s)
 - [x] Pre-built sandbox images via GitHub Container Registry
+- [ ] Tool router — navigator model selects and instructs agent tools
 - [ ] RAG over uploaded documents and codebases
 - [ ] Mobile companion app
 - [ ] Multi-user collaboration with role-based access

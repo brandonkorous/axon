@@ -1,0 +1,14 @@
+name: shell_access
+version: "1.0.0"
+description: "Grants agent access to a specific directory and allowlisted executables on the host machine. HIGH TRUST — agent can read, write, and execute on the host filesystem."
+author: "axon"
+category: "system"
+icon: "terminal"
+auto_load: false
+triggers: []
+tools:
+  - shell_exec
+  - shell_read_file
+  - shell_write_file
+  - shell_list_dir
+sandbox_type: null

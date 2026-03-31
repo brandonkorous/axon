@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { AgentInfo, useAgentStore } from "../../stores/agentStore";
+import { PluginBadges, PluginDetailSection } from "../AgentControls/PluginBadges";
 import { orgApiPath } from "../../stores/orgStore";
+import { AgentModelOverrides } from "./AgentModelOverrides";
 
 interface DelegationConfig {
   can_delegate_to: string[];
@@ -82,6 +84,7 @@ function AgentRow({
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: agent.ui?.color }} />
           <span className="text-sm font-medium truncate">{agent.name}{agent.title_tag && <span className="font-normal text-base-content/50 ml-1">({agent.title_tag})</span>}</span>
           <span className="text-xs text-base-content/50">{agent.model}</span>
+          <PluginBadges agent={agent} size="compact" />
         </div>
         <div className="flex items-center gap-2">
           {agent.comms_enabled && (
@@ -120,6 +123,10 @@ function AgentRow({
               <span className="text-xs text-base-content/60">Loading delegation...</span>
             </div>
           )}
+
+          <PluginDetailSection agent={agent} />
+
+          <AgentModelOverrides agentId={agent.id} />
 
           <button onClick={saveDelegation} disabled={saving || !delegation} className="btn btn-primary btn-xs">
             {saving ? <span className="loading loading-spinner loading-xs" /> : "Save Delegation"}
@@ -213,3 +220,4 @@ function DelegationEditor({
     </div>
   );
 }
+

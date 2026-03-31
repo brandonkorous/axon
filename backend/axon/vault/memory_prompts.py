@@ -86,9 +86,9 @@ continuity across turns and sessions for the next 5-7 days.
 **Long-term**: Validated insights — patterns, corrections, preferences, \
 strategic knowledge. These persist indefinitely and shape future behavior.
 
-CRITICAL: Each memory must be 100-200 words MAX. Think fragments, not documents. \
-If a topic needs more than 200 words, split it into multiple related memories \
-that reference each other. Humans recall partial memories that assemble together — \
+CRITICAL: Each memory must be 200 characters or fewer. Think fragments, not \
+documents. If a topic needs more, split it into multiple related memories that \
+reference each other. Humans recall partial memories that assemble together — \
 so should this agent.
 
 ## User Message
@@ -106,14 +106,14 @@ Respond with JSON only:
   "worth_saving": true/false,
   "short_term": [
     {{
-      "memory": "100-200 word fragment about working context",
+      "memory": "up to 200 char fragment about working context",
       "tags": "tag1, tag2",
       "related_files": ["path/to/related.md"]
     }}
   ],
   "long_term": [
     {{
-      "memory": "100-200 word fragment about a validated insight",
+      "memory": "up to 200 char fragment about a validated insight",
       "confidence": 0.7,
       "tags": "tag1, tag2",
       "related_files": ["path/to/related.md"]

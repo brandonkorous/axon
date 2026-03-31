@@ -1,24 +1,20 @@
 import { useEffect, useState } from "react";
 import { usePluginStore } from "../../stores/pluginStore";
 import { useAgentStore } from "../../stores/agentStore";
-import { useSandboxStore, type SandboxImageInfo } from "../../stores/sandboxStore";
 import { TagInput } from "./TagInput";
-import { SandboxBuildConfirmDialog } from "./SandboxBuildConfirmDialog";
+import { PluginInstanceList } from "./PluginInstanceList";
 
 const CATEGORIES = ["general", "research", "integration", "media", "browser"];
 
 export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBack: () => void }) {
-  const { selectedPlugin, fetchPluginDetail, enablePlugin, disablePlugin, updatePlugin, deletePlugin } =
+  const { selectedPlugin, fetchPluginDetail, updatePlugin, deletePlugin } =
     usePluginStore();
   const { agents } = useAgentStore();
 
-  const { images, fetchImages } = useSandboxStore();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [sandboxBuildImage, setSandboxBuildImage] = useState<SandboxImageInfo | null>(null);
-  const [pendingEnableAgent, setPendingEnableAgent] = useState<string | null>(null);
 
   // Edit form state
   const [description, setDescription] = useState("");
@@ -34,8 +30,7 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
 
   useEffect(() => {
     fetchPluginDetail(pluginName);
-    fetchImages();
-  }, [pluginName, fetchPluginDetail, fetchImages]);
+  }, [pluginName, fetchPluginDetail]);
 
   // Sync edit form when selectedPlugin loads
   useEffect(() => {
@@ -62,26 +57,6 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
   }
 
   const s = selectedPlugin;
-
-  const handleToggle = async (agentId: string) => {
-    const isUsing = s.agents_using.includes(agentId);
-    if (isUsing) {
-      const ok = await disablePlugin(pluginName, agentId);
-      if (ok) fetchPluginDetail(pluginName);
-      return;
-    }
-    // Check if plugin needs a sandbox image that isn't built
-    if (s.sandbox_type) {
-      const img = images.find((i) => i.type === s.sandbox_type);
-      if (img && img.status !== "ready") {
-        setSandboxBuildImage(img);
-        setPendingEnableAgent(agentId);
-        return;
-      }
-    }
-    const ok = await enablePlugin(pluginName, agentId);
-    if (ok) fetchPluginDetail(pluginName);
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -188,7 +163,8 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
             <ViewMode
               plugin={s}
               agents={agents}
-              onToggle={handleToggle}
+              onRefresh={() => fetchPluginDetail(pluginName)}
+              pluginName={pluginName}
             />
           )}
 
@@ -222,22 +198,6 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
         </div>
       </div>
 
-      {sandboxBuildImage && pendingEnableAgent && (
-        <SandboxBuildConfirmDialog
-          image={sandboxBuildImage}
-          pluginName={pluginName}
-          onComplete={async () => {
-            setSandboxBuildImage(null);
-            const ok = await enablePlugin(pluginName, pendingEnableAgent);
-            if (ok) fetchPluginDetail(pluginName);
-            setPendingEnableAgent(null);
-          }}
-          onCancel={() => {
-            setSandboxBuildImage(null);
-            setPendingEnableAgent(null);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -250,11 +210,13 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
 function ViewMode({
   plugin: s,
   agents,
-  onToggle,
+  onRefresh,
+  pluginName,
 }: {
   plugin: any;
   agents: any[];
-  onToggle: (agentId: string) => void;
+  onRefresh: () => void;
+  pluginName: string;
 }) {
   return (
     <>
@@ -285,27 +247,13 @@ function ViewMode({
         </Section>
       )}
 
-      {/* Agent Enablement */}
-      <Section title="Enabled For">
-        <div className="space-y-2">
-          {agents
-            .filter((a) => a.id !== "huddle")
-            .map((a) => {
-              const enabled = s.agents_using.includes(a.id);
-              return (
-                <label key={a.id} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="toggle toggle-sm toggle-primary"
-                    checked={enabled}
-                    onChange={() => onToggle(a.id)}
-                  />
-                  <span className="text-sm">{a.name}</span>
-                </label>
-              );
-            })}
-        </div>
-      </Section>
+      {/* Plugin Instances */}
+      <PluginInstanceList
+        pluginName={pluginName}
+        instances={s.instances || []}
+        agents={agents}
+        onRefresh={onRefresh}
+      />
 
       {/* Dependencies */}
       {s.python_deps?.length > 0 && (
