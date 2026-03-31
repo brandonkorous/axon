@@ -117,6 +117,8 @@ Run multiple AI advisors â€” CEO, CTO, COO, and any custom persona you define â€
 
 The CLI detects your system, walks you through LLM provider setup, and recommends models based on your hardware.
 
+**macOS / Linux:**
+
 ```bash
 # 1. Install the CLI
 curl -sS https://get.useaxon.dev | sh
@@ -127,6 +129,21 @@ axon init my-workspace
 # 3. Launch
 cd my-workspace && axon start
 ```
+
+**Windows (PowerShell):**
+
+```powershell
+# 1. Install the CLI (requires Docker Desktop + Git for Windows)
+irm https://get.useaxon.dev | iex
+
+# 2. Create a workspace (restart your terminal first if prompted)
+axon init my-workspace
+
+# 3. Launch
+cd my-workspace; axon start
+```
+
+> **Windows via WSL?** If you prefer WSL, use the macOS/Linux instructions above inside your WSL terminal.
 
 ### Option B: Manual setup
 
