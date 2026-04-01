@@ -25,8 +25,6 @@ class RoutingResult:
 
 
 # Tool group names — these map to the *_TOOLS lists in tools.py and shared_tools.py
-TOOL_GROUP_VAULT = "vault"
-TOOL_GROUP_TASKS = "tasks"
 TOOL_GROUP_ISSUES = "issues"
 TOOL_GROUP_DELEGATION = "delegation"
 TOOL_GROUP_REASONING = "reasoning"
@@ -35,7 +33,6 @@ TOOL_GROUP_DISCOVERY = "discovery"
 TOOL_GROUP_RECRUITMENT = "recruitment"
 TOOL_GROUP_PERFORMANCE = "performance"
 TOOL_GROUP_ACHIEVEMENT = "achievement"
-TOOL_GROUP_LEARNING = "learning"
 TOOL_GROUP_COMMS = "comms"
 TOOL_GROUP_WEB = "web"
 TOOL_GROUP_RESEARCH = "research"
@@ -44,7 +41,7 @@ TOOL_GROUP_MEDIA = "media"
 TOOL_GROUP_PLUGINS = "plugins"
 
 # Always included — minimal baseline
-ALWAYS_INCLUDED = [TOOL_GROUP_VAULT]
+ALWAYS_INCLUDED: list[str] = []
 
 # Intent definitions: keyword patterns -> tool groups + patterns
 _INTENT_RULES: list[dict[str, Any]] = [
@@ -65,7 +62,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(bug|error|broken|failing|crash|issue|problem|stuck|not working)\b",
             r"\b(fix|debug|investigate|diagnose|reproduce)\b",
         ],
-        "tool_groups": [TOOL_GROUP_ISSUES, TOOL_GROUP_DELEGATION, TOOL_GROUP_TASKS],
+        "tool_groups": [TOOL_GROUP_ISSUES, TOOL_GROUP_DELEGATION],
         "cognitive_patterns": ["blast_radius", "state_diagnosis"],
         "confidence": 0.8,
     },
@@ -75,7 +72,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(task|assign|work on|status|progress|todo|backlog)\b",
             r"\b(update|mark|complete|block)\b.*\b(task|issue)\b",
         ],
-        "tool_groups": [TOOL_GROUP_TASKS, TOOL_GROUP_DELEGATION],
+        "tool_groups": [TOOL_GROUP_DELEGATION],
         "cognitive_patterns": ["state_diagnosis"],
         "confidence": 0.8,
     },
@@ -85,7 +82,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(delegate|forward|send to|route|hand off|assign to)\b",
             r"\b(can you ask|tell|check with)\b.*\b(agent|advisor|team)\b",
         ],
-        "tool_groups": [TOOL_GROUP_DELEGATION, TOOL_GROUP_DISCOVERY, TOOL_GROUP_TASKS],
+        "tool_groups": [TOOL_GROUP_DELEGATION, TOOL_GROUP_DISCOVERY],
         "cognitive_patterns": [],
         "confidence": 0.8,
     },
@@ -96,7 +93,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(option|approach|alternative|compare|weigh|pros? and cons?)\b",
             r"\b(pricing|revenue|growth|market|competitive)\b",
         ],
-        "tool_groups": [TOOL_GROUP_REASONING, TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_TASKS],
+        "tool_groups": [TOOL_GROUP_REASONING, TOOL_GROUP_KNOWLEDGE],
         "cognitive_patterns": ["build_vs_buy", "reversibility", "essential_complexity"],
         "confidence": 0.7,
     },
@@ -107,7 +104,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(deploy|migration|schema|microservice|monolith|cache|queue)\b",
             r"\b(tech debt|refactor|rewrite|migrate)\b",
         ],
-        "tool_groups": [TOOL_GROUP_REASONING, TOOL_GROUP_DELEGATION, TOOL_GROUP_TASKS],
+        "tool_groups": [TOOL_GROUP_REASONING, TOOL_GROUP_DELEGATION],
         "cognitive_patterns": [
             "blast_radius", "boring_technology", "essential_complexity",
             "make_change_easy", "technical_debt_quadrant",
@@ -143,7 +140,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(share|document|publish|distribute|inform|update the team)\b",
             r"\b(knowledge|insight|finding|report|analysis)\b",
         ],
-        "tool_groups": [TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_TASKS],
+        "tool_groups": [TOOL_GROUP_KNOWLEDGE],
         "cognitive_patterns": ["systems_over_heroes"],
         "confidence": 0.7,
     },
@@ -196,7 +193,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(shell_exec|shell_list_dir|shell_read_file|shell_write_file)\b",
             r"\b(sandbox_exec|sandbox_list_dir|sandbox_read_file|sandbox_write_file)\b",
         ],
-        "tool_groups": [TOOL_GROUP_PLUGINS, TOOL_GROUP_TASKS],
+        "tool_groups": [TOOL_GROUP_PLUGINS],
         "cognitive_patterns": [],
         "confidence": 0.9,
     },
@@ -238,7 +235,7 @@ def classify_intent(message: str) -> RoutingResult:
     return RoutingResult(
         intent="general",
         tool_groups=ALWAYS_INCLUDED + [
-            TOOL_GROUP_TASKS, TOOL_GROUP_ISSUES, TOOL_GROUP_DELEGATION,
+            TOOL_GROUP_ISSUES, TOOL_GROUP_DELEGATION,
         ],
         pattern_names=[],
         confidence=0.3,

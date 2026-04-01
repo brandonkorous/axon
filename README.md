@@ -133,7 +133,7 @@ cd my-workspace && axon start
 **Windows (PowerShell):**
 
 ```powershell
-# 1. Install the CLI (requires Docker Desktop + Git for Windows)
+# 1. Install the CLI (requires Docker Desktop)
 irm https://get.useaxon.dev | iex
 
 # 2. Create a workspace (restart your terminal first if prompted)
@@ -149,10 +149,11 @@ cd my-workspace; axon start
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/brandonkorous/axon.git && cd axon
+git clone https://github.com/brandonkorous/axon.git
+cd axon
 
 # 2. Configure your environment
-cp .env.example .env
+cp .env.example .env        # Windows: copy .env.example .env
 # Edit .env — add your API keys (Anthropic, OpenAI, or use Ollama for fully local)
 
 # 3. Launch

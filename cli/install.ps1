@@ -1,14 +1,13 @@
 # Axon CLI Installer for Windows
 # Usage: irm https://get.useaxon.dev | iex
 #
-# Installs the `axon` CLI to %LOCALAPPDATA%\Axon\bin and adds it to user PATH.
-# Requires: Docker Desktop for Windows, Git Bash (bundled with Git for Windows).
+# Installs the `axon` CLI (PowerShell edition) to %LOCALAPPDATA%\Axon\bin.
+# Only prerequisite: Docker Desktop for Windows.
 
 $ErrorActionPreference = "Stop"
 
 $Repo = "brandonkorous/axon"
-$CliUrl = "https://raw.githubusercontent.com/$Repo/main/cli/axon"
-$VersionUrl = "https://raw.githubusercontent.com/$Repo/main/cli/VERSION"
+$CliUrl = "https://raw.githubusercontent.com/$Repo/main/cli/axon.ps1"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 function Write-Info  { param($Msg) Write-Host "  >" $Msg -ForegroundColor Cyan }
@@ -31,37 +30,34 @@ Write-Host ""
 # ── Check prerequisites ────────────────────────────────────────────────────
 Write-Info "Checking prerequisites..."
 
-# Docker
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Fail "Docker not found. Install Docker Desktop for Windows: https://docs.docker.com/desktop/install/windows-install/"
-}
-Write-Ok "Docker found"
-
-# Git (ships with Git Bash which we need to run the CLI)
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Fail "Git not found. Install Git for Windows: https://git-scm.com/download/win"
-}
-Write-Ok "Git found"
-
-# Find Git Bash
-$GitDir = Split-Path (Split-Path (Get-Command git).Source)
-$BashCandidates = @(
-    "$GitDir\bin\bash.exe",
-    "$GitDir\usr\bin\bash.exe",
-    "$env:ProgramFiles\Git\bin\bash.exe",
-    "${env:ProgramFiles(x86)}\Git\bin\bash.exe"
-)
-$BashExe = $null
-foreach ($candidate in $BashCandidates) {
-    if (Test-Path $candidate) {
-        $BashExe = $candidate
-        break
+    Write-Warn "Docker not found. Axon needs Docker Desktop to run."
+    Write-Host ""
+    Write-Host "    1)" -ForegroundColor White -NoNewline; Write-Host " Download Docker Desktop " -NoNewline; Write-Host "(opens browser)" -ForegroundColor DarkGray
+    Write-Host "    2)" -ForegroundColor White -NoNewline; Write-Host " Install via winget"
+    Write-Host "    s)" -ForegroundColor White -NoNewline; Write-Host " Skip - I'll install Docker later"
+    Write-Host ""
+    Write-Host "  ? Choose [1/2/s]: " -ForegroundColor Cyan -NoNewline
+    $choice = Read-Host
+    switch ($choice) {
+        "1" {
+            Start-Process "https://docs.docker.com/desktop/install/windows-install/"
+            Write-Info "Install Docker Desktop, then re-run this installer."
+            exit 0
+        }
+        "2" {
+            winget install -e --id Docker.DockerDesktop
+            Write-Info "Restart your terminal after Docker Desktop finishes installing, then re-run this installer."
+            exit 0
+        }
+        default {
+            Write-Info "Install Docker Desktop before using Axon: https://docs.docker.com/desktop/install/windows-install/"
+            Write-Info "Continuing with CLI install..."
+        }
     }
+} else {
+    Write-Ok "Docker found"
 }
-if (-not $BashExe) {
-    Write-Fail "Git Bash not found. Reinstall Git for Windows with 'Git Bash' option enabled."
-}
-Write-Ok "Git Bash found at $BashExe"
 
 # ── Install directory ──────────────────────────────────────────────────────
 $InstallDir = "$env:LOCALAPPDATA\Axon\bin"
@@ -73,28 +69,26 @@ Write-Info "Install directory: $InstallDir"
 # ── Download CLI ───────────────────────────────────────────────────────────
 Write-Info "Downloading Axon CLI..."
 
-$AxonScript = Join-Path $InstallDir "axon"
+$AxonScript = Join-Path $InstallDir "axon.ps1"
 try {
     Invoke-RestMethod -Uri $CliUrl -OutFile $AxonScript
 } catch {
     Write-Fail "Failed to download Axon CLI: $_"
 }
-Write-Ok "Downloaded axon CLI script"
+Write-Ok "Downloaded axon.ps1"
 
 # ── Create axon.cmd wrapper ───────────────────────────────────────────────
-# Windows can't execute bash scripts directly, so we create a .cmd wrapper
-# that invokes the script via Git Bash.
+# Lets users just type `axon` instead of `powershell axon.ps1`
 $WrapperPath = Join-Path $InstallDir "axon.cmd"
 $WrapperContent = @"
 @echo off
-setlocal
-set "AXON_SCRIPT=%~dp0axon"
-"$BashExe" "%AXON_SCRIPT%" %*
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0axon.ps1" %*
 "@
 Set-Content -Path $WrapperPath -Value $WrapperContent -Encoding ASCII
 Write-Ok "Created axon.cmd wrapper"
 
 # ── Update PATH ────────────────────────────────────────────────────────────
+$NeedsRestart = $false
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$InstallDir*") {
     [Environment]::SetEnvironmentVariable("Path", "$InstallDir;$UserPath", "User")
@@ -106,16 +100,7 @@ if ($UserPath -notlike "*$InstallDir*") {
 }
 
 # ── Verify ─────────────────────────────────────────────────────────────────
-try {
-    $null = & "$WrapperPath" version 2>&1
-    Write-Ok "axon is ready!"
-} catch {
-    if ($NeedsRestart) {
-        Write-Warn "PATH was updated. Restart your terminal for 'axon' to be available."
-    } else {
-        Write-Warn "Installation completed but verification failed. Try running 'axon version' manually."
-    }
-}
+Write-Ok "axon is ready!"
 
 Write-Host ""
 Write-Host "  Get started:" -ForegroundColor White

@@ -51,11 +51,16 @@ class PluginToolExecutor:
                     self._tool_to_plugin[name] = plugin_name
 
                 if multi:
-                    # Inject instance parameter and update description
+                    # Inject instance parameter and descriptive labels
                     ids = [iid for iid, _ in instances]
-                    labels = ", ".join(
-                        f"{iid} ({p.manifest.name})" for iid, p in instances
-                    )
+                    label_parts = []
+                    for iid, p in instances:
+                        img = getattr(p, "_image", "")
+                        desc = f"{iid}"
+                        if img:
+                            desc += f" [{img}]"
+                        label_parts.append(desc)
+                    labels = ", ".join(label_parts)
                     func["description"] = (
                         func.get("description", "")
                         + f"\nAvailable instances: {labels}."

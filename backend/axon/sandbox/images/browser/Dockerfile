@@ -27,9 +27,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright and Chromium browser
-RUN bunx playwright install chromium --with-deps 2>/dev/null || true
+# Install Playwright as a persistent package (not bunx temp)
+WORKDIR /opt/playwright
+RUN bun init -y && bun add playwright && bunx playwright install chromium
+
+# Make playwright available globally
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright/node_modules/playwright-core/.local-browsers
 
 USER sandbox
+WORKDIR /workspace
 
-CMD ["bun", "run", "/runner/runner.js"]
+CMD ["sleep", "infinity"]

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { usePluginStore, type PluginInstanceInfo } from "../../stores/pluginStore";
 import { useHostAgentStore } from "../../stores/hostAgentStore";
+import { useSandboxStore } from "../../stores/sandboxStore";
+
+const DEFAULT_SANDBOX_IMAGE = "code";
 
 export function PluginInstanceForm({
   pluginName,
@@ -18,11 +21,16 @@ export function PluginInstanceForm({
   const { createInstance, updateInstance } = usePluginStore();
   const hostAgents = useHostAgentStore((s) => s.agents);
   const fetchHostAgents = useHostAgentStore((s) => s.fetchAgents);
+  const sandboxImages = useSandboxStore((s) => s.images);
+  const fetchImages = useSandboxStore((s) => s.fetchImages);
 
   const isEdit = !!instance;
   const [id, setId] = useState(instance?.id || "");
   const [name, setName] = useState(instance?.name || "");
   const [path, setPath] = useState((instance?.config.path as string) || "");
+  const [image, setImage] = useState(
+    (instance?.config.image as string) || DEFAULT_SANDBOX_IMAGE,
+  );
   const [executables, setExecutables] = useState(
     Array.isArray(instance?.config.executables)
       ? (instance.config.executables as string[]).join(", ")
@@ -38,7 +46,8 @@ export function PluginInstanceForm({
 
   useEffect(() => {
     if (hostAgents.length === 0) fetchHostAgents();
-  }, [hostAgents.length, fetchHostAgents]);
+    if (pluginName === "sandbox" && sandboxImages.length === 0) fetchImages();
+  }, [hostAgents.length, fetchHostAgents, pluginName, sandboxImages.length, fetchImages]);
 
   const toggleAgent = (agentId: string) => {
     setSelectedAgents((prev) =>
@@ -61,6 +70,9 @@ export function PluginInstanceForm({
       path,
       executables: execList,
     };
+    if (pluginName === "sandbox") {
+      config.image = image;
+    }
     if (pluginName === "shell_access") {
       config.host_agent_id = hostAgentId || null;
       config.host_agent_url = hostAgentUrl || null;
@@ -118,6 +130,34 @@ export function PluginInstanceForm({
           onChange={(e) => setName(e.target.value)}
         />
       </div>
+
+      {pluginName === "sandbox" && (
+        <div className="form-control">
+          <label className="label py-0.5">
+            <span className="label-text text-xs">Sandbox Image</span>
+          </label>
+          <select
+            className="select select-bordered select-sm w-full"
+            value={image}
+            onChange={(e) => setImage(e.target.value)}
+          >
+            {sandboxImages
+              .filter((img) => img.status === "ready")
+              .map((img) => (
+                <option key={img.type} value={img.type}>
+                  {img.type} — {img.description}
+                </option>
+              ))}
+            {sandboxImages
+              .filter((img) => img.status !== "ready")
+              .map((img) => (
+                <option key={img.type} value={img.type} disabled>
+                  {img.type} — {img.description} (not built)
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
 
       {pluginName === "shell_access" && (
         <div className="form-control">

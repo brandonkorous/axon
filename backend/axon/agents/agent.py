@@ -15,14 +15,12 @@ if TYPE_CHECKING:
     from axon.org import OrgCommsConfig, OrgModelConfig
     from axon.usage import UsageTracker
 from axon.agents.provider import complete, stream_completion
-from axon.agents.shared_tools import ISSUE_TOOLS, KNOWLEDGE_TOOLS, TASK_TOOLS, SharedVaultToolExecutor
+from axon.agents.shared_tools import ISSUE_TOOLS, KNOWLEDGE_TOOLS, SharedVaultToolExecutor
 from axon.agents.tools import (
     DELEGATION_TOOLS,
     DISCOVERY_TOOLS,
-    LEARNING_TOOLS,
     PERFORMANCE_TOOLS,
     RECRUITMENT_TOOLS,
-    VAULT_TOOLS,
     ToolExecutor,
 )
 from axon.discovery.executor import DiscoveryToolExecutor
@@ -487,17 +485,19 @@ class Agent:
         # Signal thinking
         yield StreamChunk(agent_id=self.id, type="thinking")
 
-        # 1. Kick off vault retrieval and ack generation in parallel
+        # 1. Kick off vault retrieval, task context, and ack generation in parallel
         vault_task = asyncio.create_task(self._retrieve_vault_context(user_message))
+        task_ctx_task = asyncio.create_task(self._retrieve_task_context())
         ack_task = asyncio.create_task(self._generate_ack(user_message))
 
-        # Yield ack as soon as it's ready (don't wait for vault)
+        # Yield ack as soon as it's ready (don't wait for vault/tasks)
         ack_text = await ack_task
         if ack_text:
             yield StreamChunk(agent_id=self.id, type="ack", content=ack_text)
 
-        # Wait for vault context to finish
+        # Wait for vault and task context to finish
         vault_context = await vault_task
+        task_context = await task_ctx_task
         logger.debug("[%s] Vault context: %d chars", self.id, len(vault_context) if vault_context else 0)
 
         # 2. Classify intent and build targeted tool list + messages
@@ -522,7 +522,7 @@ class Agent:
             if tool_instruction:
                 logger.debug("[%s] Tool instruction: %s", self.id, tool_instruction[:100])
 
-        messages = self._build_messages(user_message, vault_context, routing.pattern_names, tool_instruction=tool_instruction)
+        messages = self._build_messages(user_message, vault_context, routing.pattern_names, tool_instruction=tool_instruction, task_context=task_context)
 
         # 3. Add user message to history (skip for scheduler-triggered tasks)
         if save_history:
@@ -615,6 +615,12 @@ class Agent:
         elif not self.memory_manager:
             logger.debug("[%s] No memory manager — skipping learning", self.id)
 
+        # 7. Fire async task management (local model creates/updates tasks)
+        if self.shared_vault and full_response:
+            asyncio.create_task(self._process_turn_for_tasks(
+                user_message, full_response, task_context,
+            ))
+
         yield StreamChunk(agent_id=self.id, type="done")
 
     def _record_usage(
@@ -655,6 +661,33 @@ class Agent:
         except Exception as e:
             logger.debug("Learning extraction failed (non-critical): %s", e)
 
+    async def _retrieve_task_context(self) -> str:
+        """Pre-processing: load active tasks assigned to this agent."""
+        if not self.shared_vault:
+            return ""
+        try:
+            from axon.vault.task_pipeline import recall_tasks
+            return await recall_tasks(self.shared_vault, self.id)
+        except Exception as e:
+            logger.debug("Task context retrieval failed (non-critical): %s", e)
+            return ""
+
+    async def _process_turn_for_tasks(
+        self, user_message: str, response: str, task_context: str,
+    ) -> None:
+        """Fire-and-forget: let local LLM manage tasks from this turn."""
+        try:
+            from axon.vault.task_pipeline import process_turn_for_tasks
+            memory_model = ""
+            if self.memory_manager:
+                memory_model = self.memory_manager.model
+            await process_turn_for_tasks(
+                user_message, response, self.id, self.shared_vault,
+                task_context, memory_model=memory_model, org_id=self._org_id,
+            )
+        except Exception as e:
+            logger.debug("Task pipeline failed (non-critical): %s", e)
+
     def _get_active_output_fields(self, user_message: str) -> list | None:
         """Get output fields from active skills for this message."""
         if not hasattr(self.config, "skills") or not self.config.skills or not self.config.skills.enabled:
@@ -680,6 +713,7 @@ class Agent:
         self, user_message: str, vault_context: str,
         routed_patterns: list[str] | None = None,
         tool_instruction: str = "",
+        task_context: str = "",
     ) -> list[dict[str, Any]]:
         """Build the full message array for the LLM."""
         # Inject agent identity and org context
@@ -882,6 +916,12 @@ class Agent:
                 "content": f"## Memory (from your vault)\n\n{vault_context}",
             })
 
+        if task_context:
+            messages.append({
+                "role": "system",
+                "content": task_context,
+            })
+
         # NO raw conversation history replay. Context comes from vault memory
         # (short-term + long-term). The memory manager extracts and stores
         # relevant context from each turn, so the agent has continuity
@@ -1031,24 +1071,21 @@ class Agent:
         from axon.agents.intent_router import (
             TOOL_GROUP_BROWSER, TOOL_GROUP_COMMS,
             TOOL_GROUP_DELEGATION, TOOL_GROUP_DISCOVERY, TOOL_GROUP_ISSUES,
-            TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_LEARNING, TOOL_GROUP_MEDIA,
+            TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_MEDIA,
             TOOL_GROUP_PERFORMANCE, TOOL_GROUP_PLUGINS, TOOL_GROUP_REASONING,
-            TOOL_GROUP_RECRUITMENT, TOOL_GROUP_RESEARCH, TOOL_GROUP_TASKS,
-            TOOL_GROUP_VAULT, TOOL_GROUP_WEB,
+            TOOL_GROUP_RECRUITMENT, TOOL_GROUP_RESEARCH,
+            TOOL_GROUP_WEB,
         )
 
         def _want(group: str) -> bool:
             """Check if a tool group is requested (or if we're in unfiltered mode)."""
             return tool_groups is None or group in tool_groups
 
-        # Vault tools are always included as baseline
-        tools = list(VAULT_TOOLS)
+        # Memory is handled by the pre/post pipeline (local LLM), not agent tools
+        tools: list[dict[str, Any]] = []
 
         if _want(TOOL_GROUP_DELEGATION) and self.config.delegation.can_delegate_to:
             tools.extend(DELEGATION_TOOLS)
-
-        if _want(TOOL_GROUP_LEARNING) and self.memory_manager:
-            tools.extend(LEARNING_TOOLS)
 
         if _want(TOOL_GROUP_REASONING) and self.reasoning_engine:
             from axon.reasoning.tools import REASONING_TOOLS
@@ -1089,8 +1126,7 @@ class Agent:
             tools.extend(RECRUITMENT_TOOLS)
 
         if self.shared_vault:
-            if _want(TOOL_GROUP_TASKS):
-                tools.extend(TASK_TOOLS)
+            # Tasks handled by pre/post pipeline, not agent tools
             if _want(TOOL_GROUP_ISSUES):
                 tools.extend(ISSUE_TOOLS)
             if _want(TOOL_GROUP_KNOWLEDGE):

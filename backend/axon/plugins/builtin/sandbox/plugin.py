@@ -184,16 +184,26 @@ class SandboxPlugin(BasePlugin):
         cid = await self._ensure_container()
         from axon.sandbox.manager import sandbox_manager
 
+        # Use ls -la with --time-style to get structured output
         exit_code, stdout, _ = await sandbox_manager.provider.exec_command(
             cid, ["ls", "-la", "--time-style=+%Y-%m-%d", resolved],
         )
         if exit_code != 0:
             return json.dumps({"error": f"Not a directory: {resolved}"})
 
-        entries = [
-            {"name": p[7], "type": "directory" if p[0].startswith("d") else "file",
-             "size": int(p[4]) if p[4].isdigit() else 0}
-            for line in stdout.strip().split("\n")[1:]  # Skip "total" line
-            if len(p := line.split(None, 7)) >= 8 and p[7] not in (".", "..")
-        ]
+        entries = []
+        for line in stdout.strip().split("\n")[1:]:  # Skip "total" line
+            # With --time-style=+%Y-%m-%d: perms links user group size date name
+            # Split into at most 7 parts so filename (possibly with spaces) is intact
+            p = line.split(None, 6)
+            if len(p) < 7:
+                continue
+            name = p[6]
+            if name in (".", ".."):
+                continue
+            entries.append({
+                "name": name,
+                "type": "directory" if p[0].startswith("d") else "file",
+                "size": int(p[4]) if p[4].isdigit() else 0,
+            })
         return json.dumps({"entries": entries})

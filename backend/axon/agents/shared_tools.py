@@ -13,154 +13,10 @@ from axon.vault.vault import VaultManager
 
 # ── Tool schemas (for LLM tool-use) ─────────────────────────────────
 
-TASK_TOOLS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "task_create",
-            "description": "Create a new task in the shared organization vault. Tasks track work items and assignments.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": "Short, descriptive title for the task",
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Detailed description of what needs to be done",
-                    },
-                    "assignee": {
-                        "type": "string",
-                        "description": "Agent ID to assign this task to (e.g., 'raj', 'marcus', 'diana')",
-                    },
-                    "priority": {
-                        "type": "string",
-                        "enum": ["p0", "p1", "p2", "p3"],
-                        "description": "Priority level: p0=critical, p1=high, p2=medium, p3=low",
-                        "default": "p2",
-                    },
-                    "due_date": {
-                        "type": "string",
-                        "description": "Due date in YYYY-MM-DD format (optional)",
-                    },
-                    "labels": {
-                        "type": "string",
-                        "description": "Comma-separated labels (e.g., 'backend, auth, urgent')",
-                    },
-                    "parent_task": {
-                        "type": "string",
-                        "description": "Path to parent task if this is a subtask (optional)",
-                    },
-                    "conversation_id": {
-                        "type": "string",
-                        "description": "Conversation ID to deliver results back to when task completes (for async work)",
-                    },
-                    "owner": {
-                        "type": "string",
-                        "description": "Agent ID of who needs the result (gets notified on responses). Defaults to you.",
-                    },
-                },
-                "required": ["title", "description"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "task_update",
-            "description": "Update an existing task's status, assignee, or priority.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the task file (e.g., 'tasks/2026-03-21-implement-auth.md')",
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "in_progress", "done", "blocked", "accepted"],
-                        "description": "New status for the task",
-                    },
-                    "message": {
-                        "type": "string",
-                        "description": "Required message explaining why this status change is happening. This gets recorded in task activity.",
-                    },
-                    "assignee": {
-                        "type": "string",
-                        "description": "New assignee agent ID",
-                    },
-                    "priority": {
-                        "type": "string",
-                        "enum": ["p0", "p1", "p2", "p3"],
-                        "description": "New priority level",
-                    },
-                },
-                "required": ["path", "message"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "task_list",
-            "description": "List tasks from the shared vault, optionally filtered by status or assignee.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "in_progress", "done", "blocked", "accepted"],
-                        "description": "Filter by status (optional — omit to list all)",
-                    },
-                    "assignee": {
-                        "type": "string",
-                        "description": "Filter by assignee agent ID (optional)",
-                    },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "task_respond",
-            "description": (
-                "Add a response to a task thread. Use this to send results, "
-                "updates, documents, or deliverables back to the task owner "
-                "without closing the task."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the task file (e.g., 'tasks/2026-03-21-implement-auth.md')",
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Response content — findings, results, updates, or questions",
-                    },
-                    "attachments": {
-                        "type": "string",
-                        "description": (
-                            "JSON array of attachments. Each has 'type' (vault_path|url|document), "
-                            "'path' (vault path or URL), and 'label' (short description). "
-                            'Example: [{"type":"vault_path","path":"notes/analysis.md","label":"Full analysis"}]'
-                        ),
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "in_progress", "done", "blocked", "accepted"],
-                        "description": "Optionally update task status with your response",
-                    },
-                },
-                "required": ["path", "content"],
-            },
-        },
-    },
-]
+
+# Task tools removed — task management is handled by the pre/post pipeline
+# (vault/task_pipeline.py). The SharedVaultToolExecutor still has internal
+# task methods used by the scheduler for task execution.
 
 ISSUE_TOOLS: list[dict[str, Any]] = [
     {
@@ -382,10 +238,6 @@ class SharedVaultToolExecutor:
             return f"Error: Invalid JSON arguments: {arguments}"
 
         handlers = {
-            "task_create": self._task_create,
-            "task_update": self._task_update,
-            "task_respond": self._task_respond,
-            "task_list": self._task_list,
             "issue_create": self._issue_create,
             "issue_update": self._issue_update,
             "issue_comment": self._issue_comment,

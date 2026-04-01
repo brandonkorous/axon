@@ -267,6 +267,15 @@ def init_orgs() -> None:
         org = _init_org_agents(org_path, org_config)
         registry.org_registry[org_config.id] = org
 
+        # Rebuild plugin executors now that org is registered and plugin_instances are populated
+        if org_config.plugin_instances:
+            for agent in org.agent_registry.values():
+                if hasattr(agent, "_build_plugin_executor"):
+                    agent._plugin_executor = agent._build_plugin_executor()
+                    if agent._plugin_executor:
+                        agent.tool_executor._plugin_executor = agent._plugin_executor
+                        agent.tools = agent._build_tool_list()
+
     if not registry.org_registry:
         raise RuntimeError(f"No organizations found in: {orgs_dir}")
 
