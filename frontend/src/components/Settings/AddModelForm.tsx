@@ -1,5 +1,12 @@
-import { useState, useEffect } from "react";
-import { useModelStore, RegisteredModel, CatalogModel, CatalogProvider } from "../../stores/modelStore";
+import { useState } from "react";
+import {
+  useModels,
+  useModelCatalog,
+  useOllamaModels,
+  useRegisterModel,
+  type RegisteredModel,
+  type CatalogProvider,
+} from "../../hooks/useModels";
 
 const TIER_BADGE: Record<string, string> = {
   recommended: "badge-primary",
@@ -8,19 +15,22 @@ const TIER_BADGE: Record<string, string> = {
 };
 
 export function AddModelForm({ onClose }: { onClose: () => void }) {
-  const { registerModel, fetchCatalog, catalog, discoverOllamaModels, models } = useModelStore();
+  const { data: modelsData } = useModels();
+  const { data: catalog } = useModelCatalog();
+  const { data: ollamaData } = useOllamaModels();
+  const registerModel = useRegisterModel();
   const [modelId, setModelId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [modelType, setModelType] = useState<"cloud" | "local">("cloud");
   const [isCustom, setIsCustom] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [ollamaModels, setOllamaModels] = useState<RegisteredModel[]>([]);
 
-  useEffect(() => {
-    if (!catalog) fetchCatalog();
-    // Auto-discover Ollama models on mount
-    discoverOllamaModels().then(setOllamaModels);
-  }, [catalog, fetchCatalog, discoverOllamaModels]);
+  const models = modelsData?.registered_models ?? [];
+  const ollamaModels: RegisteredModel[] = (ollamaData?.models ?? []).map((m) => ({
+    id: m.id,
+    provider: "ollama",
+    display_name: m.name,
+    model_type: "local",
+  }));
 
   const canSave = modelId.trim() && displayName.trim();
 
@@ -69,14 +79,16 @@ export function AddModelForm({ onClose }: { onClose: () => void }) {
 
   const handleSave = async () => {
     if (!canSave) return;
-    setSaving(true);
-    const ok = await registerModel({
-      id: modelId.trim(),
-      display_name: displayName.trim(),
-      model_type: modelType,
-    });
-    setSaving(false);
-    if (ok) onClose();
+    try {
+      await registerModel.mutateAsync({
+        id: modelId.trim(),
+        display_name: displayName.trim(),
+        model_type: modelType,
+      });
+      onClose();
+    } catch {
+      // mutation error handled by TQ
+    }
   };
 
   return (
@@ -158,8 +170,8 @@ export function AddModelForm({ onClose }: { onClose: () => void }) {
       )}
 
       <div className="flex gap-2">
-        <button onClick={handleSave} disabled={!canSave || saving} className="btn btn-primary btn-sm">
-          {saving ? <span className="loading loading-spinner loading-xs" /> : "Save"}
+        <button onClick={handleSave} disabled={!canSave || registerModel.isPending} className="btn btn-primary btn-sm">
+          {registerModel.isPending ? <span className="loading loading-spinner loading-xs" /> : "Save"}
         </button>
         <button onClick={onClose} className="btn btn-ghost btn-sm">Cancel</button>
       </div>
@@ -168,29 +180,31 @@ export function AddModelForm({ onClose }: { onClose: () => void }) {
 }
 
 export function OllamaDiscoverButton() {
-  const { discoverOllamaModels, registerModel, models } = useModelStore();
-  const [discovered, setDiscovered] = useState<RegisteredModel[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [adding, setAdding] = useState<string | null>(null);
+  const { data: modelsData } = useModels();
+  const { data: ollamaData, isLoading: loading, refetch } = useOllamaModels();
+  const registerModel = useRegisterModel();
 
-  const handleDiscover = async () => {
-    setLoading(true);
-    const result = await discoverOllamaModels();
-    // Filter out already registered models
-    const existingIds = new Set(models.map((m) => m.id));
-    setDiscovered(result.filter((m) => !existingIds.has(m.id)));
-    setLoading(false);
+  const models = modelsData?.registered_models ?? [];
+  const existingIds = new Set(models.map((m) => m.id));
+  const discovered: RegisteredModel[] = (ollamaData?.models ?? [])
+    .filter((m) => !existingIds.has(m.id))
+    .map((m) => ({
+      id: m.id,
+      provider: "ollama",
+      display_name: m.name,
+      model_type: "local",
+    }));
+
+  const handleDiscover = () => {
+    refetch();
   };
 
   const handleAdd = async (model: RegisteredModel) => {
-    setAdding(model.id);
-    await registerModel({
+    await registerModel.mutateAsync({
       id: model.id,
       display_name: model.display_name,
       model_type: "local",
     });
-    setDiscovered((prev) => prev.filter((m) => m.id !== model.id));
-    setAdding(null);
   };
 
   return (
@@ -210,10 +224,10 @@ export function OllamaDiscoverButton() {
               <span className="text-sm font-mono">{m.display_name}</span>
               <button
                 onClick={() => handleAdd(m)}
-                disabled={adding === m.id}
+                disabled={registerModel.isPending}
                 className="btn btn-primary btn-xs"
               >
-                {adding === m.id ? (
+                {registerModel.isPending ? (
                   <span className="loading loading-spinner loading-xs" />
                 ) : (
                   "Add"

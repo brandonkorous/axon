@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useModelStore, ModelRoles } from "../../stores/modelStore";
+import { useModels, useUpdateRoles, type ModelRoles } from "../../hooks/useModels";
 
 const ROLES: {
   key: keyof ModelRoles;
@@ -29,9 +29,11 @@ const ROLES: {
 ];
 
 export function RoleAssignments() {
-  const { models, roles, updateRoles } = useModelStore();
+  const { data } = useModels();
+  const updateRoles = useUpdateRoles();
+  const models = data?.registered_models ?? [];
+  const roles = data?.roles ?? { navigator: "", reasoning: "", memory: "", agent: "" };
   const [draft, setDraft] = useState<ModelRoles>({ ...roles });
-  const [saving, setSaving] = useState(false);
 
   const rolesKey = JSON.stringify(roles);
   const [lastKey, setLastKey] = useState(rolesKey);
@@ -41,9 +43,7 @@ export function RoleAssignments() {
   }
 
   const handleSave = async () => {
-    setSaving(true);
-    await updateRoles(draft);
-    setSaving(false);
+    await updateRoles.mutateAsync(draft);
   };
 
   return (
@@ -61,7 +61,7 @@ export function RoleAssignments() {
               onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
               className="select select-sm select-bordered w-full"
             >
-              <option value="">-- Select model --</option>
+              <option value="">Choose a model</option>
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.display_name} ({m.model_type})
@@ -71,8 +71,8 @@ export function RoleAssignments() {
           </div>
         ))}
       </div>
-      <button onClick={handleSave} disabled={saving} className="btn btn-primary btn-sm">
-        {saving ? <span className="loading loading-spinner loading-xs" /> : "Save Roles"}
+      <button onClick={handleSave} disabled={updateRoles.isPending} className="btn btn-primary btn-sm">
+        {updateRoles.isPending ? <span className="loading loading-spinner loading-xs" /> : "Save Roles"}
       </button>
     </div>
   );

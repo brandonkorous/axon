@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
-import logging
 import threading
 from datetime import datetime, date
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Default cost for models where litellm can't calculate (e.g. Ollama)
 ZERO_COST = 0.0

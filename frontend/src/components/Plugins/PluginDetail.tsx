@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { usePluginStore } from "../../stores/pluginStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { usePluginDetail, useDeletePlugin } from "../../hooks/usePlugins";
+import { useAgents } from "../../hooks/useAgents";
+import { api } from "../../utils/api";
 import { TagInput } from "./TagInput";
 import { PluginInstanceList } from "./PluginInstanceList";
 
 const CATEGORIES = ["general", "research", "integration", "media", "browser"];
 
 export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBack: () => void }) {
-  const { selectedPlugin, fetchPluginDetail, updatePlugin, deletePlugin } =
-    usePluginStore();
-  const { agents } = useAgentStore();
+  const { data: selectedPlugin, refetch: refetchDetail } = usePluginDetail(pluginName);
+  const { data: agents = [] } = useAgents();
+  const deletePluginMutation = useDeletePlugin();
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,10 +28,6 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
   const [toolPrefix, setToolPrefix] = useState("");
   const [pythonDeps, setPythonDeps] = useState<string[]>([]);
   const [requiredCredentials, setRequiredCredentials] = useState<string[]>([]);
-
-  useEffect(() => {
-    fetchPluginDetail(pluginName);
-  }, [pluginName, fetchPluginDetail]);
 
   // Sync edit form when selectedPlugin loads
   useEffect(() => {
@@ -60,30 +57,34 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
 
   const handleSave = async () => {
     setSaving(true);
-    const ok = await updatePlugin(pluginName, {
-      description,
-      version,
-      author,
-      category,
-      icon,
-      auto_load: autoLoad,
-      triggers,
-      tool_prefix: toolPrefix,
-      python_deps: pythonDeps,
-      required_credentials: requiredCredentials,
-    });
-    if (ok) {
-      await fetchPluginDetail(pluginName);
+    try {
+      await api.put(`plugins/${pluginName}`, {
+        description,
+        version,
+        author,
+        category,
+        icon,
+        auto_load: autoLoad,
+        triggers,
+        tool_prefix: toolPrefix,
+        python_deps: pythonDeps,
+        required_credentials: requiredCredentials,
+      });
+      await refetchDetail();
       setEditing(false);
+    } catch {
+      // save failed
     }
     setSaving(false);
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    const result = await deletePlugin(pluginName);
-    if (result.deleted) {
+    try {
+      await deletePluginMutation.mutateAsync(pluginName);
       onBack();
+    } catch {
+      // delete failed
     }
     setDeleting(false);
   };
@@ -163,7 +164,7 @@ export function PluginDetail({ pluginName, onBack }: { pluginName: string; onBac
             <ViewMode
               plugin={s}
               agents={agents}
-              onRefresh={() => fetchPluginDetail(pluginName)}
+              onRefresh={() => refetchDetail()}
               pluginName={pluginName}
             />
           )}

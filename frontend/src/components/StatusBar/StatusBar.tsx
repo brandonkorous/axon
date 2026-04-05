@@ -5,6 +5,7 @@ import { StatusBarAgents } from "./StatusBarAgents";
 import { StatusBarSandboxes } from "./StatusBarSandboxes";
 import { StatusBarApprovals } from "./StatusBarApprovals";
 import { StatusBarUsage } from "./StatusBarUsage";
+import { StatusBarOrg } from "./StatusBarOrg";
 
 const VOICE_DOT: Record<VoiceState, string> = {
   idle: "bg-neutral/50",
@@ -32,6 +33,7 @@ export function StatusBar() {
       <div className="flex items-center justify-between h-full px-1 text-xs select-none">
         {/* Left cluster */}
         <div className="flex items-center h-full">
+          <StatusBarOrg />
           <StatusBarAgents
             activeCount={data.activeAgents}
             thinkingCount={data.thinkingAgents}

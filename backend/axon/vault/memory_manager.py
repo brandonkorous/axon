@@ -15,13 +15,13 @@ Falls back to deterministic MemoryNavigator if the local model is unavailable.
 from __future__ import annotations
 
 import asyncio
-import logging
 import shutil
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from axon.config import LearningConfig
+from axon.logging import get_logger
 from axon.vault.frontmatter import parse_frontmatter, write_frontmatter
 from axon.vault.memory_recall import recall_with_llm, recall_fallback
 from axon.vault.memory_learning import extract_learnings, link_outcome, apply_confidence_decay
@@ -29,8 +29,9 @@ from axon.vault.vault import VaultManager
 
 if TYPE_CHECKING:
     from axon.usage import UsageTracker
+    from axon.vault.vector_store import VaultVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MemoryManager:
@@ -48,6 +49,7 @@ class MemoryManager:
         agent_id: str = "",
         usage_tracker: "UsageTracker | None" = None,
         org_id: str = "",
+        vector_store: "VaultVectorStore | None" = None,
     ):
         self.vault = vault
         self.config = config
@@ -56,29 +58,26 @@ class MemoryManager:
         self._usage_tracker = usage_tracker
         self._org_id = org_id
         self._turn_count = 0
+        self._vector_store = vector_store
+        self._log = logger.bind(agent_id=agent_id, org_id=org_id)
 
     async def recall(self, user_message: str) -> str:
         """Retrieve relevant vault context for a user message."""
-        logger.debug(
-            "[%s] 🔍 RECALL START — message: %.80s...",
-            self.agent_id, user_message,
-        )
+        self._log.debug("recall_start", message_preview=user_message[:80])
         try:
             result = await recall_with_llm(
                 self.vault, self.config, self.model, user_message,
                 usage_tracker=self._usage_tracker,
                 agent_id=self.agent_id, org_id=self._org_id,
+                vector_store=self._vector_store,
             )
-            logger.debug(
-                "[%s] 🔍 RECALL COMPLETE — returned %d chars of context",
-                self.agent_id, len(result),
-            )
+            self._log.debug("recall_complete", chars=len(result))
             return result
         except TimeoutError:
-            logger.warning("[%s] MemoryManager recall timed out — using fallback", self.agent_id)
+            self._log.warning("recall_timeout", fallback="deterministic")
             return await asyncio.to_thread(recall_fallback, self.vault, self.config, user_message)
         except Exception as e:
-            logger.warning("[%s] MemoryManager recall failed — using fallback: %s", self.agent_id, e)
+            self._log.warning("recall_failed", fallback="deterministic", error=str(e))
             return await asyncio.to_thread(recall_fallback, self.vault, self.config, user_message)
 
     async def process_turn(
@@ -90,10 +89,10 @@ class MemoryManager:
     ) -> None:
         """Process a completed turn — extract and store memories."""
         self._turn_count += 1
-        logger.debug(
-            "[%s] 📝 LEARN START — turn #%d, response: %d chars, context: %d chars",
-            self.agent_id, self._turn_count,
-            len(assistant_response), len(vault_context) if vault_context else 0,
+        self._log.debug(
+            "learn_start", turn=self._turn_count,
+            response_chars=len(assistant_response),
+            context_chars=len(vault_context) if vault_context else 0,
         )
         try:
             await extract_learnings(
@@ -103,15 +102,14 @@ class MemoryManager:
                 agent_id=self.agent_id, org_id=self._org_id,
                 conversation_id=conversation_id,
             )
-            logger.debug("[%s] 📝 LEARN COMPLETE — turn #%d", self.agent_id, self._turn_count)
+            self._log.debug("learn_complete", turn=self._turn_count)
+            # Index new/updated memories in vector store
+            await self._index_recent_memories()
             if self._turn_count % self.config.consolidation_interval == 0:
-                logger.debug(
-                    "[%s] 🔄 CONSOLIDATION triggered at turn #%d",
-                    self.agent_id, self._turn_count,
-                )
+                self._log.debug("consolidation_triggered", turn=self._turn_count)
                 await self.consolidate()
         except Exception as e:
-            logger.warning("MemoryManager process_turn failed: %s", e)
+            self._log.warning("learn_failed", error=str(e))
 
     async def link_outcome(
         self,
@@ -120,32 +118,29 @@ class MemoryManager:
         outcome_type: str,
     ) -> str:
         """Link a known outcome to prior decisions and update confidence."""
-        logger.debug(
-            "[%s] 🔗 OUTCOME LINK — type=%s, outcome=%s, related=%s",
-            self.agent_id, outcome_type, outcome_path, related_paths,
+        self._log.debug(
+            "outcome_link", outcome_type=outcome_type,
+            outcome_path=outcome_path, related_paths=related_paths,
         )
         result = await link_outcome(self.vault, outcome_path, related_paths, outcome_type)
-        logger.debug("[%s] 🔗 OUTCOME LINK RESULT — %s", self.agent_id, result)
+        self._log.debug("outcome_link_result", result=result)
         return result
 
     async def consolidate(self) -> None:
         """Lightweight consolidation — expire short-term, decay long-term."""
-        # Expire short-term memories past TTL
         expired = self._expire_short_term()
         if expired:
-            logger.info("[%s] Expired %d short-term memories to deep", self.agent_id, expired)
+            self._log.info("memories_expired", count=expired, tier="short_term")
 
-        # Decay confidence on long-term memories
         lt_entries = self.vault.list_branch("memory/long-term")
         if len(lt_entries) >= 3:
             apply_confidence_decay(self.vault, self.config, lt_entries)
 
-        # Sink long-term memories below threshold to deep
         sunk = self._sink_decayed_long_term()
         if sunk:
-            logger.info("[%s] Sunk %d decayed long-term memories to deep", self.agent_id, sunk)
+            self._log.info("memories_sunk", count=sunk, tier="long_term")
 
-        logger.debug("[%s] Consolidation complete", self.agent_id)
+        self._log.debug("consolidation_complete")
 
     async def deep_consolidate(self) -> None:
         """Run LLM-driven deep consolidation (called by scheduler)."""
@@ -158,10 +153,11 @@ class MemoryManager:
             usage_tracker=self._usage_tracker,
             agent_id=self.agent_id, org_id=self._org_id,
         )
-        logger.info(
-            "[%s] Deep consolidation: reviewed=%d, merged=%d, archived=%d, contradictions=%d",
-            self.agent_id, report.entries_reviewed, report.llm_merged,
-            report.llm_archived + report.auto_archived, report.contradictions_flagged,
+        self._log.info(
+            "deep_consolidation_complete",
+            reviewed=report.entries_reviewed, merged=report.llm_merged,
+            archived=report.llm_archived + report.auto_archived,
+            contradictions=report.contradictions_flagged,
         )
 
     # ── Memory lifecycle ─────────────────────────────────────────
@@ -193,10 +189,12 @@ class MemoryManager:
             self.vault.write_file(new_path, metadata, body)
             self._remove_file(short_term_path)
 
-            logger.info("[%s] Promoted %s -> %s", self.agent_id, short_term_path, new_path)
+            self._log.info("memory_promoted", src=short_term_path, dst=new_path)
+            self._schedule_vector_update(self._vector_upsert(new_path, metadata, body))
+            self._schedule_vector_update(self._vector_remove(short_term_path))
             return new_path
         except Exception as e:
-            logger.warning("[%s] Failed to promote %s: %s", self.agent_id, short_term_path, e)
+            self._log.warning("memory_promote_failed", path=short_term_path, error=str(e))
             return None
 
     def sink_to_deep(self, source_path: str) -> str | None:
@@ -217,10 +215,11 @@ class MemoryManager:
             self.vault.write_file(new_path, metadata, body)
             self._remove_file(source_path)
 
-            logger.info("[%s] Sunk %s -> %s", self.agent_id, source_path, new_path)
+            self._log.info("memory_sunk", src=source_path, dst=new_path)
+            self._schedule_vector_update(self._vector_remove(source_path))
             return new_path
         except Exception as e:
-            logger.warning("[%s] Failed to sink %s: %s", self.agent_id, source_path, e)
+            self._log.warning("memory_sink_failed", path=source_path, error=str(e))
             return None
 
     def reinvigorate(self, deep_path: str) -> str | None:
@@ -249,10 +248,12 @@ class MemoryManager:
             self.vault.write_file(new_path, metadata, body)
             self._remove_file(deep_path)
 
-            logger.info("[%s] Reinvigorated %s -> %s", self.agent_id, deep_path, new_path)
+            self._log.info("memory_reinvigorated", src=deep_path, dst=new_path)
+            self._schedule_vector_update(self._vector_upsert(new_path, metadata, body))
+            self._schedule_vector_update(self._vector_remove(deep_path))
             return new_path
         except Exception as e:
-            logger.warning("[%s] Failed to reinvigorate %s: %s", self.agent_id, deep_path, e)
+            self._log.warning("memory_reinvigorate_failed", path=deep_path, error=str(e))
             return None
 
     def list_deep_for_review(self) -> list[dict[str, Any]]:
@@ -263,10 +264,11 @@ class MemoryManager:
         """Permanently delete a deep memory (user-approved deletion)."""
         try:
             self._remove_file(deep_path)
-            logger.info("[%s] Permanently deleted %s", self.agent_id, deep_path)
+            self._log.info("memory_deleted", path=deep_path)
+            self._schedule_vector_update(self._vector_remove(deep_path))
             return True
         except Exception as e:
-            logger.warning("[%s] Failed to delete %s: %s", self.agent_id, deep_path, e)
+            self._log.warning("memory_delete_failed", path=deep_path, error=str(e))
             return False
 
     def archive_conversation(self, conversation_id: str, messages: list[dict], title: str = "") -> str | None:
@@ -276,6 +278,57 @@ class MemoryManager:
             self.vault.vault_path, conversation_id, messages,
             agent_id=self.agent_id, title=title,
         )
+
+    # ── Vector store helpers ───────────────────────────────────────
+
+    def _schedule_vector_update(self, coro) -> None:
+        """Schedule an async vector operation from a sync context."""
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(coro)
+        except RuntimeError:
+            # No running loop — skip vector update silently
+            pass
+
+    async def _vector_upsert(
+        self, path: str, metadata: dict[str, Any], body: str,
+    ) -> None:
+        """Index a memory entry in the vector store (no-op if disabled)."""
+        if not self._vector_store:
+            return
+        try:
+            tier = metadata.get("memory_tier", "")
+            name = metadata.get("name", Path(path).stem)
+            await self._vector_store.upsert(path, name, tier, body)
+        except Exception as e:
+            self._log.warning("vector_upsert_failed", path=path, error=str(e))
+
+    async def _vector_remove(self, path: str) -> None:
+        """Remove a memory entry from the vector store (no-op if disabled)."""
+        if not self._vector_store:
+            return
+        try:
+            await self._vector_store.remove(path)
+        except Exception as e:
+            self._log.warning("vector_remove_failed", path=path, error=str(e))
+
+    async def _index_recent_memories(self) -> None:
+        """Index the most recent short-term memories in the vector store."""
+        if not self._vector_store:
+            return
+        try:
+            st_entries = self.vault.list_branch("memory/short-term")
+            for entry in st_entries[-5:]:  # last 5 (most recent)
+                path = entry.get("path", "")
+                if not path:
+                    continue
+                try:
+                    metadata, body = self.vault.read_file(path)
+                    await self._vector_upsert(path, metadata, body)
+                except Exception:
+                    pass
+        except Exception as e:
+            self._log.debug("vector_index_recent_failed", error=str(e))
 
     # ── Internal helpers ─────────────────────────────────────────
 

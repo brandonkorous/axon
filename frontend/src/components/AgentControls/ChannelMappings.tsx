@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useOrgStore } from "../../stores/orgStore";
+import { useUpdateOrg } from "../../hooks/useOrgs";
 
 type Platform = "discord" | "slack";
 
@@ -14,29 +15,31 @@ export function ChannelMappings({
   channels: string[];
   allMappings: Record<string, string>;
 }) {
-  const { activeOrgId } = useOrgStore();
-  const updateOrg = useOrgStore((s) => s.updateOrg);
+  const activeOrgId = useOrgStore((s) => s.activeOrgId);
+  const updateOrgMutation = useUpdateOrg();
   const [newChannel, setNewChannel] = useState("");
-  const [saving, setSaving] = useState(false);
+  const saving = updateOrgMutation.isPending;
 
   const label = platform === "discord" ? "Discord" : "Slack";
 
   const assign = async () => {
     const id = newChannel.trim();
     if (!id) return;
-    setSaving(true);
     const updated = { ...allMappings, [id]: agentId };
-    await updateOrg(activeOrgId, { comms: { [platform]: { channel_mappings: updated } } });
+    await updateOrgMutation.mutateAsync({
+      orgId: activeOrgId,
+      update: { comms: { [platform]: { channel_mappings: updated } } },
+    });
     setNewChannel("");
-    setSaving(false);
   };
 
   const unassign = async (channelId: string) => {
-    setSaving(true);
     const updated = { ...allMappings };
     delete updated[channelId];
-    await updateOrg(activeOrgId, { comms: { [platform]: { channel_mappings: updated } } });
-    setSaving(false);
+    await updateOrgMutation.mutateAsync({
+      orgId: activeOrgId,
+      update: { comms: { [platform]: { channel_mappings: updated } } },
+    });
   };
 
   return (

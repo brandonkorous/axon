@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePluginStore, type PluginInfo } from "../../stores/pluginStore";
+import { usePlugins } from "../../hooks/usePlugins";
+import type { PluginInfo } from "../../stores/pluginStore";
 import { PluginDetail } from "./PluginDetail";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -13,12 +14,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function PluginBrowser() {
   const navigate = useNavigate();
-  const { plugins, loading, fetchPlugins } = usePluginStore();
+  const { data: plugins = [], isLoading } = usePlugins();
   const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchPlugins();
-  }, [fetchPlugins]);
 
   if (selectedPlugin) {
     return <PluginDetail pluginName={selectedPlugin} onBack={() => setSelectedPlugin(null)} />;
@@ -41,7 +38,7 @@ export function PluginBrowser() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        {loading && plugins.length === 0 ? (
+        {isLoading && plugins.length === 0 ? (
           <div className="flex items-center justify-center h-32">
             <span className="loading loading-spinner loading-md text-primary" />
           </div>

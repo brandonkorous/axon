@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { useSandboxStore, type SandboxImageInfo } from "../../stores/sandboxStore";
+import { useState } from "react";
+import { useSandboxImages, useRemoveImage } from "../../hooks/useSandbox";
+import type { SandboxImageInfo } from "../../stores/sandboxStore";
 import { SandboxImageCard } from "./SandboxImageCard";
 import { SandboxBuildDialog } from "./SandboxBuildDialog";
 
@@ -31,22 +32,16 @@ function buildImageTree(images: SandboxImageInfo[]): SandboxImageInfo[] {
 }
 
 export function SandboxImagesView() {
-  const { images, loading, fetchImages, removeImage } = useSandboxStore();
+  const { data: images = [], isLoading: loading } = useSandboxImages();
+  const removeImage = useRemoveImage();
   const [buildTarget, setBuildTarget] = useState<SandboxImageInfo | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchImages();
-    const interval = setInterval(fetchImages, 15_000);
-    return () => clearInterval(interval);
-  }, [fetchImages]);
-
-  const orderedImages = buildImageTree(images);
+  const orderedImages = buildImageTree(images as SandboxImageInfo[]);
 
   const handleRemove = async (type: string) => {
-    await removeImage(type);
+    await removeImage.mutateAsync(type);
     setConfirmRemove(null);
-    fetchImages();
   };
 
   return (
@@ -104,10 +99,7 @@ export function SandboxImagesView() {
       {buildTarget && (
         <SandboxBuildDialog
           image={buildTarget}
-          onClose={() => {
-            setBuildTarget(null);
-            fetchImages();
-          }}
+          onClose={() => setBuildTarget(null)}
         />
       )}
     </div>

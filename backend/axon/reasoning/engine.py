@@ -9,11 +9,11 @@ Flow: trigger → gather → reason → record → act
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from axon.agents.provider import complete
+from axon.logging import get_logger
 from axon.reasoning.config import ReasoningConfig
 from axon.reasoning.graph import ReasoningGraph
 from axon.reasoning.models import (
@@ -38,7 +38,7 @@ from axon.vault.vault import VaultManager
 if TYPE_CHECKING:
     from axon.usage import UsageTracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ReasoningEngine:

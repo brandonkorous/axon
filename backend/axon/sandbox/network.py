@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+from axon.logging import get_logger
 from axon.sandbox.config import NetworkPolicy
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Axon internal network name for container ↔ backend communication
 AXON_NETWORK = "axon-sandbox-net"

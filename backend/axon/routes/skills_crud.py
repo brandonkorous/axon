@@ -2,19 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import shutil
 
 import yaml
 from fastapi import HTTPException
 
 from axon.config import settings
-from axon.skills.loader import load_skill_from_directory
-from axon.skills.registry import (
-    SKILL_REGISTRY,
-    SKILL_SOURCE,
-    unregister_skill,
-)
+from axon.logging import get_logger
 from axon.routes.skills import (
     SNAKE_CASE_RE,
     SkillCreateRequest,
@@ -26,8 +20,14 @@ from axon.routes.skills import (
     get_skill_detail,
     org_router,
 )
+from axon.skills.loader import load_skill_from_directory
+from axon.skills.registry import (
+    SKILL_REGISTRY,
+    SKILL_SOURCE,
+    unregister_skill,
+)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

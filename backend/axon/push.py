@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 
 from pywebpush import WebPushException, webpush
 
-from axon.db.engine import _session_factory
 from axon.db.crud.push import delete_subscription, get_all_subscriptions, get_or_create_vapid_keys
+from axon.db.engine import _session_factory
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 VAPID_CLAIMS = {"sub": "mailto:notifications@useaxon.dev"}
 

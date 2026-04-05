@@ -7,13 +7,13 @@ import {
   useTransform,
 } from "framer-motion";
 import { useVoiceChatStore, VoiceState } from "../../stores/voiceChatStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 const ORB_SIZE = 80;
 
 function useOrbColor() {
-  const agents = useAgentStore((s) => s.agents);
+  const { data: agents = [] } = useAgents();
   const axon = agents.find((a) => a.id === "axon");
   return axon?.ui?.sparkle_color || axon?.ui?.color || DEFAULT_AGENT_COLOR;
 }

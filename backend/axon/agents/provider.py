@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import Any, AsyncIterator
 
 import litellm
 from litellm import acompletion
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Suppress LiteLLM's verbose logging
 litellm.suppress_debug_info = True
+# Drop params unsupported by specific models (e.g. temperature for GPT-5)
+litellm.drop_params = True
 
 # Timeout for local model calls (seconds) — prevents Ollama queue hangs
 LOCAL_MODEL_TIMEOUT = 30
@@ -33,11 +36,15 @@ async def stream_completion(
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "max_tokens": max_tokens,
         "temperature": temperature,
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    # gpt-5 models break when max_tokens is set during streaming —
+    # the API returns empty content with finish_reason=length.
+    # Omit the limit and let the model use its default output cap.
+    if not model.startswith("openai/gpt-5"):
+        kwargs["max_tokens"] = max_tokens
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"

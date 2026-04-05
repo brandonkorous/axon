@@ -6,13 +6,13 @@ weight, and flags contradictions. Runs on the cheap local model.
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from axon.agents.provider import complete
 from axon.config import LearningConfig
+from axon.logging import get_logger
 from axon.vault.memory_consolidation_actions import (
     ConsolidationReport,
     execute_archives,
@@ -30,7 +30,7 @@ from axon.vault.vault import VaultManager
 if TYPE_CHECKING:
     from axon.usage import UsageTracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 __all__ = ["deep_consolidate", "ConsolidationReport"]
 
 

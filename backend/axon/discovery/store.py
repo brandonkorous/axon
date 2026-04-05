@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
-import logging
 import uuid
 from datetime import datetime
 from typing import Any
 
 from axon.discovery.models import CapabilityRequest, RequestStatus
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # In-memory index of active requests (org_id → list of requests).
 # Persisted to shared vault as capability-requests/*.json.

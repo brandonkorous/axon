@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import axon.registry as registry
 from axon.config import settings
+from axon.logging import get_logger
+import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 org_router = APIRouter()
@@ -97,6 +97,10 @@ def _delete_agent(org_id: str, agent_id: str):
 
     # Get vault path before removing from registry
     vault_path = Path(agent.config.vault.path) if hasattr(agent, "config") else None
+
+    # Unregister from scheduler before removing from registry
+    from axon.scheduler import scheduler
+    scheduler.unregister_agent(org_id, agent_id)
 
     # Remove from registry
     del org.agent_registry[agent_id]

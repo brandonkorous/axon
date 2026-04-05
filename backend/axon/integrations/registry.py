@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import importlib
-import logging
 from pathlib import Path
 from typing import Any
 
 from axon.integrations.base import BaseIntegration
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Global registry of available integrations (name → class)
 INTEGRATION_REGISTRY: dict[str, type[BaseIntegration]] = {}

@@ -6,13 +6,14 @@ Optional feature: install with `pip install axon[voice]`.
 from __future__ import annotations
 
 import io
-import logging
 import tempfile
 import wave
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-logger = logging.getLogger("axon.voice")
+from axon.logging import get_logger
+
+logger = get_logger("axon.voice")
 
 # Lazy imports — only loaded when voice is actually used
 _whisper_model = None

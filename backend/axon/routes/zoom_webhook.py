@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import logging
 
 from fastapi import APIRouter, Request, Response
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 

@@ -1,4 +1,4 @@
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function AgentActivityBadge({ type, agentId, taskSummary, mode, status, live = true }: Props) {
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const agent = agents.find((a) => a.id === agentId);
   const name = agent?.name || agentId;
   const color = agent?.ui.color || DEFAULT_AGENT_COLOR;

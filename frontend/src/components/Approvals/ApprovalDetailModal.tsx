@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Approval, CommsPayload } from "../../stores/approvalStore";
-import { useApprovalStore } from "../../stores/approvalStore";
+import { useApprove, useDecline } from "../../hooks/useApprovals";
 import { PRIORITY_BADGE } from "../../constants/badges";
 
 function CommsPreview({ channel, payload: raw }: { channel?: string; payload: string }) {
@@ -8,7 +8,7 @@ function CommsPreview({ channel, payload: raw }: { channel?: string; payload: st
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return <p className="text-xs text-error">Could not parse message content. The payload may be malformed.</p>;
+    return <p className="text-xs text-error">This message couldn't be displayed. It may have been sent in an unexpected format.</p>;
   }
 
   if (channel === "email") {
@@ -53,9 +53,10 @@ interface ApprovalDetailModalProps {
 }
 
 export function ApprovalDetailModal({ approval, onClose }: ApprovalDetailModalProps) {
-  const { approve, decline } = useApprovalStore();
+  const approveMutation = useApprove();
+  const declineMutation = useDecline();
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [acting, setActing] = useState(false);
+  const acting = approveMutation.isPending || declineMutation.isPending;
   const [showDecline, setShowDecline] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
@@ -64,16 +65,15 @@ export function ApprovalDetailModal({ approval, onClose }: ApprovalDetailModalPr
   }, []);
 
   const handleApprove = async () => {
-    setActing(true);
-    await approve(approval.task_path);
-    setActing(false);
+    await approveMutation.mutateAsync(approval.task_path);
     onClose();
   };
 
   const handleDecline = async () => {
-    setActing(true);
-    await decline(approval.task_path, declineReason || undefined);
-    setActing(false);
+    await declineMutation.mutateAsync({
+      taskPath: approval.task_path,
+      reason: declineReason || undefined,
+    });
     onClose();
   };
 
@@ -194,7 +194,7 @@ export function ApprovalDetailModal({ approval, onClose }: ApprovalDetailModalPr
                 autoFocus
               />
               <button onClick={handleDecline} disabled={acting} className="btn btn-error btn-sm">
-                {acting ? "..." : "Confirm Decline"}
+                {acting ? "Declining\u2026" : "Confirm Decline"}
               </button>
               <button onClick={() => setShowDecline(false)} className="btn btn-ghost btn-sm">
                 Cancel
@@ -206,7 +206,7 @@ export function ApprovalDetailModal({ approval, onClose }: ApprovalDetailModalPr
                 Decline
               </button>
               <button onClick={handleApprove} disabled={acting} className="btn btn-success btn-sm">
-                {acting ? "..." : "Approve"}
+                {acting ? "Approving\u2026" : "Approve"}
               </button>
             </div>
           )}

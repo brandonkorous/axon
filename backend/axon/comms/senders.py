@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import base64
-import logging
 import mimetypes
 from pathlib import Path
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB per file
 MAX_ATTACHMENTS = 5

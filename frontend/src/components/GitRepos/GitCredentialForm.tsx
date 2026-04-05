@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useCredentialStore } from "../../stores/credentialStore";
+import { useCreateCredential } from "../../hooks/useCredentials";
 
 type CredType = "git_pat" | "git_ssh_key" | "git_app";
 
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function GitCredentialForm({ onClose, onSaved }: Props) {
-  const { createCredential } = useCredentialStore();
+  const createCredential = useCreateCredential();
   const [credType, setCredType] = useState<CredType>("git_pat");
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
@@ -38,9 +38,17 @@ export function GitCredentialForm({ onClose, onSaved }: Props) {
       secret = JSON.stringify({ app_id: appId, installation_id: installationId, private_key: appKey });
     }
 
-    const ok = await createCredential(credType, secret, label || credType);
-    setSaving(false);
-    if (ok) onSaved();
+    try {
+      await createCredential.mutateAsync({
+        provider: credType,
+        access_token: secret,
+        label: label || credType,
+      });
+      setSaving(false);
+      onSaved();
+    } catch {
+      setSaving(false);
+    }
   };
 
   const isValid = () => {

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from axon.logging import get_logger
 from axon.vault.frontmatter import parse_frontmatter
 from axon.vault.wikilinks import extract_wikilinks, resolve_wikilink
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

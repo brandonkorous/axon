@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
-logger = logging.getLogger("axon.bot_manager")
+from axon.logging import get_logger
+
+logger = get_logger("axon.bot_manager")
 
 # Module-level references to running bot instances
 _discord_bot: Any = None

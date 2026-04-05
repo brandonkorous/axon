@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-import logging
 from typing import Any
 
 from axon.browser.config import BrowserConfig
 from axon.browser.extractor import extract_page_content
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BrowserSession:

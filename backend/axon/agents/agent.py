@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncIterator
@@ -15,7 +14,7 @@ if TYPE_CHECKING:
     from axon.org import OrgCommsConfig, OrgModelConfig
     from axon.usage import UsageTracker
 from axon.agents.provider import complete, stream_completion
-from axon.agents.shared_tools import ISSUE_TOOLS, KNOWLEDGE_TOOLS, SharedVaultToolExecutor
+from axon.agents.shared_tools import ISSUE_TOOLS, KNOWLEDGE_TOOLS, ORG_SEARCH_TOOLS, SharedVaultToolExecutor
 from axon.agents.tools import (
     DELEGATION_TOOLS,
     DISCOVERY_TOOLS,
@@ -27,10 +26,11 @@ from axon.discovery.executor import DiscoveryToolExecutor
 from axon.discovery.tools import CAPABILITY_TOOLS
 from axon.config import ActionBias, PersonaConfig
 from axon.lifecycle import AgentLifecycle
+from axon.logging import get_logger
 from axon.vault.navigator import MemoryNavigator
 from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -103,8 +103,28 @@ class Agent:
 
         # Memory manager (local LLM for recall + learning)
         self.memory_manager = None
+        self._vector_store = None
         if config.learning.enabled:
             from axon.vault.memory_manager import MemoryManager
+
+            # Initialize vector store for semantic search
+            try:
+                from axon.vault.embeddings import EmbeddingClient
+                from axon.vault.vector_store import VaultVectorStore
+
+                embedding_client = EmbeddingClient(
+                    model_name=config.learning.embedding_model,
+                )
+                self._vector_store = VaultVectorStore(
+                    vault_path=config.vault.path,
+                    embedding_client=embedding_client,
+                    dimensions=config.learning.embedding_dimensions,
+                )
+            except Exception as e:
+                logger.warning(
+                    "vector_store_init_failed",
+                    agent_id=config.id, error=str(e),
+                )
 
             # Resolve memory model: agent config → org memory role → navigator
             memory_model = config.learning.memory_model
@@ -119,13 +139,16 @@ class Agent:
                 agent_id=config.id,
                 usage_tracker=usage_tracker,
                 org_id=org_id,
+                vector_store=self._vector_store,
             )
             logger.debug(
-                "[%s] MemoryManager initialized (model=%s, consolidation_interval=%d)",
-                config.id, memory_model, config.learning.consolidation_interval,
+                "memory_manager_initialized",
+                agent_id=config.id, model=memory_model,
+                consolidation_interval=config.learning.consolidation_interval,
+                vector_store=self._vector_store is not None,
             )
         else:
-            logger.debug("[%s] Learning disabled — using deterministic navigator", config.id)
+            logger.debug("learning_disabled", agent_id=config.id)
 
         # Reasoning engine (structured decision making)
         self.reasoning_engine = None
@@ -445,12 +468,15 @@ class Agent:
 
     async def process(
         self, user_message: str, *, save_history: bool = True,
+        attachments: list[dict] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Process a user message and stream the response.
 
         Args:
             save_history: If False, don't add this exchange to conversation
                 history (used by scheduler for background tasks).
+            attachments: Optional list of file attachment metadata dicts
+                (path, name, type, size) from the upload endpoint.
         """
         # Concurrency guard — skip if agent is already processing
         if self._processing_lock.locked():
@@ -464,11 +490,14 @@ class Agent:
             return
 
         async with self._processing_lock:
-            async for chunk in self._process_inner(user_message, save_history=save_history):
+            async for chunk in self._process_inner(
+                user_message, save_history=save_history, attachments=attachments,
+            ):
                 yield chunk
 
     async def _process_inner(
         self, user_message: str, *, save_history: bool = True,
+        attachments: list[dict] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Internal process — runs under the processing lock."""
         # Check lifecycle state
@@ -522,11 +551,16 @@ class Agent:
             if tool_instruction:
                 logger.debug("[%s] Tool instruction: %s", self.id, tool_instruction[:100])
 
-        messages = self._build_messages(user_message, vault_context, routing.pattern_names, tool_instruction=tool_instruction, task_context=task_context)
+        messages = self._build_messages(
+            user_message, vault_context, routing.pattern_names,
+            tool_instruction=tool_instruction, task_context=task_context,
+            attachments=attachments,
+        )
 
         # 3. Add user message to history (skip for scheduler-triggered tasks)
         if save_history:
-            self.conversation.add_user_message(user_message)
+            metadata = {"attachments": attachments} if attachments else None
+            self.conversation.add_user_message(user_message, metadata=metadata)
 
         # 4. Stream LLM response with tool handling
         full_response = ""
@@ -714,6 +748,7 @@ class Agent:
         routed_patterns: list[str] | None = None,
         tool_instruction: str = "",
         task_context: str = "",
+        attachments: list[dict] | None = None,
     ) -> list[dict[str, Any]]:
         """Build the full message array for the LLM."""
         # Inject agent identity and org context
@@ -927,14 +962,47 @@ class Agent:
         # relevant context from each turn, so the agent has continuity
         # without burning tokens on full chat replay.
 
-        # Add current user message
-        messages.append({"role": "user", "content": user_message})
+        # Add current user message — multimodal if attachments include images
+        if attachments:
+            content_blocks: list[dict[str, Any]] = []
+            if user_message:
+                content_blocks.append({"type": "text", "text": user_message})
+            for att in attachments:
+                att_type = att.get("type", "")
+                if att_type.startswith("image/"):
+                    file_path = Path(self.conversation_manager.data_dir) / att["path"]
+                    try:
+                        import base64 as _b64
+                        b64data = _b64.b64encode(file_path.read_bytes()).decode("ascii")
+                        content_blocks.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{att_type};base64,{b64data}"},
+                        })
+                    except Exception as exc:
+                        logger.warning("Failed to read attachment %s: %s", att["path"], exc)
+                        content_blocks.append({
+                            "type": "text",
+                            "text": f"\n[Attached image could not be loaded: {att['name']}]",
+                        })
+                else:
+                    content_blocks.append({
+                        "type": "text",
+                        "text": f"\n[Attached file: {att['name']} ({att_type}, {att['size']} bytes)]",
+                    })
+            messages.append({"role": "user", "content": content_blocks})
+        else:
+            messages.append({"role": "user", "content": user_message})
 
         return messages
 
     def _rebuild_comms(self, org_comms_config) -> None:
         """Hot-reload comms executor and tools after config change."""
-        if self.config.comms.enabled and self.shared_vault and org_comms_config:
+        has_channel = bool(
+            getattr(org_comms_config, "email_domain", "")
+            or getattr(org_comms_config, "discord", None) and org_comms_config.discord.guild_id
+            or getattr(org_comms_config, "slack", None) and org_comms_config.slack.channel_mappings
+        )
+        if self.config.comms.enabled and self.shared_vault and org_comms_config and has_channel:
             from axon.comms.executor import CommsToolExecutor
             self._comms_executor = CommsToolExecutor(
                 shared_vault=self.shared_vault,
@@ -1071,7 +1139,7 @@ class Agent:
         from axon.agents.intent_router import (
             TOOL_GROUP_BROWSER, TOOL_GROUP_COMMS,
             TOOL_GROUP_DELEGATION, TOOL_GROUP_DISCOVERY, TOOL_GROUP_ISSUES,
-            TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_MEDIA,
+            TOOL_GROUP_KNOWLEDGE, TOOL_GROUP_MEDIA, TOOL_GROUP_ORG_SEARCH,
             TOOL_GROUP_PERFORMANCE, TOOL_GROUP_PLUGINS, TOOL_GROUP_REASONING,
             TOOL_GROUP_RECRUITMENT, TOOL_GROUP_RESEARCH,
             TOOL_GROUP_WEB,
@@ -1131,6 +1199,8 @@ class Agent:
                 tools.extend(ISSUE_TOOLS)
             if _want(TOOL_GROUP_KNOWLEDGE):
                 tools.extend(KNOWLEDGE_TOOLS)
+            if _want(TOOL_GROUP_ORG_SEARCH):
+                tools.extend(ORG_SEARCH_TOOLS)
             if _want(TOOL_GROUP_PERFORMANCE):
                 tools.extend(PERFORMANCE_TOOLS)
 

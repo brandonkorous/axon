@@ -9,10 +9,11 @@ Flow: raw source (4000 chars) → local LLM digest (500 chars) → agent LLM
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Prompt for compressing a single source
 SOURCE_DIGEST_PROMPT = (

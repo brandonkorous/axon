@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from axon.logging import get_logger
 from axon.reasoning.config import ReasoningConfig
 from axon.reasoning.models import (
     ContradictionPair,
@@ -21,7 +21,7 @@ from axon.reasoning.models import (
 )
 from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 INDEX_PATH = "reasoning/graph-index.md"
 

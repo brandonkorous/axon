@@ -99,7 +99,7 @@ export function AuditLogView() {
         </div>
       ) : error ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
-          <p className="text-error">Could not load audit log. Check your connection and try again.</p>
+          <p className="text-error">The audit log isn't loading right now. Try refreshing the page.</p>
           <button onClick={() => setPage(page)} className="btn btn-ghost btn-xs text-error">Retry</button>
         </div>
       ) : entries.length === 0 ? (

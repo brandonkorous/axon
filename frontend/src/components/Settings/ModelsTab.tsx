@@ -1,18 +1,14 @@
-import { useEffect, useState } from "react";
-import { useModelStore } from "../../stores/modelStore";
+import { useState } from "react";
+import { useModels } from "../../hooks/useModels";
 import { RegisteredModelsList } from "./RegisteredModelsList";
 import { AddModelForm, OllamaDiscoverButton } from "./AddModelForm";
 import { RoleAssignments } from "./RoleAssignments";
 
 export function ModelsTab() {
-  const { loading, fetchModels } = useModelStore();
+  const { isLoading } = useModels();
   const [showAddForm, setShowAddForm] = useState(false);
 
-  useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center gap-2 py-4">
         <span className="loading loading-spinner loading-sm" />

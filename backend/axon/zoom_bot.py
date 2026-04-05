@@ -7,18 +7,18 @@ arrive via webhook at /api/zoom/events. Outbound uses the Zoom REST API.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
 import axon.registry as registry
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent
     from axon.org import OrgInstance
 
-logger = logging.getLogger("axon.zoom")
+logger = get_logger("axon.zoom")
 
 ZOOM_AUTH_URL = "https://zoom.us/oauth/token"
 ZOOM_API_BASE = "https://api.zoom.us/v2"

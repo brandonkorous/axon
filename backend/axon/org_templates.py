@@ -164,7 +164,14 @@ def _copy_vault_templates(
     org_name: str,
     exclude: list[str] | None = None,
 ) -> list[str]:
-    """Copy vault directories from template to org, return list of agent IDs."""
+    """Copy vault directories from template to org, return list of agent IDs.
+
+    After copying org-template files, backfills any missing vault structure
+    (second-brain.md, memory/, etc.) from the vault_templates directory
+    based on the agent's type (advisor, orchestrator, executor).
+    """
+    from axon.vault.scaffold import TEMPLATES_DIR as VAULT_TEMPLATES_DIR
+
     agent_ids = []
     exclude = exclude or []
 
@@ -183,7 +190,15 @@ def _copy_vault_templates(
         if (dest / "agent.yaml").exists():
             continue  # Never overwrite fully initialized vaults
 
-        # Copy entire vault directory with placeholder replacement
+        # Read agent config for ID and type
+        with open(agent_yaml, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        agent_id = data.get("id", vault_dir.name)
+        agent_name = data.get("name", vault_dir.name.title())
+        agent_title = data.get("title", "")
+        agent_type = data.get("type", "advisor")
+
+        # Copy org-template vault files with placeholder replacement
         dest.mkdir(parents=True, exist_ok=True)
         for item in vault_dir.rglob("*"):
             if item.is_dir():
@@ -195,10 +210,28 @@ def _copy_vault_templates(
             content = content.replace("{{ORG_NAME}}", org_name)
             target.write_text(content, encoding="utf-8")
 
-        # Read agent ID from the copied config
-        with open(agent_yaml, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        agent_ids.append(data.get("id", vault_dir.name))
+        # Backfill missing vault structure from vault_templates
+        vault_template_dir = VAULT_TEMPLATES_DIR / agent_type
+        if not vault_template_dir.exists():
+            vault_template_dir = VAULT_TEMPLATES_DIR / "advisor"
+        if vault_template_dir.exists():
+            for item in vault_template_dir.rglob("*"):
+                if item.is_dir():
+                    continue
+                relative = item.relative_to(vault_template_dir)
+                target = dest / relative
+                if target.exists():
+                    continue  # Don't overwrite org-template files
+                target.parent.mkdir(parents=True, exist_ok=True)
+                content = item.read_text(encoding="utf-8")
+                content = content.replace("{{AGENT_NAME}}", agent_name)
+                content = content.replace("{{AGENT_TITLE}}", agent_title)
+                content = content.replace("{{AGENT_ID}}", agent_id)
+                content = content.replace("{{AGENT_TAGLINE}}", agent_title or agent_name)
+                content = content.replace("{{ORG_NAME}}", org_name)
+                target.write_text(content, encoding="utf-8")
+
+        agent_ids.append(agent_id)
 
     return agent_ids
 
@@ -223,10 +256,12 @@ def _generate_huddle_vault(
     if base_huddle_yaml.exists():
         content = base_huddle_yaml.read_text(encoding="utf-8")
         # The template has {{ADVISOR_MOUNTS}} as a YAML placeholder —
-        # replace it with the actual mounts list
+        # replace it with the actual mounts list, indented to match context
         mounts_yaml = yaml.dump(mounts, default_flow_style=False).strip()
-        content = content.replace("'{{ADVISOR_MOUNTS}}'", mounts_yaml)
-        content = content.replace("{{ADVISOR_MOUNTS}}", mounts_yaml)
+        # Indent each line to align under `read_only_mounts:` (4 spaces)
+        indented_mounts = mounts_yaml.replace("\n", "\n    ")
+        content = content.replace("'{{ADVISOR_MOUNTS}}'", indented_mounts)
+        content = content.replace("{{ADVISOR_MOUNTS}}", indented_mounts)
         (huddle_dest / "agent.yaml").write_text(content, encoding="utf-8")
     else:
         # Generate from scratch

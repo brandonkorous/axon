@@ -89,7 +89,7 @@ export function SandboxBuildDialog({ image, onClose }: SandboxBuildDialogProps) 
           <div className="mt-4">
             <div className="alert alert-error py-2 px-3">
               <span className="text-xs">
-                {image.error || "Build failed. Check logs for details."}
+                {image.error || "Build failed. Scroll up to see what went wrong."}
               </span>
             </div>
             <div className="mt-3">

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING, Any
+
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.reasoning.engine import ReasoningEngine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ── Tool schemas (for LLM tool-use) ─────────────────────────────────

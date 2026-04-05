@@ -41,7 +41,7 @@ export function AchievementsView() {
         </div>
       ) : error ? (
         <div className="text-center py-12">
-          <p className="text-error mb-2">Could not load achievements. Check your connection and try again.</p>
+          <p className="text-error mb-2">Achievements aren't loading right now. Try refreshing the page.</p>
           <button onClick={() => { setLoading(true); setError(false); fetch(orgApiPath("achievements")).then((r) => r.json()).then((data) => { setAchievements(Array.isArray(data) ? data : []); setLoading(false); }).catch(() => { setLoading(false); setError(true); }); }} className="btn btn-ghost btn-xs text-error">Retry</button>
         </div>
       ) : achievements.length === 0 ? (

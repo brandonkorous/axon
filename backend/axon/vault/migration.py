@@ -6,13 +6,13 @@ Each migration is idempotent — safe to run multiple times.
 
 from __future__ import annotations
 
-import logging
 import shutil
 from pathlib import Path
 
+from axon.logging import get_logger
 from axon.vault.frontmatter import parse_frontmatter, write_frontmatter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def migrate_vault(vault_path: str | Path) -> None:

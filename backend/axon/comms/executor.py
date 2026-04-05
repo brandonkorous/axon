@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 from axon.comms.constants import APPROVAL_TYPE_COMMS, CommsChannel
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.org import OrgCommsConfig
     from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CommsToolExecutor:

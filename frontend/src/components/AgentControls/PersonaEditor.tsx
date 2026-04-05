@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
-import {
-  AgentInfo,
-  PersonaUpdate,
-  useAgentStore,
-} from "../../stores/agentStore";
+import { useAgent, useUpdatePersona } from "../../hooks/useAgents";
+import type { AgentInfo, PersonaUpdate } from "../../hooks/useAgents";
 
 export function PersonaEditor({
   agent,
@@ -12,9 +9,9 @@ export function PersonaEditor({
   agent: AgentInfo;
   onClose: () => void;
 }) {
-  const { updatePersona, fetchAgentDetail } = useAgentStore();
+  const { mutateAsync: updatePersona } = useUpdatePersona();
+  const { data: detail, isSuccess: loaded } = useAgent(agent.id);
   const [saving, setSaving] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   const [name, setName] = useState(agent.name);
   const [title, setTitle] = useState(agent.title);
@@ -23,17 +20,15 @@ export function PersonaEditor({
   const [color, setColor] = useState(agent.ui.color);
   const [sparkleColor, setSparkleColor] = useState(agent.ui.sparkle_color);
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [promptInitialized, setPromptInitialized] = useState(false);
 
-  // Load full detail (including system_prompt) on mount
+  // Sync system_prompt from detail query once loaded
   useEffect(() => {
-    if (loaded) return;
-    fetchAgentDetail(agent.id).then((detail) => {
-      if (detail?.system_prompt !== undefined) {
-        setSystemPrompt(detail.system_prompt);
-      }
-      setLoaded(true);
-    });
-  }, [loaded, agent.id, fetchAgentDetail]);
+    if (loaded && detail?.system_prompt !== undefined && !promptInitialized) {
+      setSystemPrompt(detail.system_prompt);
+      setPromptInitialized(true);
+    }
+  }, [loaded, detail, promptInitialized]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -48,7 +43,7 @@ export function PersonaEditor({
     if (systemPrompt) update.system_prompt = systemPrompt;
 
     try {
-      await updatePersona(agent.id, update);
+      await updatePersona({ agentId: agent.id, update });
       onClose();
     } catch {
       // keep open on error

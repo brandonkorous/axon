@@ -11,14 +11,14 @@ sees pre-digested, high-signal content.
 from __future__ import annotations
 
 import json
-import logging
 from datetime import date
 from typing import Any
 
+from axon.logging import get_logger
 from axon.research.config import ArtifactType, ResearchConfig, ResearchDepth
 from axon.research.templates import get_template
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ResearchSession:

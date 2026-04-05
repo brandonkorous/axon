@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,9 +14,10 @@ from axon.db.crud.credentials import (
     get_org_credentials,
     update_tokens,
 )
+from axon.logging import get_logger
 import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 

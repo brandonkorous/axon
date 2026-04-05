@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePluginStore } from "../../stores/pluginStore";
+import { useCreatePlugin } from "../../hooks/usePlugins";
 import { TagInput } from "./TagInput";
 
 const CATEGORIES = ["general", "research", "integration", "media", "browser"];
@@ -11,7 +11,7 @@ function Hint({ children }: { children: React.ReactNode }) {
 
 export function PluginCreateView() {
   const navigate = useNavigate();
-  const { createPlugin } = usePluginStore();
+  const createPlugin = useCreatePlugin();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -36,23 +36,22 @@ export function PluginCreateView() {
     setCreating(true);
     setError("");
 
-    const ok = await createPlugin({
-      name,
-      description,
-      version,
-      author,
-      category,
-      icon,
-      auto_load: autoLoad,
-      triggers,
-      tool_prefix: toolPrefix,
-      python_deps: pythonDeps,
-      required_credentials: requiredCredentials,
-    });
-
-    if (ok) {
+    try {
+      await createPlugin.mutateAsync({
+        name,
+        description,
+        version,
+        author,
+        category,
+        icon,
+        auto_load: autoLoad,
+        triggers,
+        tool_prefix: toolPrefix,
+        python_deps: pythonDeps,
+        required_credentials: requiredCredentials,
+      } as any);
       navigate("/plugins");
-    } else {
+    } catch {
       setError("Failed to create plugin. Name may already be taken.");
       setCreating(false);
     }

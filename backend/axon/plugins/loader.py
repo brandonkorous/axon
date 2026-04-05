@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import importlib
-import logging
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from axon.logging import get_logger
 from axon.plugins.base import BasePlugin
 from axon.plugins.manifest import PluginManifest
 from axon.plugins.registry import register_plugin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def load_plugin_from_directory(plugin_dir: Path) -> type[BasePlugin] | None:

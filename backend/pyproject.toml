@@ -5,6 +5,7 @@ description = "Self-hosted AI command center — your personal chief of staff"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
+    "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.34.0",
     "websockets>=14.0,<16",
     "litellm>=1.55.0",
@@ -23,6 +24,11 @@ dependencies = [
     "slack-bolt>=1.20.0",
     "slack-sdk>=3.33.0",
     "pywebpush>=2.0.0",
+    "structlog>=24.0.0",
+    "lancedb>=0.6.0",
+    "pyarrow>=15.0.0",
+    "sentence-transformers>=3.0.0",
+    "apscheduler>=3.10.0,<4",
 ]
 
 [project.optional-dependencies]

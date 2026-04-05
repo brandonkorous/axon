@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useOrgStore } from "../stores/orgStore";
-import { OrgSwitcher } from "./OrgSwitcher";
+
 import { VoiceChatOverlay } from "./VoiceChat/VoiceChatOverlay";
 import { SettingsModal } from "./Settings/SettingsModal";
 import { ModelOnboardingModal } from "./Settings/ModelOnboardingModal";
 import { useSettingsStore } from "../stores/settingsStore";
-import { useApprovalStore } from "../stores/approvalStore";
-import { useAgentStore } from "../stores/agentStore";
-import { useModelStore } from "../stores/modelStore";
+import { useOrgs } from "../hooks/useOrgs";
+import { useAgents } from "../hooks/useAgents";
+import { usePendingApprovals } from "../hooks/useApprovals";
+import { useModelStatus } from "../hooks/useModels";
 import { StatusBar } from "./StatusBar/StatusBar";
 
 // Apply stored theme on load (GeneralTab manages it when settings are open)
@@ -20,34 +21,32 @@ if (storedTheme === "axon" || storedTheme === "axon-dark") {
 }
 
 export function Layout() {
-  const fetchAgents = useAgentStore((s) => s.fetchAgents);
-  const { fetchOrgs, activeOrgId } = useOrgStore();
+  const activeOrgId = useOrgStore((s) => s.activeOrgId);
+  const setActiveOrg = useOrgStore((s) => s.setActiveOrg);
   const openSettings = useSettingsStore((s) => s.open);
-  const approvalCount = useApprovalStore((s) => s.approvals.length);
-  const fetchPending = useApprovalStore((s) => s.fetchPending);
-  const modelStatus = useModelStore((s) => s.status);
-  const fetchModelStatus = useModelStore((s) => s.fetchStatus);
+
+  // TanStack Query auto-fetches — no useEffect needed for these
+  const { data: orgs } = useOrgs();
+  useAgents();
+  const { data: pendingApprovals } = usePendingApprovals();
+  const approvalCount = pendingApprovals?.length ?? 0;
+  const { data: modelStatus } = useModelStatus();
+
+  // Bridge orgs query into Zustand store so activeOrgId gets set
+  useEffect(() => {
+    if (!orgs?.length) return;
+    if (!orgs.find((o) => o.id === activeOrgId)) {
+      setActiveOrg(orgs[0].id);
+    }
+  }, [orgs, activeOrgId, setActiveOrg]);
+
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    fetchOrgs().then(() => fetchAgents());
-  }, [fetchOrgs, fetchAgents]);
-
-  useEffect(() => {
-    if (activeOrgId) fetchModelStatus();
-  }, [activeOrgId, fetchModelStatus]);
-
-  useEffect(() => {
     if (modelStatus && !modelStatus.configured) setShowOnboarding(true);
   }, [modelStatus]);
-
-  useEffect(() => {
-    fetchPending();
-    const interval = setInterval(fetchPending, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchPending]);
 
 
   // Close sidebar on navigation (mobile)
@@ -82,8 +81,6 @@ export function Layout() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M18 6L6 18M6 6l12 12" /></svg>
           </button>
         </div>
-
-        <OrgSwitcher />
 
         <nav className="flex-1 px-2 py-3 overflow-y-auto" aria-label="Main navigation">
           <ul className="menu w-full gap-0.5">

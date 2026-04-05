@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
+from axon.logging import get_logger
 from axon.skills.models import SkillDefinition
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Global registries

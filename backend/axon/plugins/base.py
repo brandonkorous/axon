@@ -24,9 +24,18 @@ class BasePlugin(ABC):
 
     manifest: PluginManifest
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        agent_id: str = "",
+        org_id: str = "",
+        instance_id: str = "",
+        **kwargs: Any,
+    ) -> None:
         if not hasattr(self, "manifest"):
             raise NotImplementedError("Plugins must define a `manifest` class attribute")
+        self._agent_id = agent_id
+        self._org_id = org_id
+        self._instance_id = instance_id
         self._credentials: dict[str, Any] = {}
         self._loaded = False
 

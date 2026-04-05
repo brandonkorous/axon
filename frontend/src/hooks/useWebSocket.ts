@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { orgWsPath } from "../stores/orgStore";
+import { useOrgStore, orgWsPath } from "../stores/orgStore";
 
 interface UseWebSocketOptions {
   url: string;
@@ -15,8 +15,13 @@ export function useWebSocket({ url, onMessage, autoConnect = true }: UseWebSocke
   // Flag to prevent zombie reconnects after intentional disconnect
   const intentionalCloseRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track activeOrgId so we reconnect when it becomes available
+  const activeOrgId = useOrgStore((s) => s.activeOrgId);
 
   const connect = useCallback(() => {
+    // Don't connect until org is resolved
+    if (!activeOrgId) return;
+
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     // Clean up any existing connection before creating a new one
@@ -61,7 +66,7 @@ export function useWebSocket({ url, onMessage, autoConnect = true }: UseWebSocke
     };
 
     wsRef.current = ws;
-  }, [url]);
+  }, [url, activeOrgId]);
 
   const send = useCallback((data: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

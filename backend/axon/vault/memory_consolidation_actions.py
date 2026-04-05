@@ -6,14 +6,14 @@ as directed by the LLM consolidation review.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from axon.logging import get_logger
 from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

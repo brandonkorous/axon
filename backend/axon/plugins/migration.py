@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from axon.logging import get_logger
 from axon.plugins.instance import PluginInstanceConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 

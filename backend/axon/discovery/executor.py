@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 from axon.discovery.models import CapabilityType
 from axon.discovery.searcher import search_capabilities
 from axon.discovery.store import create_request, list_requests
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DiscoveryToolExecutor:

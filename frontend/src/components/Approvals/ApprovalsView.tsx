@@ -1,5 +1,11 @@
-import { useEffect, useState } from "react";
-import { useApprovalStore, type Approval, type ApprovalHistoryItem } from "../../stores/approvalStore";
+import { useState } from "react";
+import type { Approval, ApprovalHistoryItem } from "../../stores/approvalStore";
+import {
+  usePendingApprovals,
+  useApprovalHistory,
+  useApprove,
+  useDecline,
+} from "../../hooks/useApprovals";
 import { PRIORITY_BADGE } from "../../constants/badges";
 import { ApprovalDetailModal } from "./ApprovalDetailModal";
 
@@ -16,21 +22,18 @@ function ApprovalRow({
   approval: Approval;
   onSelect: (a: Approval) => void;
 }) {
-  const { approve, decline } = useApprovalStore();
-  const [acting, setActing] = useState(false);
+  const approveMutation = useApprove();
+  const declineMutation = useDecline();
+  const acting = approveMutation.isPending || declineMutation.isPending;
 
   const handleApprove = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    setActing(true);
-    await approve(approval.task_path);
-    setActing(false);
+    await approveMutation.mutateAsync(approval.task_path);
   };
 
   const handleDecline = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    setActing(true);
-    await decline(approval.task_path);
-    setActing(false);
+    await declineMutation.mutateAsync({ taskPath: approval.task_path });
   };
 
   return (
@@ -66,14 +69,14 @@ function ApprovalRow({
             disabled={acting}
             className="btn btn-success btn-xs"
           >
-            {acting ? "..." : "Approve"}
+            {acting ? "Approving\u2026" : "Approve"}
           </button>
           <button
             onClick={handleDecline}
             disabled={acting}
             className="btn btn-error btn-soft btn-xs"
           >
-            {acting ? "..." : "Decline"}
+            {acting ? "Declining\u2026" : "Decline"}
           </button>
         </div>
       </td>
@@ -109,19 +112,13 @@ function HistoryRow({ item }: { item: ApprovalHistoryItem }) {
 }
 
 export function ApprovalsView() {
-  const { approvals, loading, fetchPending, history, historyLoading, fetchHistory } = useApprovalStore();
   const [selected, setSelected] = useState<Approval | null>(null);
   const [tab, setTab] = useState<"pending" | "history">("pending");
 
-  useEffect(() => {
-    fetchPending();
-  }, [fetchPending]);
-
-  useEffect(() => {
-    if (tab === "history" && history.length === 0 && !historyLoading) {
-      fetchHistory();
-    }
-  }, [tab, history.length, historyLoading, fetchHistory]);
+  const { data: pendingData, isLoading: loading } = usePendingApprovals();
+  const { data: historyData, isLoading: historyLoading } = useApprovalHistory();
+  const approvals = (pendingData ?? []) as Approval[];
+  const history = (historyData ?? []) as ApprovalHistoryItem[];
 
   return (
     <div className="h-full flex flex-col">

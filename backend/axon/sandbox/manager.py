@@ -5,10 +5,10 @@ Delegates all container/pod operations to a SandboxProvider (Docker or k8s).
 
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Any
 
+from axon.logging import get_logger
 from axon.sandbox.config import (
     ImageSource,
     KubernetesConfig,
@@ -17,7 +17,7 @@ from axon.sandbox.config import (
 )
 from axon.sandbox.provider import SandboxProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def create_provider(

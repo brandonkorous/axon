@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import re
 import shutil
 from pathlib import Path
@@ -12,8 +11,8 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import axon.registry as registry
 from axon.config import settings
+from axon.logging import get_logger
 from axon.plugins.loader import load_plugin_from_directory
 from axon.plugins.registry import (
     PLUGIN_REGISTRY,
@@ -21,8 +20,9 @@ from axon.plugins.registry import (
     list_plugins,
     unregister_plugin,
 )
+import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 

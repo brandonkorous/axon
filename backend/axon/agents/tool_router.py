@@ -7,10 +7,11 @@ model doesn't have to choose from a huge list.
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 MAX_ROUTED_TOOLS = 8  # Skip routing below this threshold
 

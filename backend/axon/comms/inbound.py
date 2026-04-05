@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 import httpx
 
+from axon.logging import get_logger
 import axon.registry as registry
 
 if TYPE_CHECKING:
     from axon.org import OrgInstance
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 POLL_INTERVAL_SECONDS = 30
 

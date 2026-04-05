@@ -1,7 +1,7 @@
-import { useAgentStore } from "../stores/agentStore";
+import { useAgents } from "./useAgents";
 import { useAgentRuntimeStore } from "../stores/agentRuntimeStore";
-import { useSandboxStore } from "../stores/sandboxStore";
-import { useApprovalStore } from "../stores/approvalStore";
+import { useSandboxImages } from "./useSandbox";
+import { usePendingApprovals } from "./useApprovals";
 import { useVoiceChatStore, type VoiceState } from "../stores/voiceChatStore";
 
 export interface StatusBarData {
@@ -13,10 +13,10 @@ export interface StatusBarData {
 }
 
 export function useStatusBarData(): StatusBarData {
-  const agents = useAgentStore((s) => s.agents);
+  const { data: agents = [] } = useAgents();
   const runtimeAgents = useAgentRuntimeStore((s) => s.agents);
-  const images = useSandboxStore((s) => s.images);
-  const pendingApprovals = useApprovalStore((s) => s.approvals.length);
+  const { data: images = [] } = useSandboxImages();
+  const { data: approvals = [] } = usePendingApprovals();
   const voiceState = useVoiceChatStore((s) => s.voiceState);
 
   const activeAgents = agents.filter(
@@ -31,7 +31,7 @@ export function useStatusBarData(): StatusBarData {
     activeAgents,
     thinkingAgents,
     buildingSandboxes,
-    pendingApprovals,
+    pendingApprovals: approvals.length,
     voiceState,
   };
 }

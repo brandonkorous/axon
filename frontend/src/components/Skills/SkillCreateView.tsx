@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSkillStore } from "../../stores/skillStore";
+import { useCreateSkill } from "../../hooks/useSkills";
 import { TagInput } from "../Plugins/TagInput";
 
 const CATEGORIES = ["general", "research", "analysis", "engineering", "communication", "planning"];
@@ -11,7 +11,7 @@ function Hint({ children }: { children: React.ReactNode }) {
 
 export function SkillCreateView() {
   const navigate = useNavigate();
-  const { createSkill } = useSkillStore();
+  const createSkill = useCreateSkill();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -34,14 +34,13 @@ export function SkillCreateView() {
     setCreating(true);
     setError("");
 
-    const ok = await createSkill({
-      name, description, version, author, category, icon,
-      auto_inject: autoInject, triggers, methodology,
-    });
-
-    if (ok) {
+    try {
+      await createSkill.mutateAsync({
+        name, description, version, author, category, icon,
+        auto_inject: autoInject, triggers, methodology,
+      } as any);
       navigate("/skills");
-    } else {
+    } catch {
       setError("Failed to create skill. Name may already be taken.");
       setCreating(false);
     }

@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { useModelStore } from "../../stores/modelStore";
+import { useModels, useModelStatus } from "../../hooks/useModels";
 import { RegisteredModelsList } from "./RegisteredModelsList";
 import { AddModelForm, OllamaDiscoverButton } from "./AddModelForm";
 import { RoleAssignments } from "./RoleAssignments";
 
 export function ModelOnboardingModal({ onClose }: { onClose: () => void }) {
-  const { models, roles, loading, fetchModels, fetchStatus } = useModelStore();
+  const { data, isLoading: loading } = useModels();
+  const { refetch: refetchStatus } = useModelStatus();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
+  const models = data?.registered_models ?? [];
+  const roles = data?.roles ?? { navigator: "", reasoning: "", memory: "", agent: "" };
+
   useEffect(() => {
     dialogRef.current?.showModal();
-    fetchModels();
-  }, [fetchModels]);
+  }, []);
 
   const hasModels = models.length > 0;
   const hasRoles = !!(roles.navigator && roles.reasoning && roles.memory && roles.agent);
@@ -20,7 +23,7 @@ export function ModelOnboardingModal({ onClose }: { onClose: () => void }) {
 
   const handleDone = async () => {
     if (!canFinish) return;
-    await fetchStatus();
+    await refetchStatus();
     dialogRef.current?.close();
     onClose();
   };

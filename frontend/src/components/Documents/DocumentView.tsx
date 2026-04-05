@@ -3,13 +3,15 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { orgApiPath } from "../../stores/orgStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import type { FileData } from "../../stores/mindStore";
 
-export function DocumentView() {
-  const { vaultId, "*": filePath } = useParams<{ vaultId: string; "*": string }>();
+export function DocumentView({ vaultId: propVaultId, path: propPath }: { vaultId?: string; path?: string } = {}) {
+  const { vaultId: paramVaultId, "*": paramFilePath } = useParams<{ vaultId: string; "*": string }>();
+  const vaultId = propVaultId || paramVaultId;
+  const filePath = propPath || paramFilePath;
   const navigate = useNavigate();
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const [file, setFile] = useState<FileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

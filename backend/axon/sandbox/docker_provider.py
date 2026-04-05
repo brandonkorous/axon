@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, Callable
 
+from axon.logging import get_logger
 from axon.sandbox.config import ImageSource, SandboxConfig
 from axon.sandbox.containers import create_container
 from axon.sandbox.provider import SandboxInstance
 from axon.sandbox.types import SandboxType, image_name
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DockerProvider:

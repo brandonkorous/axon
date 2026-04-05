@@ -6,11 +6,12 @@ The catalog is fetched from rhasspy/piper-voices on Hugging Face.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("axon.voice_catalog")
+from axon.logging import get_logger
+
+logger = get_logger("axon.voice_catalog")
 
 VOICES_JSON_URL = (
     "https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json"

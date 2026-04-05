@@ -7,13 +7,14 @@ scheduler can push task results back to the correct conversation.
 from __future__ import annotations
 
 import json
-import logging
 from collections import defaultdict
 from typing import Any
 
 from fastapi import WebSocket
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 # (agent_id, conversation_id) → set of connected WebSockets
 _connections: dict[tuple[str, str], set[WebSocket]] = defaultdict(set)

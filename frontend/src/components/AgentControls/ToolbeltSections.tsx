@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { usePluginStore, PluginInfo } from "../../stores/pluginStore";
-import { useSkillStore, SkillInfo } from "../../stores/skillStore";
+import { usePlugins, useEnablePlugin, useDisablePlugin } from "../../hooks/usePlugins";
+import type { PluginInfo } from "../../stores/pluginStore";
+import { useSkills, useEnableSkill, useDisableSkill } from "../../hooks/useSkills";
+import type { SkillInfo } from "../../stores/skillStore";
 import { useSandboxStore, SandboxImageInfo } from "../../stores/sandboxStore";
 import { orgApiPath } from "../../stores/orgStore";
 
@@ -16,15 +18,12 @@ const SANDBOX_STATUS_BADGE: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 export function PluginsSection({ agentId }: { agentId: string }) {
-  const { plugins, loading, fetchPlugins, enablePlugin, disablePlugin } =
-    usePluginStore();
+  const { data: plugins = [], isLoading } = usePlugins();
+  const enablePlugin = useEnablePlugin();
+  const disablePlugin = useDisablePlugin();
   const [enabledMap, setEnabledMap] = useState<Record<string, boolean>>({});
   const [toggling, setToggling] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    fetchPlugins();
-  }, [fetchPlugins]);
 
   useEffect(() => {
     if (plugins.length === 0) return;
@@ -40,15 +39,15 @@ export function PluginsSection({ agentId }: { agentId: string }) {
     const enabled = enabledMap[plugin.name] ?? false;
     setToggling(plugin.name);
     if (enabled) {
-      await disablePlugin(plugin.name, agentId);
+      await disablePlugin.mutateAsync({ pluginName: plugin.name, agent_id: agentId });
     } else {
-      await enablePlugin(plugin.name, agentId);
+      await enablePlugin.mutateAsync({ pluginName: plugin.name, agent_id: agentId });
     }
     setEnabledMap((prev) => ({ ...prev, [plugin.name]: !enabled }));
     setToggling(null);
   };
 
-  if (loading || (!loaded && plugins.length > 0)) {
+  if (isLoading || (!loaded && plugins.length > 0)) {
     return <SectionShell title="Plugins" loading />;
   }
   if (plugins.length === 0) {
@@ -78,15 +77,12 @@ export function PluginsSection({ agentId }: { agentId: string }) {
 // ---------------------------------------------------------------------------
 
 export function SkillsSection({ agentId }: { agentId: string }) {
-  const { skills, loading, fetchSkills, enableSkill, disableSkill } =
-    useSkillStore();
+  const { data: skills = [], isLoading } = useSkills();
+  const enableSkill = useEnableSkill();
+  const disableSkill = useDisableSkill();
   const [enabledMap, setEnabledMap] = useState<Record<string, boolean>>({});
   const [toggling, setToggling] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    fetchSkills();
-  }, [fetchSkills]);
 
   useEffect(() => {
     if (skills.length === 0) return;
@@ -102,15 +98,15 @@ export function SkillsSection({ agentId }: { agentId: string }) {
     const enabled = enabledMap[skill.name] ?? false;
     setToggling(skill.name);
     if (enabled) {
-      await disableSkill(skill.name, agentId);
+      await disableSkill.mutateAsync({ skillName: skill.name, agent_id: agentId });
     } else {
-      await enableSkill(skill.name, agentId);
+      await enableSkill.mutateAsync({ skillName: skill.name, agent_id: agentId });
     }
     setEnabledMap((prev) => ({ ...prev, [skill.name]: !enabled }));
     setToggling(null);
   };
 
-  if (loading || (!loaded && skills.length > 0)) {
+  if (isLoading || (!loaded && skills.length > 0)) {
     return <SectionShell title="Skills" loading />;
   }
   if (skills.length === 0) {

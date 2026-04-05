@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-import { useAnalyticsStore } from "../../stores/analyticsStore";
+import { useAnalytics } from "../../hooks/useAnalytics";
 import { KpiCards } from "./KpiCards";
 import { AgentPerformanceTable } from "./AgentPerformanceTable";
 import { ConfidencePanel } from "./ConfidencePanel";
@@ -9,11 +8,7 @@ import { DelegationPanel } from "./DelegationPanel";
 import { MemoryPanel } from "./MemoryPanel";
 
 export function AnalyticsView() {
-  const { data, loading, error, fetch: fetchAnalytics } = useAnalyticsStore();
-
-  useEffect(() => {
-    fetchAnalytics();
-  }, [fetchAnalytics]);
+  const { data, isLoading: loading, isError: error, refetch: fetchAnalytics } = useAnalytics();
 
   if (loading && !data) {
     return (
@@ -28,7 +23,7 @@ export function AnalyticsView() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-base-content">Analytics</h1>
         <button
-          onClick={fetchAnalytics}
+          onClick={() => fetchAnalytics()}
           disabled={loading}
           className="btn btn-ghost btn-sm text-base-content/60"
         >
@@ -38,8 +33,8 @@ export function AnalyticsView() {
 
       {error && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm">
-          Could not load analytics data. Check your connection and try again.
-          <button onClick={fetchAnalytics} className="btn btn-ghost btn-xs text-error">
+          Analytics data isn't available right now. Try refreshing the page.
+          <button onClick={() => fetchAnalytics()} className="btn btn-ghost btn-xs text-error">
             Retry
           </button>
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useOrgStore, OrgTemplate } from "../../stores/orgStore";
+import { useOrgStore } from "../../stores/orgStore";
+import { useOrgTemplates, useCreateOrg, type OrgTemplate } from "../../hooks/useOrgs";
 
 const TEMPLATE_ICONS: Record<string, string> = {
   rocket: "\u{1F680}",
@@ -15,22 +16,22 @@ interface OrgCreatorModalProps {
 }
 
 export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
-  const { templates, fetchTemplates, createOrg, setActiveOrg } = useOrgStore();
+  const { setActiveOrg } = useOrgStore();
+  const { data: templates = [] } = useOrgTemplates();
+  const createOrgMutation = useCreateOrg();
   const [selectedTemplate, setSelectedTemplate] = useState<OrgTemplate | null>(null);
   const [orgName, setOrgName] = useState("");
   const [orgId, setOrgId] = useState("");
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      if (templates.length === 0) fetchTemplates();
       dialogRef.current?.showModal();
     } else {
       dialogRef.current?.close();
     }
-  }, [isOpen, templates.length, fetchTemplates]);
+  }, [isOpen]);
 
   const handleNameChange = (name: string) => {
     setOrgName(name);
@@ -40,21 +41,27 @@ export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
 
   const handleCreate = async () => {
     if (!orgName.trim() || !orgId.trim()) return;
-    setCreating(true);
     setError("");
 
-    const result = await createOrg(orgId, orgName, selectedTemplate?.id);
-    if (result) {
-      setActiveOrg(result.id);
-      setOrgName("");
-      setOrgId("");
-      setSelectedTemplate(null);
-      onClose();
-      window.location.reload();
-    } else {
-      setError("Could not create organization. An organization with this name may already exist.");
+    try {
+      const result = await createOrgMutation.mutateAsync({
+        id: orgId,
+        name: orgName,
+        template: selectedTemplate?.id,
+      });
+      if (result && "id" in result) {
+        setActiveOrg(result.id);
+        setOrgName("");
+        setOrgId("");
+        setSelectedTemplate(null);
+        onClose();
+        window.location.reload();
+      } else {
+        setError("Could not create organization. Please check backend logs for details.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create organization.");
     }
-    setCreating(false);
   };
 
   return (
@@ -165,10 +172,10 @@ export function OrgCreatorModal({ isOpen, onClose }: OrgCreatorModalProps) {
             <button onClick={onClose} className="btn btn-ghost btn-sm">Cancel</button>
             <button
               onClick={handleCreate}
-              disabled={!orgName.trim() || creating}
+              disabled={!orgName.trim() || createOrgMutation.isPending}
               className="btn btn-primary btn-sm"
             >
-              {creating ? <><span className="loading loading-spinner loading-xs" /> Creating...</> : "Create"}
+              {createOrgMutation.isPending ? <><span className="loading loading-spinner loading-xs" /> Creating...</> : "Create"}
             </button>
           </div>
         </div>

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import copy
 import json
-import logging
 from typing import Any
 
+from axon.logging import get_logger
 from axon.plugins.base import BasePlugin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PluginToolExecutor:

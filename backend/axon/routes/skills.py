@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import axon.registry as registry
 from axon.config import settings
+from axon.logging import get_logger
+import axon.registry as registry
 from axon.skills.registry import (
     SKILL_REGISTRY,
     SKILL_METHODOLOGY,
@@ -18,7 +18,7 @@ from axon.skills.registry import (
     list_skills,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 

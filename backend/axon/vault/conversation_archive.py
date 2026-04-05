@@ -7,14 +7,14 @@ The memory manager can reference them via wikilinks from memory entries.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from axon.logging import get_logger
 from axon.vault.frontmatter import write_frontmatter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def archive_conversation(

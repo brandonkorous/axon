@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -11,9 +10,10 @@ import yaml
 from enum import Enum
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
-
+from axon.logging import get_logger
 from axon.plugins.instance import PluginInstanceConfig
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent

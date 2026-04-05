@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 import discord
 
 import axon.registry as registry
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent
     from axon.org import OrgInstance
 
-logger = logging.getLogger("axon.discord")
+logger = get_logger("axon.discord")
 
 MAX_DISCORD_LENGTH = 2000
 

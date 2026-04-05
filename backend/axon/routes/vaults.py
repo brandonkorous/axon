@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from axon.config import settings
 import axon.registry as registry
+from axon.db.crud.vault_index import list_entries, search_fts, rebuild_index
 from axon.vault.frontmatter import parse_frontmatter, write_frontmatter
 
 router = APIRouter()
@@ -207,6 +208,105 @@ async def resolve_org_vault_file(org_id: str, file_path: str):
     raise HTTPException(status_code=404, detail=f"File not found in any vault: {file_path}")
 
 
+@org_router.get("/documents")
+async def list_org_documents(
+    org_id: str,
+    q: str | None = None,
+    type: str | None = None,
+    agent_id: str | None = None,
+    branch: str | None = None,
+    tags: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Search/browse documents across all agent vaults in an org."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+
+    agents_to_query: list[tuple[str, Any]] = []
+    if agent_id:
+        agent = org.agent_registry.get(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+        agents_to_query.append((agent_id, agent))
+    else:
+        agents_to_query = list(org.agent_registry.items())
+
+    all_docs: list[dict] = []
+    agent_doc_counts: dict[str, dict] = {}
+    type_set: set[str] = set()
+
+    for aid, agent in agents_to_query:
+        if not hasattr(agent, "_agent_db") or agent._agent_db is None:
+            continue
+
+        async with agent._agent_db() as session:
+            if q:
+                results = await search_fts(session, q, limit=200)
+            else:
+                results = await list_entries(
+                    session,
+                    type_filter=type,
+                    branch_filter=branch,
+                    tags_filter=tags,
+                    limit=200,
+                    offset=0,
+                )
+
+        for doc in results:
+            doc["agent_id"] = aid
+            doc["agent_name"] = agent.name
+            doc_type = doc.get("type", "")
+            if doc_type:
+                type_set.add(doc_type)
+
+        agent_doc_counts[aid] = {
+            "id": aid,
+            "name": agent.name,
+            "doc_count": len(results),
+        }
+        all_docs.extend(results)
+
+    # Sort merged results by last_modified DESC (fall back to date, then name)
+    def sort_key(d: dict):
+        return d.get("last_modified") or d.get("date") or ""
+
+    all_docs.sort(key=sort_key, reverse=True)
+
+    total = len(all_docs)
+    paginated = all_docs[offset : offset + limit]
+
+    return {
+        "documents": paginated,
+        "total": total,
+        "agents": list(agent_doc_counts.values()),
+        "types": sorted(type_set),
+    }
+
+
+@org_router.post("/rebuild-indexes")
+async def rebuild_all_vault_indexes(org_id: str):
+    """Rebuild vault indexes for all agents in an org."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+
+    results: dict[str, int] = {}
+    for aid, agent in org.agent_registry.items():
+        if not hasattr(agent, "_agent_db") or agent._agent_db is None:
+            continue
+        async with agent._agent_db() as session:
+            count = await rebuild_index(session, agent.config.vault.path)
+        results[aid] = count
+
+    return {
+        "status": "ok",
+        "agents_rebuilt": len(results),
+        "details": results,
+    }
+
+
 @org_router.get("/{agent_id}/graph")
 async def get_org_vault_graph(org_id: str, agent_id: str):
     org = registry.get_org(org_id)
@@ -330,3 +430,17 @@ async def act_on_deep_memory(org_id: str, agent_id: str, file_path: str, body: D
         raise HTTPException(status_code=500, detail="Failed to delete memory")
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {body.action}")
+
+
+@org_router.post("/{agent_id}/rebuild-vectors")
+async def rebuild_vectors(org_id: str, agent_id: str):
+    """Full rebuild of the LanceDB vector index for an agent's vault."""
+    org = registry.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization not found: {org_id}")
+    agent = _get_agent_or_404(org.agent_registry, agent_id, org_id)
+    vector_store = getattr(agent, "_vector_store", None)
+    if not vector_store:
+        raise HTTPException(status_code=400, detail="Vector store not enabled for this agent")
+    count = await vector_store.rebuild(agent.vault)
+    return {"status": "ok", "files_indexed": count}

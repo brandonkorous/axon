@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from axon.logging import get_logger
 from axon.performance.models import AgentRetro, PerformanceMetric
 
 if TYPE_CHECKING:
     from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _current_week() -> str:

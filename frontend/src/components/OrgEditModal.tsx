@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useOrgStore, OrgInfo } from "../stores/orgStore";
+import type { OrgInfo } from "../stores/orgStore";
+import { useUpdateOrg } from "../hooks/useOrgs";
 import { CredentialManager } from "./Credentials/CredentialManager";
 
 const ORG_TYPES = [
@@ -18,7 +19,7 @@ interface OrgEditModalProps {
 }
 
 export function OrgEditModal({ isOpen, onClose, org }: OrgEditModalProps) {
-  const { updateOrg } = useOrgStore();
+  const updateOrgMutation = useUpdateOrg();
   const [name, setName] = useState(org.name);
   const [description, setDescription] = useState(org.description);
   const [type, setType] = useState(org.type);
@@ -60,24 +61,27 @@ export function OrgEditModal({ isOpen, onClose, org }: OrgEditModalProps) {
     setSaving(true);
     setError("");
 
-    const ok = await updateOrg(org.id, {
-      name,
-      description,
-      type,
-      comms: {
-        require_approval: requireApproval,
-        email_domain: emailDomain,
-        email_signature: emailSignature,
-        inbound_polling: inboundPolling,
-        discord: org.comms.discord, // preserve existing discord config
-        slack: org.comms.slack, // preserve existing slack config
-        teams: org.comms.teams, // preserve existing teams config
-        zoom: org.comms.zoom, // preserve existing zoom config
-      },
-    });
-    if (ok) {
+    try {
+      await updateOrgMutation.mutateAsync({
+        orgId: org.id,
+        update: {
+          name,
+          description,
+          type,
+          comms: {
+            require_approval: requireApproval,
+            email_domain: emailDomain,
+            email_signature: emailSignature,
+            inbound_polling: inboundPolling,
+            discord: org.comms.discord,
+            slack: org.comms.slack,
+            teams: org.comms.teams,
+            zoom: org.comms.zoom,
+          },
+        },
+      });
       onClose();
-    } else {
+    } catch {
       setError("Failed to update organization.");
     }
     setSaving(false);

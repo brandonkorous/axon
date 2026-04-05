@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Task, TaskResponse } from "../../stores/taskStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 
 const STATUSES = [
   { key: "pending", label: "Pending" },
@@ -99,7 +99,7 @@ export function TaskEditModal({
   onClose: () => void;
   onSave: (path: string, data: Partial<Task>) => void;
 }) {
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<"activity" | "edit">(
     task.responses?.length ? "activity" : "edit"

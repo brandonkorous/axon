@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents, useUpdatePersona } from "../../hooks/useAgents";
 import { useOrgStore } from "../../stores/orgStore";
 import { ChannelMappings } from "./ChannelMappings";
 
 export function CommsSection({ agentId }: { agentId: string }) {
-  const { agents, updatePersona } = useAgentStore();
+  const { data: agents = [] } = useAgents();
+  const { mutateAsync: updatePersona } = useUpdatePersona();
   const agent = agents.find((a) => a.id === agentId);
   const org = useOrgStore((s) => s.orgs.find((o) => o.id === s.activeOrgId));
   const comms = org?.comms;
@@ -41,11 +42,11 @@ export function CommsSection({ agentId }: { agentId: string }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updatePersona(agentId, {
+      await updatePersona({ agentId, update: {
         comms_enabled: commsEnabled,
         email_alias: emailAlias,
         action_bias: actionBias,
-      });
+      } });
       setDirty(false);
     } finally {
       setSaving(false);

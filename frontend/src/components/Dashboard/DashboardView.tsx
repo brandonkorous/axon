@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { StatusBadge } from "../AgentControls/AgentControls";
 import { PluginBadges } from "../AgentControls/PluginBadges";
 import { orgApiPath } from "../../stores/orgStore";
@@ -98,7 +98,7 @@ function formatTime(ts: string): string {
 }
 
 export function DashboardView() {
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState(false);
 
@@ -115,7 +115,7 @@ export function DashboardView() {
       <h1 className="text-2xl font-bold text-base-content">Command Center</h1>
       {error && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm">
-          Could not load dashboard. Check your connection and try again.
+          The dashboard isn't loading right now. Try refreshing the page.
           <button onClick={() => { setError(false); fetch(orgApiPath("dashboard")).then((r) => r.json()).then(setData).catch(() => setError(true)); }} className="btn btn-ghost btn-xs text-error">Retry</button>
         </div>
       )}

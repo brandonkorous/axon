@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import axon.registry as registry
 from axon.config import AgentType
+from axon.logging import get_logger
+import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 org_router = APIRouter()
@@ -125,6 +125,7 @@ def _get_agent_detail(agent, email_domain: str = "", org_id: str = "") -> dict:
             "avatar": agent.config.ui.avatar,
             "sparkle_color": agent.config.ui.sparkle_color,
         },
+        "type": agent.config.type.value if hasattr(agent.config, "type") else "advisor",
         "model": agent.config.model.reasoning,
         "vault": {
             "path": agent.config.vault.path,
@@ -138,8 +139,14 @@ def _get_agent_detail(agent, email_domain: str = "", org_id: str = "") -> dict:
         "status": agent.lifecycle.status.value if hasattr(agent, "lifecycle") else "idle",
         "lifecycle": agent.lifecycle.to_dict() if hasattr(agent, "lifecycle") else None,
         "email": _agent_email(agent, email_domain),
+        "comms_enabled": getattr(agent.config.comms, "enabled", False) if hasattr(agent.config, "comms") else False,
+        "email_alias": getattr(agent.config.comms, "email_alias", "") if hasattr(agent.config, "comms") else "",
         "parent_id": agent.config.parent_id,
         "action_bias": agent.config.behavior.action_bias.value,
+        "plugins": {
+            "enabled": agent.config.plugins.enabled if agent.config.plugins else [],
+            "config": agent.config.plugins.config if agent.config.plugins and agent.config.plugins.config else {},
+        },
         "plugin_names": p_names,
     }
 

@@ -284,7 +284,7 @@ class ToolExecutor:
             from axon.performance.tracker import PerformanceTracker
             self._perf_tracker = PerformanceTracker(shared_vault)
 
-    _SHARED_TOOL_PREFIXES = ("task_", "issue_", "achievement_", "knowledge_")
+    _SHARED_TOOL_PREFIXES = ("task_", "issue_", "achievement_", "knowledge_", "org_")
 
     async def execute(self, tool_name: str, arguments: str) -> str:
         """Execute a tool call and return the result as a string."""

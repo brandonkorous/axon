@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import logging
 
 from axon.browser.config import BrowserConfig
 from axon.browser.manager import browser_manager
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BrowserToolExecutor:

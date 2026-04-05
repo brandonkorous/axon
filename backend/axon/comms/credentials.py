@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def resolve_credential(org_id: str, provider: str) -> str | None:

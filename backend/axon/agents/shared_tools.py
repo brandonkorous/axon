@@ -138,6 +138,38 @@ ISSUE_TOOLS: list[dict[str, Any]] = [
     },
 ]
 
+ORG_SEARCH_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "org_search",
+            "description": (
+                "Search documents across all agent vaults in the organization. "
+                "Use this to find knowledge, decisions, memories, or any document "
+                "stored by any advisor. Results include which agent owns each document."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query — matched against document names, descriptions, tags, and content",
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Filter by document type (e.g., 'memory', 'decision', 'learning'). Optional.",
+                    },
+                    "tags": {
+                        "type": "string",
+                        "description": "Comma-separated tags to filter by (e.g., 'strategy, fundraising'). Optional.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
+
 KNOWLEDGE_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -243,6 +275,7 @@ class SharedVaultToolExecutor:
             "issue_comment": self._issue_comment,
             "knowledge_share": self._knowledge_share,
             "issue_list": self._issue_list,
+            "org_search": self._org_search,
         }
 
         handler = handlers.get(tool_name)
@@ -253,6 +286,66 @@ class SharedVaultToolExecutor:
             return await handler(args)
         except Exception as e:
             return f"Error executing {tool_name}: {e}"
+
+    # ── Org Search ─────────────────────────────────────────────────
+
+    async def _org_search(self, args: dict) -> str:
+        query = args.get("query", "")
+        type_filter = args.get("type")
+        tags_filter = args.get("tags")
+
+        if not query and not type_filter and not tags_filter:
+            return "Error: Provide at least a query, type, or tags filter."
+
+        import axon.registry as registry
+        from axon.db.crud.vault_index import list_entries, search_fts
+
+        org = registry.org_registry.get(self.org_id)
+        if not org:
+            return f"Error: Organization not found: {self.org_id}"
+
+        all_results: list[dict] = []
+        for aid, agent in org.agent_registry.items():
+            if not hasattr(agent, "_agent_db") or agent._agent_db is None:
+                continue
+
+            async with agent._agent_db() as session:
+                if query:
+                    results = await search_fts(session, query, limit=20)
+                else:
+                    results = await list_entries(
+                        session,
+                        type_filter=type_filter,
+                        tags_filter=tags_filter,
+                        limit=20,
+                    )
+
+            for doc in results:
+                doc["agent_id"] = aid
+                doc["agent_name"] = agent.name
+            all_results.extend(results)
+
+        if not all_results:
+            return f"No documents found across org vaults for: {query or 'filters'}"
+
+        # Format results for the agent
+        lines = [f"Found {len(all_results)} document(s) across org vaults:\n"]
+        for doc in all_results[:30]:
+            agent_label = doc.get("agent_name", doc.get("agent_id", "?"))
+            doc_type = doc.get("type", "")
+            type_label = f" [{doc_type}]" if doc_type else ""
+            tags = doc.get("tags", "")
+            tags_label = f" tags:{tags}" if tags else ""
+            lines.append(
+                f"- **{doc.get('name', doc['path'])}**{type_label} "
+                f"(vault: {agent_label}, path: `{doc['path']}`)"
+                f"{tags_label}"
+            )
+            desc = doc.get("description", "")
+            if desc:
+                lines.append(f"  {desc[:120]}")
+
+        return "\n".join(lines)
 
     # ── Tasks ───────────────────────────────────────────────────────
 

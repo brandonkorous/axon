@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useCredentialStore } from "../../stores/credentialStore";
+import { useState } from "react";
+import { useCredentials, useCreateCredential, useDeleteCredential } from "../../hooks/useCredentials";
 
 const PROVIDERS = [
   { value: "resend", label: "Resend (Email)" },
@@ -15,31 +15,30 @@ const PROVIDERS = [
 ] as const;
 
 export function CredentialManager() {
-  const { credentials, loading, fetchCredentials, createCredential, deleteCredential } =
-    useCredentialStore();
+  const { data: credentials = [], isLoading } = useCredentials();
+  const createCredential = useCreateCredential();
+  const deleteCredential = useDeleteCredential();
   const [adding, setAdding] = useState(false);
   const [provider, setProvider] = useState("resend");
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchCredentials();
-  }, [fetchCredentials]);
-
   const handleAdd = async () => {
     if (!token.trim()) return;
     setSaving(true);
-    const ok = await createCredential(provider, token.trim());
-    if (ok) {
+    try {
+      await createCredential.mutateAsync({ provider, access_token: token.trim() });
       setToken("");
       setAdding(false);
+    } catch {
+      // save failed
     }
     setSaving(false);
   };
 
   return (
     <div className="space-y-3">
-      {loading ? (
+      {isLoading ? (
         <div className="flex items-center gap-2 py-2">
           <span className="loading loading-spinner loading-xs" />
           <span className="text-xs text-base-content/60">Loading credentials...</span>
@@ -64,7 +63,7 @@ export function CredentialManager() {
                 </span>
               </div>
               <button
-                onClick={() => deleteCredential(c.id)}
+                onClick={() => deleteCredential.mutate(c.id)}
                 className="btn btn-ghost btn-xs text-error"
                 title="Remove credential"
               >

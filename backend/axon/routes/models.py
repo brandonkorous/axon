@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 from pathlib import Path
 
@@ -11,11 +10,12 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import axon.registry as registry
 from axon.config import settings
+from axon.logging import get_logger
 from axon.org import OrgModelConfig, ModelRoleAssignments, RegisteredModel
+import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 
@@ -216,6 +216,9 @@ CURATED_MODELS = {
         "name": "OpenAI",
         "requires_key": True,
         "models": [
+            ("openai/gpt-5", "GPT-5", "Latest flagship model", "premium"),
+            ("openai/gpt-5-mini", "GPT-5 Mini", "Fast and capable", "recommended"),
+            ("openai/gpt-5-nano", "GPT-5 Nano", "Affordable with strong tool use", "budget"),
             ("openai/gpt-4o", "GPT-4o", "Fast multimodal model", "recommended"),
             ("openai/gpt-4o-mini", "GPT-4o Mini", "Affordable and fast", "budget"),
             ("openai/o3", "o3", "Advanced reasoning", "premium"),
@@ -236,6 +239,8 @@ CURATED_MODELS = {
         "models": [
             ("gemini/gemini-2.5-pro", "Gemini 2.5 Pro", "Google's most capable", "premium"),
             ("gemini/gemini-2.5-flash", "Gemini 2.5 Flash", "Fast and affordable", "budget"),
+            ("ollama/gemma4:26b", "Gemma 4 26B", "Multimodal, agentic, local MoE", "budget"),
+            ("ollama/gemma4:e4b", "Gemma 4 E4B", "Lightweight multimodal, local", "budget"),
         ],
     },
     "groq": {

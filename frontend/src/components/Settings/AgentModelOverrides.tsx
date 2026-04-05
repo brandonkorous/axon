@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { useModelStore } from "../../stores/modelStore";
+import { useModels } from "../../hooks/useModels";
 import { orgApiPath } from "../../stores/orgStore";
 
 export function AgentModelOverrides({ agentId }: { agentId: string }) {
-  const { models, roles } = useModelStore();
+  const { data } = useModels();
+  const models = data?.registered_models ?? [];
+  const roles = data?.roles ?? { navigator: "", reasoning: "", memory: "", agent: "" };
   const [overrides, setOverrides] = useState<{ navigator: string; reasoning: string }>({
     navigator: "",
     reasoning: "",

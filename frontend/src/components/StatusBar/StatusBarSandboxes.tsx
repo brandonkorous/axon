@@ -1,6 +1,13 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useSandboxStore, type SandboxImageInfo, type RunningInstance } from "../../stores/sandboxStore";
+import {
+  useSandboxImages,
+  useRunningInstances,
+  useBuildImage,
+  useRemoveImage,
+  useStopInstance,
+  type SandboxImageInfo,
+  type RunningInstance,
+} from "../../hooks/useSandbox";
 import { StatusBarPopover } from "./StatusBarPopover";
 
 const STATUS_DOT: Record<string, string> = {
@@ -18,7 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function RunningItem({ instance }: { instance: RunningInstance }) {
-    const { stopInstance } = useSandboxStore();
+    const stopInstance = useStopInstance();
 
     return (
         <li className="flex flex-row items-center justify-between gap-2 px-3 py-1.5 hover:bg-base-content/5 rounded-lg">
@@ -32,7 +39,7 @@ function RunningItem({ instance }: { instance: RunningInstance }) {
                 </span>
             </div>
             <button
-                onClick={() => stopInstance(instance.instance_id)}
+                onClick={() => stopInstance.mutate(instance.instance_id)}
                 className="btn btn-error btn-soft btn-xs flex-shrink-0"
             >
                 Stop
@@ -42,7 +49,8 @@ function RunningItem({ instance }: { instance: RunningInstance }) {
 }
 
 function ImageItem({ image }: { image: SandboxImageInfo }) {
-    const { buildImage, removeImage } = useSandboxStore();
+    const buildImage = useBuildImage();
+    const removeImage = useRemoveImage();
 
     return (
         <li className="flex flex-row items-center justify-between gap-2 px-3 py-1.5 hover:bg-base-content/5 rounded-lg">
@@ -59,7 +67,7 @@ function ImageItem({ image }: { image: SandboxImageInfo }) {
             <div className="flex gap-1 flex-shrink-0">
                 {(image.status === "idle" || image.status === "error") && (
                     <button
-                        onClick={() => buildImage(image.type)}
+                        onClick={() => buildImage.mutate(image.type)}
                         className="btn btn-success btn-soft btn-xs"
                     >
                         Build
@@ -67,7 +75,7 @@ function ImageItem({ image }: { image: SandboxImageInfo }) {
                 )}
                 {image.status === "ready" && (
                     <button
-                        onClick={() => removeImage(image.type)}
+                        onClick={() => removeImage.mutate(image.type)}
                         className="btn btn-error btn-soft btn-xs"
                     >
                         Remove
@@ -82,15 +90,8 @@ function ImageItem({ image }: { image: SandboxImageInfo }) {
 }
 
 export function StatusBarSandboxes({ buildingCount }: { buildingCount: number }) {
-    const images = useSandboxStore((s) => s.images);
-    const runningInstances = useSandboxStore((s) => s.runningInstances);
-    const fetchRunningInstances = useSandboxStore((s) => s.fetchRunningInstances);
-
-    useEffect(() => {
-        fetchRunningInstances();
-        const interval = setInterval(fetchRunningInstances, 15000);
-        return () => clearInterval(interval);
-    }, [fetchRunningInstances]);
+    const { data: images = [] } = useSandboxImages();
+    const { data: runningInstances = [] } = useRunningInstances();
 
     const runningCount = runningInstances.length;
     const totalCount = runningCount + buildingCount;

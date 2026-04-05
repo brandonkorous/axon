@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
-import { useUsageStore, type Period } from "../../stores/usageStore";
+import { useState, useMemo } from "react";
+import { useUsageSummary, useUsageRecords } from "../../hooks/useUsage";
 import { formatCost, formatTokens } from "../../utils/format";
 import { UsageBreakdown } from "./UsageBreakdown";
 import { UsageTable } from "./UsageTable";
+
+type Period = "today" | "7d" | "30d" | "all";
 
 const PERIODS: { value: Period; label: string }[] = [
   { value: "today", label: "Today" },
@@ -13,28 +15,42 @@ const PERIODS: { value: Period; label: string }[] = [
 
 const PAGE_SIZE = 50;
 
+function dateRange(period: Period): { dateFrom: string; dateTo: string } {
+  const now = new Date();
+  const to = now.toISOString().slice(0, 10);
+  if (period === "all") return { dateFrom: "2000-01-01", dateTo: to };
+  if (period === "today") return { dateFrom: to, dateTo: to };
+  const days = period === "7d" ? 7 : 30;
+  const from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
+  return { dateFrom: from, dateTo: to };
+}
+
 export function UsageView() {
-  const {
-    summary,
-    records,
-    total,
-    loading,
-    error,
-    period,
-    setPeriod,
-    fetchSummary,
-    fetchRecords,
-  } = useUsageStore();
+  const [period, setPeriod] = useState<Period>("30d");
   const [page, setPage] = useState(0);
 
-  useEffect(() => {
-    fetchSummary();
-    fetchRecords(PAGE_SIZE, 0);
-  }, [fetchSummary, fetchRecords]);
+  const { dateFrom, dateTo } = useMemo(() => dateRange(period), [period]);
+
+  const {
+    data: summary,
+    isLoading: summaryLoading,
+    isError: summaryError,
+    refetch: refetchSummary,
+  } = useUsageSummary(dateFrom, dateTo);
+
+  const {
+    data: recordsData,
+    isError: recordsError,
+    refetch: refetchRecords,
+  } = useUsageRecords(dateFrom, dateTo, PAGE_SIZE, page * PAGE_SIZE);
+
+  const records = recordsData?.records ?? [];
+  const total = recordsData?.total ?? 0;
+  const loading = summaryLoading;
+  const error = summaryError || recordsError;
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-    fetchRecords(PAGE_SIZE, newPage * PAGE_SIZE);
   };
 
   const avgCost =
@@ -66,11 +82,11 @@ export function UsageView() {
 
       {error && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm">
-          Could not load usage data. Check your connection and try again.
+          Usage data isn't available right now. Try refreshing the page.
           <button
             onClick={() => {
-              fetchSummary();
-              fetchRecords(PAGE_SIZE, page * PAGE_SIZE);
+              refetchSummary();
+              refetchRecords();
             }}
             className="btn btn-ghost btn-xs text-error"
           >

@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { usePluginStore, type PluginInstanceInfo } from "../../stores/pluginStore";
-import { useHostAgentStore } from "../../stores/hostAgentStore";
-import { useSandboxStore } from "../../stores/sandboxStore";
+import { useState } from "react";
+import { useCreateInstance, useUpdateInstance, type PluginInstanceInfo } from "../../hooks/usePlugins";
+import { useHostAgents } from "../../hooks/useHostAgents";
+import { useSandboxImages } from "../../hooks/useSandbox";
 
 const DEFAULT_SANDBOX_IMAGE = "code";
 
@@ -18,11 +18,10 @@ export function PluginInstanceForm({
   onSave: () => void;
   onCancel: () => void;
 }) {
-  const { createInstance, updateInstance } = usePluginStore();
-  const hostAgents = useHostAgentStore((s) => s.agents);
-  const fetchHostAgents = useHostAgentStore((s) => s.fetchAgents);
-  const sandboxImages = useSandboxStore((s) => s.images);
-  const fetchImages = useSandboxStore((s) => s.fetchImages);
+  const createInstance = useCreateInstance();
+  const updateInstance = useUpdateInstance();
+  const { data: hostAgents = [] } = useHostAgents();
+  const { data: sandboxImages = [] } = useSandboxImages();
 
   const isEdit = !!instance;
   const [id, setId] = useState(instance?.id || "");
@@ -43,11 +42,6 @@ export function PluginInstanceForm({
     instance?.agents || [],
   );
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (hostAgents.length === 0) fetchHostAgents();
-    if (pluginName === "sandbox" && sandboxImages.length === 0) fetchImages();
-  }, [hostAgents.length, fetchHostAgents, pluginName, sandboxImages.length, fetchImages]);
 
   const toggleAgent = (agentId: string) => {
     setSelectedAgents((prev) =>
@@ -78,23 +72,29 @@ export function PluginInstanceForm({
       config.host_agent_url = hostAgentUrl || null;
     }
 
-    let ok: boolean;
-    if (isEdit) {
-      ok = await updateInstance(pluginName, instance.id, {
-        name,
-        agents: selectedAgents,
-        config,
-      });
-    } else {
-      ok = await createInstance(pluginName, {
-        id,
-        name: name || id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        agents: selectedAgents,
-        config,
-      });
+    try {
+      if (isEdit) {
+        await updateInstance.mutateAsync({
+          pluginName,
+          instanceId: instance.id,
+          name,
+          agents: selectedAgents,
+          config,
+        });
+      } else {
+        await createInstance.mutateAsync({
+          pluginName,
+          id,
+          name: name || id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          agents: selectedAgents,
+          config,
+        });
+      }
+      setSaving(false);
+      onSave();
+    } catch {
+      setSaving(false);
     }
-    setSaving(false);
-    if (ok) onSave();
   };
 
   return (

@@ -6,19 +6,20 @@ for the paid reasoning model. Falls back to deterministic search.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from axon.agents.provider import complete
 from axon.config import LearningConfig
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.usage import UsageTracker
+    from axon.vault.vector_store import VaultVectorStore
 from axon.vault.memory_prompts import RECALL_PLAN_PROMPT, RECALL_RANK_PROMPT, parse_llm_json
 from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def recall_with_llm(
@@ -29,11 +30,12 @@ async def recall_with_llm(
     usage_tracker: "UsageTracker | None" = None,
     agent_id: str = "",
     org_id: str = "",
+    vector_store: "VaultVectorStore | None" = None,
 ) -> str:
     """Use the local LLM to semantically search and curate vault context."""
+    log = logger.bind(agent_id=agent_id, org_id=org_id)
     vault_summary = _build_vault_summary(vault)
-    logger.debug("RECALL step 1/4 — planning search (model=%s)", model)
-    logger.debug("RECALL vault summary:\n%s", vault_summary)
+    log.debug("recall_plan", step="1/4", model=model)
 
     # Step 1: Ask the local model what to search for
     plan_prompt = RECALL_PLAN_PROMPT.format(
@@ -47,24 +49,24 @@ async def recall_with_llm(
     )
     _record_usage(usage_tracker, model, plan_response, agent_id, org_id, "memory_recall")
     plan = parse_llm_json(plan_response.get("content", ""))
-    logger.debug("RECALL step 1/4 — plan result: %s", plan)
+    log.debug("recall_plan_result", step="1/4", plan=plan)
     if not plan or not plan.get("needs_context"):
-        logger.debug("RECALL — local model says no context needed, returning empty")
+        log.debug("recall_skip", reason="no_context_needed")
         return ""
 
     # Step 2: Execute searches
     queries = plan.get("search_queries", [])
     branches = plan.get("branches", [])
-    logger.debug("RECALL step 2/4 — searching vault: queries=%s, branches=%s", queries, branches)
-    candidates = _execute_searches(vault, queries, branches)
-    logger.debug("RECALL step 2/4 — found %d candidate files", len(candidates))
+    log.debug("recall_search", step="2/4", queries=queries, branches=branches)
+    candidates = await _execute_searches(vault, queries, branches, vector_store, user_message)
+    log.debug("recall_search_result", step="2/4", candidate_count=len(candidates))
     if not candidates:
-        logger.debug("RECALL — no candidates found, returning empty")
+        log.debug("recall_skip", reason="no_candidates")
         return ""
 
     # Step 3: Ask the local model to rank candidates
     candidates_text = _format_candidates(vault, candidates)
-    logger.debug("RECALL step 3/4 — ranking %d candidates", len(candidates))
+    log.debug("recall_rank", step="3/4", candidate_count=len(candidates))
     rank_prompt = RECALL_RANK_PROMPT.format(
         user_message=user_message, candidates=candidates_text,
     )
@@ -77,11 +79,11 @@ async def recall_with_llm(
     _record_usage(usage_tracker, model, rank_response, agent_id, org_id, "memory_recall")
     ranking = parse_llm_json(rank_response.get("content", ""))
     ranked_paths = ranking.get("ranked_paths", []) if ranking else []
-    logger.debug("RECALL step 3/4 — ranked paths: %s", ranked_paths)
+    log.debug("recall_rank_result", step="3/4", ranked_paths=ranked_paths)
 
     # Step 4: Build context from ranked paths within token budget
     result = _build_context(vault, config, ranked_paths, candidates)
-    logger.debug("RECALL step 4/4 — built context: %d chars", len(result))
+    log.debug("recall_context_built", step="4/4", chars=len(result))
     return result
 
 
@@ -89,13 +91,13 @@ def recall_fallback(
     vault: VaultManager, config: LearningConfig, user_message: str,
 ) -> str:
     """Deterministic fallback when the local LLM is unavailable."""
-    logger.debug("RECALL FALLBACK — using deterministic MemoryNavigator")
+    logger.debug("recall_fallback", method="MemoryNavigator")
     from axon.vault.navigator import MemoryNavigator
 
     nav = MemoryNavigator(vault.vault_path, vault.root_file, cache=vault.cache)
     result = nav._search_and_rank(user_message, config.max_recall_tokens)
     context = nav._format_context(result)
-    logger.debug("RECALL FALLBACK — returned %d chars", len(context))
+    logger.debug("recall_fallback_result", chars=len(context))
     return context
 
 
@@ -119,18 +121,39 @@ def _build_vault_summary(vault: VaultManager) -> str:
     return "\n".join(lines) if lines else "Empty vault."
 
 
-def _execute_searches(
-    vault: VaultManager, queries: list[str], branches: list[str],
+async def _execute_searches(
+    vault: VaultManager,
+    queries: list[str],
+    branches: list[str],
+    vector_store: "VaultVectorStore | None" = None,
+    user_message: str = "",
 ) -> dict[str, dict[str, Any]]:
     """Execute search queries against the vault, return candidate files.
 
-    Prioritizes memory tiers: short-term first, then long-term, then other
-    branches. Never searches deep/ or conversations/ — those are archived.
+    Prioritizes: vector search (semantic), then memory tiers, then keyword
+    search, then branch browsing. Never searches deep/ or conversations/.
     """
-    # Excluded paths — archived trees with independent roots
     excluded_prefixes = ("deep/", "conversations/")
 
     candidates: dict[str, dict[str, Any]] = {}
+
+    # Priority 0: Vector (semantic) search
+    if vector_store and user_message:
+        try:
+            vector_results = await vector_store.search(user_message, limit=10)
+            for r in vector_results:
+                path = r["path"]
+                if any(path.startswith(p) for p in excluded_prefixes):
+                    continue
+                if path not in candidates:
+                    candidates[path] = {
+                        "path": path,
+                        "title": r.get("name", path),
+                        "snippet": r.get("text", ""),
+                        "source": "vector",
+                    }
+        except Exception:
+            pass  # Graceful fallback — vector search is additive
 
     # Priority 1: Search memory tiers directly
     for memory_branch in ["memory/short-term", "memory/long-term"]:

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { useTaskStore, Task } from "../../stores/taskStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useMemo, useState, type DragEvent } from "react";
+import { useTasks, useCreateTask, useUpdateTask, type Task } from "../../hooks/useTasks";
+import { useAgents } from "../../hooks/useAgents";
 import { PRIORITY_BADGE } from "../../constants/badges";
 import { TaskEditModal } from "./TaskEditModal";
 import { CreateTaskModal } from "./CreateTaskModal";
@@ -293,9 +293,11 @@ function sortTasks(tasks: Task[], sort: SortKey): Task[] {
 }
 
 export function TaskBoardView() {
-    const { tasks, loading, error, fetchTasks, updateTask, createTask } =
-        useTaskStore();
-    const { agents } = useAgentStore();
+    const { data: tasks = [], isLoading: loading, isError: error, refetch: fetchTasks } =
+        useTasks();
+    const createTaskMutation = useCreateTask();
+    const updateTaskMutation = useUpdateTask();
+    const { data: agents = [] } = useAgents();
     const [showCreate, setShowCreate] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [showClosed, setShowClosed] = useState(false);
@@ -305,10 +307,6 @@ export function TaskBoardView() {
         priority: "",
         sort: "newest",
     });
-
-    useEffect(() => {
-        fetchTasks();
-    }, [fetchTasks]);
 
     const { activeTasks, closedTasks, filtered } = useMemo(() => {
         const active = tasks.filter((t) => t.status !== "closed");
@@ -338,11 +336,11 @@ export function TaskBoardView() {
     }, [tasks, filters]);
 
     const handleStatusChange = (path: string, status: string) => {
-        updateTask(path, { status });
+        updateTaskMutation.mutate({ path, data: { status } });
     };
 
     const handleDrop = (taskPath: string, newStatus: string) => {
-        updateTask(taskPath, { status: newStatus });
+        updateTaskMutation.mutate({ path: taskPath, data: { status: newStatus } });
     };
 
     const grouped = COLUMNS.map((col) => ({
@@ -381,7 +379,7 @@ export function TaskBoardView() {
             ) : error ? (
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                        <p className="text-sm text-error mb-2">Could not load tasks. Check your connection and try again.</p>
+                        <p className="text-sm text-error mb-2">Tasks aren't loading right now. Try refreshing the page.</p>
                         <button onClick={() => fetchTasks()} className="link link-accent text-xs">
                             Try again
                         </button>
@@ -410,7 +408,7 @@ export function TaskBoardView() {
                             agents={agents}
                             expanded={showClosed}
                             onToggle={() => setShowClosed(!showClosed)}
-                            onReopen={(path) => updateTask(path, { status: "pending" })}
+                            onReopen={(path) => updateTaskMutation.mutate({ path, data: { status: "pending" } })}
                             onEdit={setEditingTask}
                         />
                     )}
@@ -420,7 +418,7 @@ export function TaskBoardView() {
             {showCreate && (
                 <CreateTaskModal
                     onClose={() => setShowCreate(false)}
-                    onCreate={(data) => createTask(data)}
+                    onCreate={(data) => createTaskMutation.mutate(data)}
                 />
             )}
 
@@ -428,7 +426,7 @@ export function TaskBoardView() {
                 <TaskEditModal
                     task={editingTask}
                     onClose={() => setEditingTask(null)}
-                    onSave={(path, data) => updateTask(path, data)}
+                    onSave={(path, data) => updateTaskMutation.mutate({ path, data })}
                 />
             )}
         </div>

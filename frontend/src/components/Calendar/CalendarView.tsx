@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCalendarStore, type CalendarEvent } from "../../stores/calendarStore";
-import { useTaskStore } from "../../stores/taskStore";
+import { useCalendarEvents } from "../../hooks/useCalendar";
+import { useCreateTask, type CreateTaskInput } from "../../hooks/useTasks";
 import { CalendarToolbar } from "./CalendarToolbar";
 import { MonthGrid } from "./MonthGrid";
 import { WeekGrid } from "./WeekGrid";
@@ -16,24 +17,18 @@ import {
 
 export function CalendarView() {
   const {
-    events,
-    loading,
     viewMode,
     currentDate,
     filters,
-    fetchEvents,
   } = useCalendarStore();
-  const { createTask } = useTaskStore();
+  const createTaskMutation = useCreateTask();
 
   const navigate = useNavigate();
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [createDate, setCreateDate] = useState<string | null>(null);
 
   // Compute date range based on view mode
-  const fetchRange = useCallback(() => {
-    let start: string;
-    let end: string;
-
+  const { start, end } = useMemo(() => {
     if (viewMode === "month") {
       const first = firstOfMonth(currentDate);
       const last = lastOfMonth(currentDate);
@@ -41,20 +36,19 @@ export function CalendarView() {
       gridStart.setDate(gridStart.getDate() - gridStart.getDay());
       const gridEnd = new Date(last);
       gridEnd.setDate(gridEnd.getDate() + (6 - gridEnd.getDay()));
-      start = formatDate(gridStart);
-      end = formatDate(gridEnd);
-    } else {
-      const dates = weekGridDates(currentDate);
-      start = formatDate(dates[0]);
-      end = formatDate(dates[6]);
+      return { start: formatDate(gridStart), end: formatDate(gridEnd) };
     }
+    const dates = weekGridDates(currentDate);
+    return { start: formatDate(dates[0]), end: formatDate(dates[6]) };
+  }, [viewMode, currentDate]);
 
-    fetchEvents(start, end);
-  }, [viewMode, currentDate, filters, fetchEvents]);
-
-  useEffect(() => {
-    fetchRange();
-  }, [fetchRange]);
+  const { data: eventsData, isLoading: loading } = useCalendarEvents(
+    start,
+    end,
+    filters.agentId ?? undefined,
+    filters.source ?? undefined,
+  );
+  const events = (eventsData ?? []) as CalendarEvent[];
 
   const handleEditTask = () => {
     setSelectedEvent(null);
@@ -65,10 +59,9 @@ export function CalendarView() {
     setCreateDate(dateStr);
   };
 
-  const handleCreateTask = async (data: Parameters<typeof createTask>[0]) => {
-    await createTask(data);
+  const handleCreateTask = async (data: CreateTaskInput) => {
+    await createTaskMutation.mutateAsync(data);
     setCreateDate(null);
-    fetchRange();
   };
 
   return (

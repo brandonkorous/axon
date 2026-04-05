@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, HTTPException
 
-import axon.registry as registry
 from axon.integrations.registry import INTEGRATION_REGISTRY
+from axon.logging import get_logger
+import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 

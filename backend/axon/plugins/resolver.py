@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+from axon.logging import get_logger
 from axon.plugins.base import BasePlugin
 from axon.plugins.registry import PLUGIN_REGISTRY
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def resolve_plugins(

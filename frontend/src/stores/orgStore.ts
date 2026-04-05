@@ -71,7 +71,7 @@ interface OrgStore {
   fetchOrgs: () => Promise<void>;
   fetchTemplates: () => Promise<void>;
   setActiveOrg: (orgId: string) => void;
-  createOrg: (id: string, name: string, template?: string) => Promise<OrgInfo | null>;
+  createOrg: (id: string, name: string, template?: string) => Promise<OrgInfo | { error: string } | null>;
   updateOrg: (orgId: string, update: {
     name?: string;
     description?: string;
@@ -131,15 +131,15 @@ export const useOrgStore = create<OrgStore>((set, get) => ({
         body: JSON.stringify({ id, name, template: template || "" }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to create organization");
+        const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+        return { error: err.detail || "Failed to create organization" } as { error: string };
       }
       // Refresh orgs list
       await get().fetchOrgs();
       const newOrg = get().orgs.find((o) => o.id === id) || null;
       return newOrg;
-    } catch {
-      return null;
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Network error" } as { error: string };
     }
   },
 

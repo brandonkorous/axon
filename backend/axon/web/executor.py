@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING
 
 import httpx
 
+from axon.logging import get_logger
+
 if TYPE_CHECKING:
     from axon.web.config import WebConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Content extraction — trafilatura is optional, falls back to basic extraction
 try:

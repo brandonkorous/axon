@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, Callable
 
+from axon.logging import get_logger
 from axon.sandbox.config import KubernetesConfig, SandboxConfig
 from axon.sandbox.k8s_network import build_network_policy
 from axon.sandbox.k8s_volumes import build_volumes_and_mounts
 from axon.sandbox.provider import SandboxInstance
 from axon.sandbox.types import SandboxType, image_name
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Labels applied to every sandbox pod for identification and cleanup
 LABEL_PREFIX = "axon.sandbox"

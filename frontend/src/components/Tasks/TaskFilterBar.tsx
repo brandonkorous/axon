@@ -1,4 +1,4 @@
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 
 const PRIORITIES = [
   { key: "", label: "All priorities" },
@@ -35,7 +35,7 @@ export function TaskFilterBar({
   taskCount: number;
   filteredCount: number;
 }) {
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const isFiltered = filters.search || filters.assignee || filters.priority;
 
   return (

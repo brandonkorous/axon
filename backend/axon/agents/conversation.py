@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
-import logging
 import shutil
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("axon.conversation")
+from axon.logging import get_logger
+
+logger = get_logger("axon.conversation")
 
 
 @dataclass
@@ -62,9 +63,11 @@ class Conversation:
             return self.data_dir / "conversations" / self.agent_id / f"{self.conversation_id}.json"
         return self.data_dir / "conversations" / f"{self.agent_id}.json"
 
-    def add_user_message(self, content: str) -> Message:
+    def add_user_message(
+        self, content: str, metadata: dict[str, Any] | None = None,
+    ) -> Message:
         """Add a user message to the conversation."""
-        msg = Message(role="user", content=content)
+        msg = Message(role="user", content=content, metadata=metadata or {})
         self.messages.append(msg)
         self._trim()
         self._save()

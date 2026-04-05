@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def extract_video_id(url: str) -> str | None:

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useOrgStore } from "../../stores/orgStore";
+import { useOrgs, useUpdateOrg } from "../../hooks/useOrgs";
 import { DiscordSection, type ChannelMapping } from "./DiscordSection";
 import { SlackSection, type SlackChannelMapping } from "./SlackSection";
 import { TeamsSection, type TeamsChannelMapping } from "./TeamsSection";
@@ -30,7 +31,9 @@ function serializeMappings(entries: MappingEntry[]): Record<string, string> {
 }
 
 export function OrganizationTab() {
-  const { orgs, activeOrgId, updateOrg } = useOrgStore();
+  const activeOrgId = useOrgStore((s) => s.activeOrgId);
+  const { data: orgs = [] } = useOrgs();
+  const updateOrgMutation = useUpdateOrg();
   const org = orgs.find((o) => o.id === activeOrgId);
   const [saving, setSaving] = useState(false);
 
@@ -78,17 +81,20 @@ export function OrganizationTab() {
 
   const handleSave = async () => {
     setSaving(true);
-    await updateOrg(org.id, {
-      name, description, type,
-      comms: {
-        require_approval: requireApproval,
-        email_domain: emailDomain,
-        email_signature: emailSignature,
-        inbound_polling: inboundPolling,
-        discord: { guild_id: guildId, channel_mappings: serializeMappings(discordMappings) },
-        slack: { channel_mappings: serializeMappings(slackMappings) },
-        teams: { tenant_id: tenantId, channel_mappings: serializeMappings(teamsMappings) },
-        zoom: { channel_mappings: serializeMappings(zoomMappings) },
+    await updateOrgMutation.mutateAsync({
+      orgId: org.id,
+      update: {
+        name, description, type,
+        comms: {
+          require_approval: requireApproval,
+          email_domain: emailDomain,
+          email_signature: emailSignature,
+          inbound_polling: inboundPolling,
+          discord: { guild_id: guildId, channel_mappings: serializeMappings(discordMappings) },
+          slack: { channel_mappings: serializeMappings(slackMappings) },
+          teams: { tenant_id: tenantId, channel_mappings: serializeMappings(teamsMappings) },
+          zoom: { channel_mappings: serializeMappings(zoomMappings) },
+        },
       },
     });
     setSaving(false);

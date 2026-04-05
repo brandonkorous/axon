@@ -5,7 +5,7 @@ import { ConversationSwitcher } from "../Conversation/ConversationSwitcher";
 import { WorkingIndicator } from "../Conversation/WorkingIndicator";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
 import { useConversationStore } from "../../stores/conversationStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { useAgentRuntimeStore, useThinkingAgents } from "../../stores/agentRuntimeStore";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
@@ -26,7 +26,7 @@ const AGENT_ID = "huddle";
 
 export function HuddleView() {
     const { messages, addMessage, appendToSpeaker } = useConversationStore();
-    const { agents } = useAgentStore();
+    const { data: agents = [] } = useAgents();
     const thinkingAgentIds = useThinkingAgents();
     const huddleRunningTasks = useAgentRuntimeStore(
         useShallow((s) => Object.values(s.agents).flatMap((a) => a.runningTasks)),

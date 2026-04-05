@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { useMindStore } from "../../stores/mindStore";
 import { MindGraph } from "./MindGraph";
 import { MindSidebar } from "./MindSidebar";
 import { MindFileDetail } from "./MindFileDetail";
 
-export function MindView() {
+export function MindView({ agentId: propAgentId }: { agentId?: string } = {}) {
   const { agentId: paramAgentId } = useParams<{ agentId?: string }>();
-  const { agents } = useAgentStore();
+  const resolvedAgentId = propAgentId || paramAgentId;
+  const { data: agents = [] } = useAgents();
   const store = useMindStore();
 
   const [selectedAgentId, setSelectedAgentId] = useState(
-    paramAgentId || agents.find((a) => a.id !== "axon")?.id || "",
+    resolvedAgentId || agents.find((a) => a.id !== "axon")?.id || "",
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -74,7 +75,7 @@ export function MindView() {
   if (store.error) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-2 text-base-content/60">
-        <p className="text-error text-sm">Could not load vault graph. Check your connection and try again.</p>
+        <p className="text-error text-sm">The vault graph isn't loading right now. The agent may be starting up — try again in a moment.</p>
         <button
           onClick={() => store.fetchGraph(selectedAgentId)}
           className="btn btn-ghost btn-sm text-error"

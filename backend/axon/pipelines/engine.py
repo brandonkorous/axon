@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
+from axon.logging import get_logger
 from axon.pipelines.models import (
     AutoResolve,
     PipelineDefinition,
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from axon.agents.agent import Agent, StreamChunk
     from axon.org import OrgInstance
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

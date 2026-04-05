@@ -70,22 +70,13 @@ logger = logging.getLogger(__name__)
 
 
 def _configure_logging() -> None:
-    """Configure logging based on AXON_LOG_LEVEL setting (default: INFO)."""
-    level = settings.axon_log_level.upper()
-    logging.basicConfig(
-        level=getattr(logging, level, logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
+    """Configure structured logging via structlog (stdlib integration mode)."""
+    from axon.logging import configure_logging
+
+    configure_logging(
+        level=settings.axon_log_level,
+        log_format=settings.axon_log_format,
     )
-    # Always show memory pipeline at configured level
-    for module in (
-        "axon.vault.memory_manager",
-        "axon.vault.memory_recall",
-        "axon.vault.memory_learning",
-        "axon.vault.memory_prompts",
-        "axon.agents.agent",
-    ):
-        logging.getLogger(module).setLevel(getattr(logging, level, logging.INFO))
 
 
 def _export_api_keys() -> None:
@@ -509,6 +500,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Structured-logging context middleware (binds org_id to every log line)
+from axon.middleware import LogContextMiddleware  # noqa: E402
+app.add_middleware(LogContextMiddleware)
+
 # ── Org-scoped routes ───────────────────────────────────────────────
 app.include_router(orgs_routes.router, prefix="/api/orgs", tags=["orgs"])
 app.include_router(agents_routes.org_router, prefix="/api/orgs/{org_id}/agents", tags=["agents"])
@@ -590,11 +585,19 @@ async def health():
 @app.get("/api/debug/scheduler")
 async def debug_scheduler():
     """Diagnostic endpoint — shows scheduler state and pending tasks."""
-    from axon.scheduler import scheduler, AgentScheduler
+    from axon.scheduler import scheduler
+    from axon.scheduler_jobs import find_agent_tasks
 
+    jobs = scheduler._scheduler.get_jobs() if scheduler._scheduler.running else []
     result = {
-        "scheduler_running": scheduler._task is not None and not scheduler._task.done(),
-        "last_runs": {k: v.isoformat() for k, v in scheduler._last_run.items()},
+        "scheduler_running": scheduler._scheduler.running,
+        "jobs": [
+            {
+                "id": j.id,
+                "next_run": j.next_run_time.isoformat() if j.next_run_time else None,
+            }
+            for j in jobs
+        ],
         "agents": {},
     }
 
@@ -604,15 +607,13 @@ async def debug_scheduler():
             lock_held = (
                 hasattr(agent, "_processing_lock") and agent._processing_lock.locked()
             )
-            tasks = AgentScheduler._find_agent_tasks(agent, agent_id)
-            has_pending_inbox = False  # Inbox concept removed — kept for API compat
+            tasks = find_agent_tasks(agent, agent_id)
             result["agents"][agent_id] = {
                 "proactive_checks": [
                     {"action": c.action, "trigger": c.trigger} for c in checks
                 ],
                 "processing_lock_held": lock_held,
                 "has_shared_vault": agent.shared_vault is not None,
-                "has_pending_inbox": has_pending_inbox,
                 "in_progress_tasks": [
                     {
                         "path": t["path"],

@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { useSkillStore } from "../../stores/skillStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useSkillDetail, useEnableSkill, useDisableSkill, useUpdateSkill, useDeleteSkill } from "../../hooks/useSkills";
+import { useAgents } from "../../hooks/useAgents";
 import { SkillEditForm } from "./SkillEditForm";
 
 export function SkillDetail({ skillName, onBack }: { skillName: string; onBack: () => void }) {
-  const { selectedSkill, fetchSkillDetail, enableSkill, disableSkill, updateSkill, deleteSkill } =
-    useSkillStore();
-  const { agents } = useAgentStore();
+  const { data: selectedSkill, refetch: refetchDetail } = useSkillDetail(skillName);
+  const { data: agents = [] } = useAgents();
+  const enableSkillMutation = useEnableSkill();
+  const disableSkillMutation = useDisableSkill();
+  const updateSkillMutation = useUpdateSkill();
+  const deleteSkillMutation = useDeleteSkill();
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -22,10 +25,6 @@ export function SkillDetail({ skillName, onBack }: { skillName: string; onBack: 
   const [autoInject, setAutoInject] = useState(false);
   const [triggers, setTriggers] = useState<string[]>([]);
   const [methodology, setMethodology] = useState("");
-
-  useEffect(() => {
-    fetchSkillDetail(skillName);
-  }, [skillName, fetchSkillDetail]);
 
   useEffect(() => {
     if (selectedSkill) {
@@ -52,29 +51,41 @@ export function SkillDetail({ skillName, onBack }: { skillName: string; onBack: 
 
   const handleToggle = async (agentId: string) => {
     const isUsing = s.agents_using.includes(agentId);
-    const ok = isUsing
-      ? await disableSkill(skillName, agentId)
-      : await enableSkill(skillName, agentId);
-    if (ok) fetchSkillDetail(skillName);
+    try {
+      if (isUsing) {
+        await disableSkillMutation.mutateAsync({ skillName, agent_id: agentId });
+      } else {
+        await enableSkillMutation.mutateAsync({ skillName, agent_id: agentId });
+      }
+      refetchDetail();
+    } catch {
+      // toggle failed
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
-    const ok = await updateSkill(skillName, {
-      description, version, author, category, icon,
-      auto_inject: autoInject, triggers, methodology,
-    });
-    if (ok) {
-      await fetchSkillDetail(skillName);
+    try {
+      await updateSkillMutation.mutateAsync({
+        name: skillName, description, version, author, category, icon,
+        auto_inject: autoInject, triggers, methodology,
+      } as any);
+      await refetchDetail();
       setEditing(false);
+    } catch {
+      // save failed
     }
     setSaving(false);
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    const result = await deleteSkill(skillName);
-    if (result.deleted) onBack();
+    try {
+      await deleteSkillMutation.mutateAsync(skillName);
+      onBack();
+    } catch {
+      // delete failed
+    }
     setDeleting(false);
   };
 

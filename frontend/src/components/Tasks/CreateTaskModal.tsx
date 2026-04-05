@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 
 export interface CreateTaskData {
   title: string;
@@ -20,7 +20,7 @@ export function CreateTaskModal({
   onCreate: (data: CreateTaskData) => void;
   defaultDate?: string;
 }) {
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState("");

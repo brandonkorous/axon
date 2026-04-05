@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import axon.registry as registry
 from axon.discovery.models import RequestStatus
 from axon.discovery.searcher import search_capabilities
 from axon.discovery.store import list_requests, resolve_request
+from axon.logging import get_logger
+import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 

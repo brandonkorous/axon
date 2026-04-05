@@ -7,18 +7,18 @@ and responses are sent back via the Bot Framework REST API.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
 import axon.registry as registry
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent
     from axon.org import OrgInstance
 
-logger = logging.getLogger("axon.teams")
+logger = get_logger("axon.teams")
 
 # Bot Framework endpoints
 LOGIN_URL = "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token"

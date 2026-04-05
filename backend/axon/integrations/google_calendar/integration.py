@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -11,8 +10,9 @@ import httpx
 
 from axon.integrations.base import BaseIntegration
 from axon.integrations.google_calendar.tools import GOOGLE_CALENDAR_TOOLS
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3"
 

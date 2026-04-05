@@ -5,14 +5,21 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-import logging
+import mimetypes
+import re
+import time
+from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
 
+from axon.logging import get_logger
 import axon.registry as registry
 import axon.ws_registry as ws_registry
 
-logger = logging.getLogger("axon.conversations")
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB per file
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+logger = get_logger("axon.conversations")
 
 router = APIRouter()
 org_router = APIRouter()
@@ -78,16 +85,19 @@ async def _handle_conversation(websocket: WebSocket, agent_reg: dict, agent_id: 
 
             if message.get("type") == "message":
                 user_content = message.get("content", "")
-                if not user_content:
+                attachments = message.get("attachments", []) or []
+                if not user_content and not attachments:
                     continue
 
                 # Auto-title from first user message
                 mgr = agent.conversation_manager
-                mgr.auto_title_from_message(mgr.active_id, user_content)
+                if user_content:
+                    mgr.auto_title_from_message(mgr.active_id, user_content)
 
                 want_audio = message.get("voice", False)
                 await _process_and_stream(
-                    websocket, agent, agent_reg, user_content, want_audio
+                    websocket, agent, agent_reg, user_content, want_audio,
+                    attachments=attachments,
                 )
 
             elif message.get("type") == "audio":
@@ -247,6 +257,7 @@ async def _process_and_stream(
     user_content: str,
     want_audio: bool = False,
     voice_id_override: str | None = None,
+    attachments: list[dict] | None = None,
 ):
     """Process a message through the agent, stream text, optionally synthesize audio."""
     target_agent = agent
@@ -264,7 +275,7 @@ async def _process_and_stream(
     # Activity event types that should be persisted in conversation history
     PERSISTED_ACTIVITY_TYPES = {"tool_use", "agent_activated", "agent_result"}
 
-    async for chunk in target_agent.process(user_content):
+    async for chunk in target_agent.process(user_content, attachments=attachments):
         response = {
             "type": chunk.type,
             "agent_id": chunk.agent_id,
@@ -288,7 +299,7 @@ async def _process_and_stream(
                 await websocket.send_json(response)
                 context = chunk.metadata.get("context", "")
                 routed_message = f"{context}\n\n{user_content}" if context else user_content
-                async for sub_chunk in routed_agent.process(routed_message):
+                async for sub_chunk in routed_agent.process(routed_message, attachments=attachments):
                     if sub_chunk.type == "text":
                         full_response += sub_chunk.content
                     # Persist activity events from routed agents too
@@ -366,6 +377,45 @@ def _conversation_delete_response(agent, conversation_id: str):
     return {"deleted": True, "active_id": agent.conversation_manager.active_id}
 
 
+# ── File upload helper ─────────────────────────────────────────────
+
+
+def _sanitize_filename(name: str) -> str:
+    """Remove unsafe characters from a filename."""
+    name = re.sub(r"[^\w.\-]", "_", name)
+    return name[:200]  # cap length
+
+
+async def _handle_upload(agent, file: UploadFile) -> dict:
+    """Store an uploaded file and return its metadata."""
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({len(contents)} bytes). Max is {MAX_UPLOAD_SIZE} bytes.",
+        )
+
+    original_name = file.filename or "upload"
+    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+    sanitized = _sanitize_filename(original_name)
+    stored_name = f"{int(time.time() * 1000)}_{sanitized}"
+
+    data_dir: Path = agent.conversation_manager.data_dir
+    attach_dir = data_dir / "attachments" / agent.id
+    attach_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = attach_dir / stored_name
+    dest.write_bytes(contents)
+
+    relative_path = f"attachments/{agent.id}/{stored_name}"
+    return {
+        "path": relative_path,
+        "name": original_name,
+        "type": content_type,
+        "size": len(contents),
+    }
+
+
 # ── Legacy routes (default org) ─────────────────────────────────────
 
 
@@ -373,6 +423,15 @@ def _conversation_delete_response(agent, conversation_id: str):
 async def conversation_websocket(websocket: WebSocket, agent_id: str):
     """WebSocket endpoint for streaming conversations (default org)."""
     await _handle_conversation(websocket, registry.agent_registry, agent_id)
+
+
+@router.post("/{agent_id}/upload")
+async def upload_file(agent_id: str, file: UploadFile = File(...)):
+    """Upload a file attachment for an agent (default org)."""
+    agent = registry.agent_registry.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+    return await _handle_upload(agent, file)
 
 
 @router.get("/{agent_id}/history")
@@ -437,6 +496,15 @@ async def org_conversation_websocket(websocket: WebSocket, org_id: str, agent_id
         await websocket.close(code=4004, reason=f"Organization not found: {org_id}")
         return
     await _handle_conversation(websocket, org.agent_registry, agent_id)
+
+
+@org_router.post("/{agent_id}/upload")
+async def org_upload_file(org_id: str, agent_id: str, file: UploadFile = File(...)):
+    """Upload a file attachment for an agent (org-scoped)."""
+    agent = registry.get_agent(org_id, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id} in org {org_id}")
+    return await _handle_upload(agent, file)
 
 
 @org_router.get("/{agent_id}/history")

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useGitRepoStore, type CloneStrategy, type GitRepo } from "../../stores/gitRepoStore";
-import { useCredentialStore } from "../../stores/credentialStore";
+import { useState } from "react";
+import { useCreateRepo, useUpdateRepo, type GitRepo } from "../../hooks/useGitRepos";
+import { useCredentials } from "../../hooks/useCredentials";
 import { GitCredentialForm } from "./GitCredentialForm";
 
 const GIT_CREDENTIAL_TYPES = ["git_pat", "git_ssh_key", "git_app"];
@@ -11,9 +11,12 @@ interface Props {
   onSaved: () => void;
 }
 
+type CloneStrategy = "shallow" | "full" | "sparse";
+
 export function GitRepoForm({ repo, onClose, onSaved }: Props) {
-  const { createRepo, updateRepo } = useGitRepoStore();
-  const { credentials, fetchCredentials } = useCredentialStore();
+  const createRepo = useCreateRepo();
+  const updateRepo = useUpdateRepo();
+  const { data: credentials = [], refetch: refetchCredentials } = useCredentials();
 
   const [url, setUrl] = useState(repo?.url || "");
   const [name, setName] = useState(repo?.name || "");
@@ -23,10 +26,6 @@ export function GitRepoForm({ repo, onClose, onSaved }: Props) {
   const [sparsePaths, setSparsePaths] = useState(repo?.sparse_paths?.join("\n") || "");
   const [saving, setSaving] = useState(false);
   const [showCredForm, setShowCredForm] = useState(false);
-
-  useEffect(() => {
-    fetchCredentials();
-  }, [fetchCredentials]);
 
   const gitCredentials = credentials.filter((c) => GIT_CREDENTIAL_TYPES.includes(c.provider));
 
@@ -46,17 +45,22 @@ export function GitRepoForm({ repo, onClose, onSaved }: Props) {
         : [],
     };
 
-    const ok = repo
-      ? await updateRepo(repo.id, data)
-      : await createRepo(data);
-
-    setSaving(false);
-    if (ok) onSaved();
+    try {
+      if (repo) {
+        await updateRepo.mutateAsync({ repoId: repo.id, ...data });
+      } else {
+        await createRepo.mutateAsync(data);
+      }
+      setSaving(false);
+      onSaved();
+    } catch {
+      setSaving(false);
+    }
   };
 
   const handleCredentialCreated = () => {
     setShowCredForm(false);
-    fetchCredentials();
+    refetchCredentials();
   };
 
   if (showCredForm) {

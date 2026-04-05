@@ -2,7 +2,7 @@ import { memo, useMemo, type AnchorHTMLAttributes, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatMessage as ChatMessageType } from "../../stores/conversationStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { parseVaultDocLink } from "./docLinkUtils";
 import { DEFAULT_AGENT_COLOR } from "../../constants/theme";
 
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }: Props) {
-    const { agents } = useAgentStore();
+    const { data: agents = [] } = useAgents();
     const agent = agents.find((a) => a.id === message.agentId);
 
     const isUser = message.role === "user";
@@ -92,12 +92,52 @@ export const ChatMessage = memo(function ChatMessage({ message, onDocumentOpen }
                         )}
                     </div>
                 )}
-                <div className="prose prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                        {message.content}
-                    </ReactMarkdown>
-                </div>
+                {message.content && (
+                    <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                            {message.content}
+                        </ReactMarkdown>
+                    </div>
+                )}
+                {message.attachments && message.attachments.length > 0 && (
+                    <MessageAttachments attachments={message.attachments} />
+                )}
             </div>
         </div>
     );
 });
+
+function MessageAttachments({ attachments }: { attachments: NonNullable<ChatMessageType["attachments"]> }) {
+    return (
+        <div className="flex flex-wrap gap-2 mt-2">
+            {attachments.map((att, i) =>
+                att.type.startsWith("image/") && att.preview ? (
+                    <a
+                        key={`${att.name}-${i}`}
+                        href={att.preview}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                    >
+                        <img
+                            src={att.preview}
+                            alt={att.name}
+                            className="rounded-lg border border-base-300 max-w-[300px] max-h-[200px] object-contain"
+                        />
+                    </a>
+                ) : (
+                    <div
+                        key={`${att.name}-${i}`}
+                        className="flex items-center gap-1.5 bg-base-300/40 rounded-lg px-2.5 py-1.5 border border-base-300"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-base-content/60 shrink-0">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        <span className="text-xs text-base-content/80">{att.name}</span>
+                    </div>
+                )
+            )}
+        </div>
+    );
+}

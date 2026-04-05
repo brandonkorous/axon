@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import yaml
@@ -13,11 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from axon.config import settings
 from axon.db.engine import get_session
 from axon.db.crud import org_settings as org_settings_crud
-import axon.registry as registry
+from axon.logging import get_logger
 from axon.org import DiscordConfig, SlackConfig, TeamsConfig, ZoomConfig, OrgCommsConfig, OrgConfig, OrgType, scaffold_org, load_org_config
 from axon.org_templates import list_templates, get_template, scaffold_from_template
+import axon.registry as registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -290,7 +290,7 @@ async def update_org(
 
 
 @router.post("")
-async def create_org(body: CreateOrgRequest):
+async def create_org(body: CreateOrgRequest, session: AsyncSession = Depends(get_session)):
     """Create a new organization.
 
     If `template` is provided, scaffolds from that template with curated agents.
@@ -321,9 +321,45 @@ async def create_org(body: CreateOrgRequest):
     # Initialize the org's agents and register it live
     from axon.main import _init_org_agents
 
-    org_config = load_org_config(org_path)
-    org = _init_org_agents(org_path, org_config)
+    try:
+        org_config = load_org_config(org_path)
+        org = _init_org_agents(org_path, org_config)
+    except Exception as e:
+        # Scaffolding succeeded but init failed — clean up the directory
+        # so the user can retry without hitting "already exists"
+        import shutil
+        shutil.rmtree(org_path, ignore_errors=True)
+        logger.exception("Failed to initialize org '%s'", body.id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Organization scaffolded but failed to initialize: {e}",
+        )
+
     registry.org_registry[body.id] = org
+
+    # Rebuild plugin executors (mirrors startup logic)
+    if org_config.plugin_instances:
+        for agent in org.agent_registry.values():
+            if hasattr(agent, "_build_plugin_executor"):
+                agent._plugin_executor = agent._build_plugin_executor()
+                if agent._plugin_executor:
+                    agent.tool_executor._plugin_executor = agent._plugin_executor
+                    agent.tools = agent._build_tool_list()
+
+    # Seed org settings into central DB
+    await org_settings_crud.seed_from_config(
+        session,
+        org_id=body.id,
+        name=org_config.name,
+        description=org_config.description,
+        org_type=org_config.type.value if hasattr(org_config.type, "value") else str(org_config.type),
+        comms={
+            "require_approval": org_config.comms.require_approval,
+            "email_domain": org_config.comms.email_domain,
+            "email_signature": org_config.comms.email_signature,
+            "inbound_polling": org_config.comms.inbound_polling,
+        },
+    )
 
     return {
         "status": "created",

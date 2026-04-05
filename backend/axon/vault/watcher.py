@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -10,10 +9,12 @@ from typing import TYPE_CHECKING
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
+from axon.logging import get_logger
+
 if TYPE_CHECKING:
     from axon.vault.cache import VaultCache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Debounce window in seconds — batches rapid saves (Obsidian temp files, Windows duplicates)
 DEBOUNCE_SECONDS = 0.2

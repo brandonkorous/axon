@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
-
 import httpx
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 ZOOM_AUTH_URL = "https://zoom.us/oauth/token"
 ZOOM_API_BASE = "https://api.zoom.us/v2"

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from datetime import date
 from typing import Any, Callable, Awaitable
 
+from axon.logging import get_logger
 from fastapi import WebSocket
 
-logger = logging.getLogger("axon.commands")
+logger = get_logger("axon.commands")
 
 
 # ── Command registry ─────────────────────────────────────────────

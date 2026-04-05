@@ -1,5 +1,5 @@
 import { useCalendarStore, type CalendarSource } from "../../stores/calendarStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { monthLabel, weekLabel, weekGridDates } from "./calendarUtils";
 
 const SOURCE_OPTIONS: { value: string; label: string }[] = [
@@ -20,7 +20,7 @@ export function CalendarToolbar({ onNewTask }: { onNewTask: () => void }) {
     navigateBackward,
     navigateToday,
   } = useCalendarStore();
-  const agents = useAgentStore((s) => s.agents);
+  const { data: agents = [] } = useAgents();
 
   const periodLabel =
     viewMode === "month"

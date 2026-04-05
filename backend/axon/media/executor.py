@@ -12,11 +12,11 @@ a fortune. The local model extracts key points first.
 from __future__ import annotations
 
 import json
-import logging
 
+from axon.logging import get_logger
 from axon.media.config import MediaConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TRANSCRIPT_DIGEST_PROMPT = (
     "You are a media content analyst. Extract the key points, insights, and "

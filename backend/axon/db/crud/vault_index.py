@@ -5,7 +5,6 @@ Handles vault_entry + vault_link tables, FTS5 search, and full index rebuild.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +12,10 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from axon.db.agent_models import ConfidenceHistory, VaultEntry, VaultLink
+from axon.logging import get_logger
 from axon.vault.frontmatter import parse_frontmatter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CONTENT_PREVIEW_CHARS = 500
 
@@ -77,6 +77,61 @@ async def search_fts(
             "path": row[0], "name": row[1], "description": row[2],
             "tags": row[3], "confidence": row[4], "content_preview": row[5],
             "link_count": row[6], "backlink_count": row[7], "rank": row[8],
+        }
+        for row in result.fetchall()
+    ]
+
+
+async def list_entries(
+    session: AsyncSession,
+    type_filter: str | None = None,
+    branch_filter: str | None = None,
+    tags_filter: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """List vault entries with optional filters.
+
+    Returns list of dicts matching the search_fts result shape.
+    """
+    conditions: list[str] = []
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
+
+    if type_filter:
+        conditions.append("ve.type = :type_filter")
+        params["type_filter"] = type_filter
+
+    if branch_filter:
+        conditions.append("ve.path LIKE :branch_filter")
+        params["branch_filter"] = f"{branch_filter}/%"
+
+    if tags_filter:
+        for i, tag in enumerate(tags_filter.split(",")):
+            tag = tag.strip()
+            if tag:
+                key = f"tag_{i}"
+                conditions.append(f"ve.tags LIKE :tag_{i}")
+                params[key] = f"%{tag}%"
+
+    where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    sql = text(f"""
+        SELECT ve.path, ve.name, ve.description, ve.type, ve.tags,
+               ve.content_preview, ve.confidence, ve.status, ve.date,
+               ve.link_count, ve.backlink_count, ve.last_modified
+        FROM vault_entry ve
+        {where_clause}
+        ORDER BY ve.last_modified DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    result = await session.execute(sql, params)
+    return [
+        {
+            "path": row[0], "name": row[1], "description": row[2],
+            "type": row[3], "tags": row[4], "content_preview": row[5],
+            "confidence": row[6], "status": row[7], "date": row[8],
+            "link_count": row[9], "backlink_count": row[10],
+            "last_modified": str(row[11]) if row[11] else None,
         }
         for row in result.fetchall()
     ]

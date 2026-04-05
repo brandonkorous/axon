@@ -7,11 +7,12 @@ to its siblings, enabling associative recall.
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 MAX_BODY_CHARS = 200
 # Split target is ~75% of max to leave room for linking text

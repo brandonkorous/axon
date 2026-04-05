@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { useAgentStore } from "../../stores/agentStore";
-import { usePluginStore } from "../../stores/pluginStore";
-import { useSkillStore } from "../../stores/skillStore";
+import { useAgents } from "../../hooks/useAgents";
+import { usePlugins, useEnablePlugin, useDisablePlugin } from "../../hooks/usePlugins";
+import { useSkills, useEnableSkill, useDisableSkill } from "../../hooks/useSkills";
 import { orgApiPath } from "../../stores/orgStore";
 
 export function ExtensionsTab() {
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const advisors = agents.filter((a) => a.type !== "external");
 
   return (
@@ -22,13 +22,11 @@ export function ExtensionsTab() {
 // ---------------------------------------------------------------------------
 
 function SkillsSection({ agents }: { agents: { id: string; name: string }[] }) {
-  const { skills, loading, fetchSkills, enableSkill, disableSkill } = useSkillStore();
+  const { data: skills = [], isLoading } = useSkills();
+  const enableSkill = useEnableSkill();
+  const disableSkill = useDisableSkill();
   const [details, setDetails] = useState<Record<string, string[]>>({});
   const [toggling, setToggling] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchSkills();
-  }, [fetchSkills]);
 
   useEffect(() => {
     if (skills.length === 0) return;
@@ -53,9 +51,9 @@ function SkillsSection({ agents }: { agents: { id: string; name: string }[] }) {
   const handleToggle = async (skillName: string, agentId: string, enabled: boolean) => {
     setToggling(`${agentId}-${skillName}`);
     if (enabled) {
-      await disableSkill(skillName, agentId);
+      await disableSkill.mutateAsync({ skillName, agent_id: agentId });
     } else {
-      await enableSkill(skillName, agentId);
+      await enableSkill.mutateAsync({ skillName, agent_id: agentId });
     }
     try {
       const res = await fetch(orgApiPath(`skills/${skillName}`));
@@ -67,7 +65,7 @@ function SkillsSection({ agents }: { agents: { id: string; name: string }[] }) {
     setToggling(null);
   };
 
-  if (loading) return <LoadingRow label="skills" />;
+  if (isLoading) return <LoadingRow label="skills" />;
   if (skills.length === 0) return <EmptyRow title="Skills" />;
 
   return (
@@ -92,13 +90,11 @@ function SkillsSection({ agents }: { agents: { id: string; name: string }[] }) {
 // ---------------------------------------------------------------------------
 
 function PluginsSection({ agents }: { agents: { id: string; name: string }[] }) {
-  const { plugins, loading, fetchPlugins, enablePlugin, disablePlugin } = usePluginStore();
+  const { data: plugins = [], isLoading } = usePlugins();
+  const enablePlugin = useEnablePlugin();
+  const disablePlugin = useDisablePlugin();
   const [details, setDetails] = useState<Record<string, string[]>>({});
   const [toggling, setToggling] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchPlugins();
-  }, [fetchPlugins]);
 
   useEffect(() => {
     if (plugins.length === 0) return;
@@ -123,9 +119,9 @@ function PluginsSection({ agents }: { agents: { id: string; name: string }[] }) 
   const handleToggle = async (pluginName: string, agentId: string, enabled: boolean) => {
     setToggling(`${agentId}-${pluginName}`);
     if (enabled) {
-      await disablePlugin(pluginName, agentId);
+      await disablePlugin.mutateAsync({ pluginName, agent_id: agentId });
     } else {
-      await enablePlugin(pluginName, agentId);
+      await enablePlugin.mutateAsync({ pluginName, agent_id: agentId });
     }
     try {
       const res = await fetch(orgApiPath(`plugins/${pluginName}`));
@@ -137,7 +133,7 @@ function PluginsSection({ agents }: { agents: { id: string; name: string }[] }) 
     setToggling(null);
   };
 
-  if (loading) return <LoadingRow label="plugins" />;
+  if (isLoading) return <LoadingRow label="plugins" />;
   if (plugins.length === 0) return <EmptyRow title="Plugins" />;
 
   return (

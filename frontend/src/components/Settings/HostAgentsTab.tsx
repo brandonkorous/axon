@@ -1,18 +1,20 @@
-import { useEffect, useState } from "react";
-import { useHostAgentStore, type HostAgent } from "../../stores/hostAgentStore";
+import { useState } from "react";
+import {
+  useHostAgents,
+  useManagerStatus,
+  useRegisterHostAgent,
+  useDeleteHostAgent,
+  useStartHostAgent,
+  useStopHostAgent,
+  type HostAgent,
+} from "../../hooks/useHostAgents";
 import { orgApiPath } from "../../stores/orgStore";
 
 export function HostAgentsTab() {
-  const { agents, loading, managerRunning, hostOrgsPath, fetchAgents, fetchManagerStatus, checkHealth } =
-    useHostAgentStore();
-
-  useEffect(() => {
-    fetchManagerStatus();
-    fetchAgents().then(() => {
-      const { agents: current } = useHostAgentStore.getState();
-      current.forEach((a) => checkHealth(a.id));
-    });
-  }, [fetchAgents, fetchManagerStatus, checkHealth]);
+  const { data: agents = [], isLoading: loading } = useHostAgents();
+  const { data: managerData } = useManagerStatus();
+  const managerRunning = managerData?.manager_running ?? false;
+  const hostOrgsPath = managerData?.host_orgs_path ?? "";
 
   return (
     <div className="space-y-6">
@@ -107,24 +109,20 @@ function nextPort(agents: HostAgent[]): number {
 }
 
 function HostAgentTable({ agents, managerRunning }: { agents: HostAgent[]; managerRunning: boolean }) {
-  const { deleteAgent, startAgent, stopAgent } = useHostAgentStore();
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [toggling, setToggling] = useState<string | null>(null);
+  const deleteAgent = useDeleteHostAgent();
+  const startAgent = useStartHostAgent();
+  const stopAgent = useStopHostAgent();
 
   const handleRemove = async (id: string) => {
-    setDeleting(id);
-    await deleteAgent(id);
-    setDeleting(null);
+    await deleteAgent.mutateAsync(id);
   };
 
   const handleToggle = async (agent: HostAgent) => {
-    setToggling(agent.id);
     if (agent.status === "running") {
-      await stopAgent(agent.id);
+      await stopAgent.mutateAsync(agent.id);
     } else {
-      await startAgent(agent.id);
+      await startAgent.mutateAsync(agent.id);
     }
-    setToggling(null);
   };
 
   const managerTooltip = !managerRunning ? "Start the Host Agent Manager first" : undefined;
@@ -163,27 +161,27 @@ function HostAgentTable({ agents, managerRunning }: { agents: HostAgent[]; manag
                   <button
                     className="btn btn-xs btn-error btn-outline"
                     onClick={() => handleToggle(a)}
-                    disabled={!managerRunning || toggling === a.id}
+                    disabled={!managerRunning || stopAgent.isPending}
                     title={managerTooltip}
                   >
-                    {toggling === a.id ? "..." : "Stop"}
+                    {stopAgent.isPending ? "..." : "Stop"}
                   </button>
                 ) : (
                   <button
                     className="btn btn-xs btn-success btn-outline"
                     onClick={() => handleToggle(a)}
-                    disabled={!managerRunning || toggling === a.id}
+                    disabled={!managerRunning || startAgent.isPending}
                     title={managerTooltip}
                   >
-                    {toggling === a.id ? "..." : "Start"}
+                    {startAgent.isPending ? "..." : "Start"}
                   </button>
                 )}
                 <button
                   className="btn btn-ghost btn-xs text-error"
                   onClick={() => handleRemove(a.id)}
-                  disabled={deleting === a.id}
+                  disabled={deleteAgent.isPending}
                 >
-                  {deleting === a.id ? "..." : "Remove"}
+                  {deleteAgent.isPending ? "..." : "Remove"}
                 </button>
               </td>
             </tr>
@@ -195,13 +193,12 @@ function HostAgentTable({ agents, managerRunning }: { agents: HostAgent[]; manag
 }
 
 function AddHostAgentForm({ nextPort }: { nextPort: number }) {
-  const { registerAgent } = useHostAgentStore();
+  const registerAgent = useRegisterHostAgent();
   const [name, setName] = useState("");
   const [id, setId] = useState("");
   const [path, setPath] = useState("");
   const [port, setPort] = useState(nextPort);
   const [executables, setExecutables] = useState("");
-  const [saving, setSaving] = useState(false);
   const [idTouched, setIdTouched] = useState(false);
 
   const autoId = name
@@ -213,18 +210,18 @@ function AddHostAgentForm({ nextPort }: { nextPort: number }) {
 
   const handleSave = async () => {
     if (!effectiveId || !name) return;
-    setSaving(true);
     const execList = executables.split(",").map((e) => e.trim()).filter(Boolean);
-    const ok = await registerAgent({ id: effectiveId, name, path, port, executables: execList });
-    if (ok) {
+    try {
+      await registerAgent.mutateAsync({ id: effectiveId, name, path, port, executables: execList });
       setName("");
       setId("");
       setPath("");
       setPort(nextPort + 1);
       setExecutables("");
       setIdTouched(false);
+    } catch {
+      // mutation error handled by TQ
     }
-    setSaving(false);
   };
 
   return (
@@ -273,8 +270,8 @@ function AddHostAgentForm({ nextPort }: { nextPort: number }) {
           onChange={(e) => setExecutables(e.target.value)}
         />
       </div>
-      <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || !name}>
-        {saving ? "Saving..." : "Save"}
+      <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={registerAgent.isPending || !name}>
+        {registerAgent.isPending ? "Saving..." : "Save"}
       </button>
     </div>
   );

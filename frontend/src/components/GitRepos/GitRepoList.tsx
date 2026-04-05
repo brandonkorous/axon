@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useGitRepoStore, type GitRepo } from "../../stores/gitRepoStore";
-import { useCredentialStore } from "../../stores/credentialStore";
+import { useState } from "react";
+import { useGitRepos, useDeleteRepo, type GitRepo } from "../../hooks/useGitRepos";
+import { useCredentials } from "../../hooks/useCredentials";
 import { GitRepoForm } from "./GitRepoForm";
 
 const STRATEGY_BADGE: Record<string, string> = {
@@ -10,19 +10,15 @@ const STRATEGY_BADGE: Record<string, string> = {
 };
 
 export function GitRepoList() {
-  const { repos, loading, fetchRepos, deleteRepo } = useGitRepoStore();
-  const { credentials, fetchCredentials } = useCredentialStore();
+  const { data: repos = [], isLoading: loading } = useGitRepos();
+  const { data: credentials = [] } = useCredentials();
+  const deleteRepo = useDeleteRepo();
   const [editingRepo, setEditingRepo] = useState<GitRepo | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRepos();
-    fetchCredentials();
-  }, [fetchRepos, fetchCredentials]);
-
   const handleDelete = async (id: string) => {
-    await deleteRepo(id);
+    await deleteRepo.mutateAsync(id);
     setConfirmDelete(null);
   };
 

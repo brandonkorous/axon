@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from axon.logging import get_logger
 from axon.voice_catalog import (
     download_voice,
     fetch_catalog,
@@ -14,7 +13,7 @@ from axon.voice_catalog import (
     list_voices_summary,
 )
 
-logger = logging.getLogger("axon.voices")
+logger = get_logger("axon.voices")
 
 router = APIRouter()
 

@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import axon.registry as registry
 from axon.config import AgentType, PersonaConfig, _load_agent_yaml, settings
+from axon.logging import get_logger
 from axon.org import ensure_huddle
+import axon.registry as registry
 from axon.vault.scaffold import scaffold_vault
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 
@@ -175,6 +175,10 @@ async def approve_recruitment(org_id: str, task_path: str, body: ApproveRequest)
 
         # Auto-create huddle if this is the first advisor
         ensure_huddle(org, settings.axon_orgs_dir)
+
+        # Register with scheduler for proactive checks
+        from axon.scheduler import scheduler
+        scheduler.register_agent(org_id, agent_id, agent)
 
         logger.info("Agent '%s' created and loaded in org '%s'", agent_id, org_id)
     except Exception as e:

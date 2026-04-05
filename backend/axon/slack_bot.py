@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from slack_bolt.async_app import AsyncApp
@@ -11,12 +10,13 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_sdk.web.async_client import AsyncWebClient
 
 import axon.registry as registry
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.agents.agent import Agent
     from axon.org import OrgInstance
 
-logger = logging.getLogger("axon.slack")
+logger = get_logger("axon.slack")
 
 MAX_SLACK_LENGTH = 3000  # Slack's practical message limit
 

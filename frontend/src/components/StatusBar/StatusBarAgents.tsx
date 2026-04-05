@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents, useLifecycleAction, useStartRunner, useStopRunner } from "../../hooks/useAgents";
+import type { AgentInfo } from "../../hooks/useAgents";
 import { useAgentRuntimeStore } from "../../stores/agentRuntimeStore";
-import { useHostAgentStore } from "../../stores/hostAgentStore";
+import { useHostAgents } from "../../hooks/useHostAgents";
 import { StatusBadge } from "../AgentControls/AgentControls";
 import { PluginDots } from "../AgentControls/PluginBadges";
 import { StatusBarPopover } from "./StatusBarPopover";
-import type { AgentInfo } from "../../stores/agentStore";
 
 function Dot({ color, pulse }: { color: string; pulse?: boolean }) {
     return (
@@ -44,7 +44,7 @@ function StatusBarPluginBadges({ agent }: { agent: AgentInfo }) {
 }
 
 function HostAgentIndicator({ agent }: { agent: AgentInfo }) {
-    const hostAgents = useHostAgentStore((s) => s.agents);
+    const { data: hostAgents = [] } = useHostAgents();
     if ((!hasShellAccess(agent) && !hasSandbox(agent)) || hostAgents.length === 0) return null;
     const ok = hostAgents.some((ha) => ha.status === "running");
     return (
@@ -56,7 +56,8 @@ function HostAgentIndicator({ agent }: { agent: AgentInfo }) {
 }
 
 function RunnerControls({ agent }: { agent: AgentInfo }) {
-    const { startRunner, stopRunner } = useAgentStore();
+    const { mutate: startRunner } = useStartRunner();
+    const { mutate: stopRunner } = useStopRunner();
     const status = agent.runner_status ?? "unknown";
 
     return (
@@ -99,8 +100,8 @@ export function StatusBarAgents({
     activeCount: number;
     thinkingCount: number;
 }) {
-    const agents = useAgentStore((s) => s.agents);
-    const { lifecycleAction } = useAgentStore();
+    const { data: agents = [] } = useAgents();
+    const { mutate: lifecycleAction } = useLifecycleAction();
     const runtimeAgents = useAgentRuntimeStore((s) => s.agents);
 
     const visible = agents.filter((a) => a.id !== "axon" && a.type !== "external");
@@ -168,7 +169,7 @@ export function StatusBarAgents({
                                 {showRunner && <RunnerControls agent={agent} />}
                                 {status === "active" && (
                                     <button
-                                        onClick={() => lifecycleAction(agent.id, "pause")}
+                                        onClick={() => lifecycleAction({ agentId: agent.id, action: "pause" })}
                                         className="btn btn-warning btn-soft btn-xs"
                                     >
                                         Pause
@@ -176,7 +177,7 @@ export function StatusBarAgents({
                                 )}
                                 {status === "paused" && (
                                     <button
-                                        onClick={() => lifecycleAction(agent.id, "resume")}
+                                        onClick={() => lifecycleAction({ agentId: agent.id, action: "resume" })}
                                         className="btn btn-success btn-soft btn-xs"
                                     >
                                         Resume
@@ -184,7 +185,7 @@ export function StatusBarAgents({
                                 )}
                                 {status === "disabled" && (
                                     <button
-                                        onClick={() => lifecycleAction(agent.id, "enable")}
+                                        onClick={() => lifecycleAction({ agentId: agent.id, action: "enable" })}
                                         className="btn btn-success btn-soft btn-xs"
                                     >
                                         Enable

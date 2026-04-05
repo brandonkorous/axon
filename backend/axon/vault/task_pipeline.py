@@ -8,14 +8,14 @@ Replaces agent-facing task tools with automatic pipeline:
 from __future__ import annotations
 
 import json
-import logging
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from axon.logging import get_logger
 from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 STATUS_ICONS = {
     "pending": "⏳", "in_progress": "🔄", "done": "✅",

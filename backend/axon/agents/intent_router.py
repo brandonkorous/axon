@@ -39,6 +39,7 @@ TOOL_GROUP_RESEARCH = "research"
 TOOL_GROUP_BROWSER = "browser"
 TOOL_GROUP_MEDIA = "media"
 TOOL_GROUP_PLUGINS = "plugins"
+TOOL_GROUP_ORG_SEARCH = "org_search"
 
 # Always included — minimal baseline
 ALWAYS_INCLUDED: list[str] = []
@@ -160,7 +161,7 @@ _INTENT_RULES: list[dict[str, Any]] = [
             r"\b(research|look up|search|find out|investigate|explore)\b",
             r"\b(what is|how does|compare|benchmark|evaluate)\b",
         ],
-        "tool_groups": [TOOL_GROUP_WEB, TOOL_GROUP_RESEARCH, TOOL_GROUP_REASONING],
+        "tool_groups": [TOOL_GROUP_WEB, TOOL_GROUP_RESEARCH, TOOL_GROUP_REASONING, TOOL_GROUP_PLUGINS],
         "cognitive_patterns": ["build_vs_buy"],
         "confidence": 0.6,
     },

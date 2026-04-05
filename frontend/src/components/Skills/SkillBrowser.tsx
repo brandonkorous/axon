@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSkillStore, type SkillInfo } from "../../stores/skillStore";
+import { useSkills } from "../../hooks/useSkills";
+import type { SkillInfo } from "../../stores/skillStore";
 import { SkillDetail } from "./SkillDetail";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -14,12 +15,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function SkillBrowser() {
   const navigate = useNavigate();
-  const { skills, loading, fetchSkills } = useSkillStore();
+  const { data: skills = [], isLoading } = useSkills();
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchSkills();
-  }, [fetchSkills]);
 
   if (selectedSkill) {
     return <SkillDetail skillName={selectedSkill} onBack={() => setSelectedSkill(null)} />;
@@ -42,7 +39,7 @@ export function SkillBrowser() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        {loading && skills.length === 0 ? (
+        {isLoading && skills.length === 0 ? (
           <div className="flex items-center justify-center h-32">
             <span className="loading loading-spinner loading-md text-primary" />
           </div>

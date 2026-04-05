@@ -10,13 +10,13 @@ extractions are split into linked fragments for associative recall.
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from axon.agents.provider import complete
 from axon.config import LearningConfig
+from axon.logging import get_logger
 
 if TYPE_CHECKING:
     from axon.usage import UsageTracker
@@ -24,7 +24,7 @@ from axon.vault.memory_prompts import PROCESS_TURN_PROMPT, parse_llm_json
 from axon.vault.memory_splitter import split_memory
 from axon.vault.vault import VaultManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def extract_learnings(

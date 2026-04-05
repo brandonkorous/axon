@@ -11,7 +11,8 @@ model:
 
 vault:
   root_file: second-brain.md
-  read_only_mounts: {{ADVISOR_MOUNTS}}
+  read_only_mounts:
+    {{ADVISOR_MOUNTS}}
   writable_paths:
     - "."
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -20,6 +19,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from axon.agents.provider import stream_completion, complete
 from axon.agents.conversation import Conversation, ConversationManager
 from axon.config import PersonaConfig
+from axon.logging import get_logger
 from axon.vault.navigator import MemoryNavigator
 from axon.vault.vault import VaultManager
 import axon.ws_registry as ws_registry
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from axon.agents.agent import Agent
     from axon.usage import UsageTracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Speaker detection: matches **Name:** or **Name → Name:**

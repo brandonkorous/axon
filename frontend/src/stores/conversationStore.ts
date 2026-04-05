@@ -1,5 +1,13 @@
 import { create } from "zustand";
 
+export interface Attachment {
+  path: string;    // server path from upload
+  name: string;    // original filename
+  type: string;    // MIME type
+  size: number;    // bytes
+  preview?: string; // data URL for images (used for display in both input and messages)
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -9,6 +17,7 @@ export interface ChatMessage {
   target?: string; // For huddle: "marcus → raj"
   timestamp: number;
   metadata?: Record<string, unknown>;
+  attachments?: Attachment[];
 }
 
 export interface ConversationMeta {

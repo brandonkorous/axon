@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import importlib
-import logging
 from pathlib import Path
 from typing import Any
 
+from axon.logging import get_logger
 from axon.plugins.base import BasePlugin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Global registry: plugin_name → plugin class
 PLUGIN_REGISTRY: dict[str, type[BasePlugin]] = {}

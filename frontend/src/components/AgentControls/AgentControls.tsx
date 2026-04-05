@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useAgentStore, AgentInfo, LifecycleState } from "../../stores/agentStore";
+import { useLifecycleAction, useDeleteAgent } from "../../hooks/useAgents";
+import type { AgentInfo, LifecycleState } from "../../hooks/useAgents";
 import { PersonaEditor } from "./PersonaEditor";
 
 const STATUS_VARIANT: Record<string, string> = {
@@ -33,7 +34,8 @@ export function AgentControls({
   lifecycle: LifecycleState;
   agent?: AgentInfo;
 }) {
-  const { lifecycleAction, deleteAgent } = useAgentStore();
+  const { mutateAsync: lifecycleAction } = useLifecycleAction();
+  const { mutateAsync: deleteAgent } = useDeleteAgent();
   const [showStrategy, setShowStrategy] = useState(false);
   const [showPersona, setShowPersona] = useState(false);
   const [strategyPrompt, setStrategyPrompt] = useState(
@@ -57,7 +59,7 @@ export function AgentControls({
         <div className="flex flex-wrap gap-2">
           {lifecycle.status === "active" && (
             <button
-              onClick={() => lifecycleAction(agentId, "pause")}
+              onClick={() => lifecycleAction({ agentId, action: "pause" })}
               className="btn btn-soft btn-warning btn-xs"
             >
               Pause
@@ -65,7 +67,7 @@ export function AgentControls({
           )}
           {lifecycle.status === "paused" && (
             <button
-              onClick={() => lifecycleAction(agentId, "resume")}
+              onClick={() => lifecycleAction({ agentId, action: "resume" })}
               className="btn btn-soft btn-success btn-xs"
             >
               Resume ({lifecycle.queued_messages} queued)
@@ -73,7 +75,7 @@ export function AgentControls({
           )}
           {lifecycle.status === "active" && (
             <button
-              onClick={() => lifecycleAction(agentId, "disable")}
+              onClick={() => lifecycleAction({ agentId, action: "disable" })}
               className="btn btn-soft btn-ghost btn-xs"
             >
               Disable
@@ -81,7 +83,7 @@ export function AgentControls({
           )}
           {lifecycle.status === "disabled" && (
             <button
-              onClick={() => lifecycleAction(agentId, "enable")}
+              onClick={() => lifecycleAction({ agentId, action: "enable" })}
               className="btn btn-soft btn-success btn-xs"
             >
               Enable
@@ -118,10 +120,10 @@ export function AgentControls({
             </button>
           ) : (
             <span className="flex items-center gap-1">
-              <span className="text-xs text-error">Terminate this agent?</span>
+              <span className="text-xs text-error">Terminate this agent? Active tasks will be stopped and unsaved work will be lost.</span>
               <button
                 onClick={() => {
-                  lifecycleAction(agentId, "terminate");
+                  lifecycleAction({ agentId, action: "terminate" });
                   setConfirmTerminate(false);
                 }}
                 className="btn btn-error btn-xs"
@@ -153,11 +155,12 @@ export function AgentControls({
             </button>
           ) : (
             <span className="flex items-center gap-1">
-              <span className="text-xs text-error font-semibold">Delete vault and all data?</span>
+              <span className="text-xs text-error font-semibold">Permanently delete this agent's vault? All memories, notes, and stored data will be lost. This can't be undone.</span>
               <button
                 onClick={() => {
                   deleteAgent(agentId);
                   setConfirmDelete(false);
+
                 }}
                 className="btn btn-error btn-xs"
               >
@@ -187,9 +190,9 @@ export function AgentControls({
           <div className="flex gap-2">
             <button
               onClick={() => {
-                lifecycleAction(agentId, "strategy-override", {
+                lifecycleAction({ agentId, action: "strategy-override", body: {
                   prompt: strategyPrompt,
-                });
+                } });
                 setShowStrategy(false);
               }}
               disabled={!strategyPrompt.trim()}
@@ -200,7 +203,7 @@ export function AgentControls({
             {lifecycle.strategy_override && (
               <button
                 onClick={() => {
-                  lifecycleAction(agentId, "strategy-override-clear");
+                  lifecycleAction({ agentId, action: "strategy-override-clear" });
                   setStrategyPrompt("");
                   setShowStrategy(false);
                 }}

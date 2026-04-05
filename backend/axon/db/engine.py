@@ -5,7 +5,6 @@ Supports SQLite (default) and Postgres via DATABASE_URL env var.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -16,7 +15,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-logger = logging.getLogger(__name__)
+from axon.logging import get_logger
+
+logger = get_logger(__name__)
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None

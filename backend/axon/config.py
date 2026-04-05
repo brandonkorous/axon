@@ -22,6 +22,8 @@ from axon.media.config import MediaConfig  # noqa: E402
 from axon.reasoning.config import ReasoningConfig  # noqa: E402 — no circular import risk (lazy __init__)
 from axon.web.config import WebConfig  # noqa: E402
 
+# Use stdlib logger here — config.py is imported before structlog is configured.
+# Once structlog is configured, these logs still flow through the structlog pipeline.
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +44,7 @@ class Settings(BaseSettings):
     default_model: str = "anthropic/claude-sonnet-4-20250514"
     axon_orgs_dir: str = "./orgs"  # Multi-org root — all orgs, vaults, and data
     axon_log_level: str = "INFO"  # Logging level (DEBUG, INFO, WARNING, ERROR)
+    axon_log_format: str = "console"  # "console" (dev) or "json" (production)
     database_url: str = ""  # Empty → auto-derive SQLite from axon_orgs_dir
     db_encryption_key: str = ""  # Fernet key for encrypting credentials at rest
     resend_api_key: str = ""  # Resend API key for transactional email
@@ -148,6 +151,10 @@ class LearningConfig(BaseModel):
     deep_consolidation_batch_size: int = 10  # entries per LLM call
     deep_consolidation_min_entries: int = 5  # skip if fewer active entries
     archive_confidence_threshold: float = 0.2  # auto-archive below this
+
+    # Embedding / vector search
+    embedding_model: str = "all-MiniLM-L6-v2"  # sentence-transformers model
+    embedding_dimensions: int = 384  # must match model output dimensions
 
     # Memory tiers
     short_term_ttl_days: int = 7  # short-term memories expire after this

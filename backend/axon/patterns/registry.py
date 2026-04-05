@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import yaml
 
+from axon.logging import get_logger
 from axon.patterns.models import CognitivePattern
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Global registries
 PATTERN_REGISTRY: dict[str, CognitivePattern] = {}  # name -> definition

@@ -9,7 +9,7 @@ import { AgentActivityBadge } from "../Conversation/AgentActivityBadge";
 import { ThinkingIndicator } from "../Sparkle/ThinkingIndicator";
 import { AgentControls, StatusBadge } from "../AgentControls/AgentControls";
 import { useConversationStore } from "../../stores/conversationStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { useAgentRuntimeStore, useAgentRuntime } from "../../stores/agentRuntimeStore";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
@@ -20,7 +20,7 @@ const AGENT_ID = "axon";
 
 export function AxonView() {
   const { messages, addMessage, appendToLast, replaceLastMessage } = useConversationStore();
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const [activeAgent, setActiveAgent] = useState<string>("axon");
   const runtime = useAgentRuntime(activeAgent);
   const messagesEndRef = useRef<HTMLDivElement>(null);

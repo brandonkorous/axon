@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { RegisteredModel, useModelStore } from "../../stores/modelStore";
+import { useModels, useUnregisterModel, type RegisteredModel } from "../../hooks/useModels";
 
 export function RegisteredModelsList() {
-  const { models, unregisterModel } = useModelStore();
+  const { data } = useModels();
+  const unregisterModel = useUnregisterModel();
+  const models = data?.registered_models ?? [];
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [removing, setRemoving] = useState(false);
 
   const handleRemove = async (modelId: string) => {
-    setRemoving(true);
-    await unregisterModel(modelId);
-    setRemoving(false);
+    await unregisterModel.mutateAsync(modelId);
     setConfirmId(null);
   };
 
@@ -39,7 +38,7 @@ export function RegisteredModelsList() {
               key={m.id}
               model={m}
               confirming={confirmId === m.id}
-              removing={removing && confirmId === m.id}
+              removing={unregisterModel.isPending && confirmId === m.id}
               onConfirm={() => setConfirmId(m.id)}
               onCancel={() => setConfirmId(null)}
               onRemove={() => handleRemove(m.id)}

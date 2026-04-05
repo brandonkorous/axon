@@ -6,7 +6,6 @@ Engines are lazily created and cached by vault path.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import (
@@ -17,8 +16,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from axon.db.agent_models import AgentBase
+from axon.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache: vault_path → (engine, session_factory)
 _agent_engines: dict[str, tuple[AsyncEngine, async_sessionmaker[AsyncSession]]] = {}

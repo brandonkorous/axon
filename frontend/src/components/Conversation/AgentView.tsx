@@ -11,24 +11,35 @@ import { AgentControls, StatusBadge } from "../AgentControls/AgentControls";
 import { PluginBadges, PluginDetailSection } from "../AgentControls/PluginBadges";
 import { ToolbeltSidebar } from "../AgentControls/ToolbeltSidebar";
 import { useConversationStore } from "../../stores/conversationStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useAgents } from "../../hooks/useAgents";
 import { useAgentRuntimeStore, useAgentRuntime } from "../../stores/agentRuntimeStore";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useConversationSwitching } from "../../hooks/useConversationSwitching";
+import { useAttachments } from "../../hooks/useAttachments";
 import { playAudioBase64 } from "../../hooks/useVoice";
 import { orgApiPath } from "../../stores/orgStore";
 import { DocumentDrawer } from "../Documents/DocumentDrawer";
 
-export function AgentView() {
-  const { agentId } = useParams<{ agentId: string }>();
+export function AgentView({ agentId: propAgentId }: { agentId?: string } = {}) {
+  const { agentId: paramAgentId } = useParams<{ agentId: string }>();
+  const agentId = propAgentId || paramAgentId;
   const { messages, addMessage, appendToLast, replaceLastMessage } = useConversationStore();
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const runtime = useAgentRuntime(agentId || "");
   const [openDocPath, setOpenDocPath] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasGreetedRef = useRef<string | null>(null);
   const historyLoadedRef = useRef(false);
   const switchedHandlerRef = useRef<(data: Record<string, unknown>) => void>(() => {});
+
+  const {
+    attachments,
+    addFiles,
+    removeAttachment,
+    clearAttachments,
+    uploading,
+    uploadAttachments,
+  } = useAttachments();
 
   const agent = agents.find((a) => a.id === agentId);
   const conversationMessages = messages[agentId || ""] || [];
@@ -255,15 +266,37 @@ export function AgentView() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversationMessages.length, runtime.thinking]);
 
-  const handleSend = (content: string) => {
+  const handleSend = async (content: string) => {
     if (!agentId) return;
+
+    let uploadedAttachments: typeof attachments | undefined;
+    if (attachments.length > 0) {
+      try {
+        uploadedAttachments = await uploadAttachments(agentId);
+      } catch {
+        addMessage(agentId, {
+          id: `err-upload-${Date.now()}`,
+          role: "system",
+          content: "Failed to upload attachments.",
+          timestamp: Date.now(),
+        });
+        return;
+      }
+    }
+
     addMessage(agentId, {
       id: `user-${Date.now()}`,
       role: "user",
       content,
       timestamp: Date.now(),
+      attachments: uploadedAttachments,
     });
-    send({ type: "message", content });
+    send({
+      type: "message",
+      content,
+      ...(uploadedAttachments ? { attachments: uploadedAttachments } : {}),
+    });
+    clearAttachments();
   };
 
   const handleCommand = (name: string, args: string) => {
@@ -377,6 +410,10 @@ export function AgentView() {
             agents={agents}
             placeholder={`Message ${agent.name}...`}
             disabled={!connected}
+            attachments={attachments}
+            onFilesAdded={addFiles}
+            onRemoveAttachment={removeAttachment}
+            uploading={uploading}
           />
         </div>
 

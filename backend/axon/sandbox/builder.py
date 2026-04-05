@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
+from axon.logging import get_logger
 from axon.sandbox.types import (
     SANDBOX_PARENTS,
     SandboxType,
@@ -17,7 +17,7 @@ from axon.sandbox.types import (
     image_name,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 IMAGES_DIR = Path(__file__).parent / "images"
 

@@ -29,7 +29,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "3000:3000"
+      - "8001:3000"
     depends_on:
       - backend
 
@@ -73,17 +73,17 @@ services:
       - |
         echo "Waiting for Ollama to be ready..."
         until curl -s http://ollama:11434/api/tags > /dev/null 2>&1; do sleep 1; done
-        echo "Pulling navigator model (${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b})..."
-        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b}\"}" | head -1
-        echo "Pulling memory model (${OLLAMA_MEMORY_MODEL:-llama3:8b})..."
-        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MEMORY_MODEL:-llama3:8b}\"}" | head -1
-        echo "Pulling reasoning model (${OLLAMA_MODEL:-qwen2.5:14b})..."
-        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MODEL:-qwen2.5:14b}\"}" | head -1
+        echo "Pulling navigator model (${OLLAMA_NAVIGATOR_MODEL:-gemma4:26b})..."
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_NAVIGATOR_MODEL:-gemma4:26b}\"}" | head -1
+        echo "Pulling memory model (${OLLAMA_MEMORY_MODEL:-gemma4:26b})..."
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MEMORY_MODEL:-gemma4:26b}\"}" | head -1
+        echo "Pulling reasoning model (${OLLAMA_MODEL:-gemma4:26b})..."
+        curl -s http://ollama:11434/api/pull -d "{\"name\":\"${OLLAMA_MODEL:-gemma4:26b}\"}" | head -1
         echo "Models ready."
     environment:
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:14b}
-      - OLLAMA_NAVIGATOR_MODEL=${OLLAMA_NAVIGATOR_MODEL:-qwen2.5:7b}
-      - OLLAMA_MEMORY_MODEL=${OLLAMA_MEMORY_MODEL:-llama3:8b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma4:26b}
+      - OLLAMA_NAVIGATOR_MODEL=${OLLAMA_NAVIGATOR_MODEL:-gemma4:26b}
+      - OLLAMA_MEMORY_MODEL=${OLLAMA_MEMORY_MODEL:-gemma4:26b}
 
 volumes:
   ollama_models:

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useIssueStore, Issue } from "../../stores/issueStore";
-import { useAgentStore } from "../../stores/agentStore";
+import { useIssues, useCreateIssue, useUpdateIssue, useAddComment, type Issue } from "../../hooks/useIssues";
+import { useAgents } from "../../hooks/useAgents";
 import { PRIORITY_BADGE, STATUS_BADGE } from "../../constants/badges";
 
 
@@ -55,7 +55,7 @@ function IssueDetail({
   onClose: () => void;
   onStatusChange: (status: string) => void;
 }) {
-  const { addComment } = useIssueStore();
+  const addCommentMutation = useAddComment();
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState(issue.comments || []);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -66,7 +66,7 @@ function IssueDetail({
 
   const handleComment = async () => {
     if (!comment.trim()) return;
-    await addComment(issue.id, comment);
+    await addCommentMutation.mutateAsync({ issueId: issue.id, content: comment });
     setComments([
       ...comments,
       { author: "user", type: "comment", created_at: new Date().toISOString(), body: comment },
@@ -172,7 +172,7 @@ function CreateIssueModal({
     labels: string[];
   }) => void;
 }) {
-  const { agents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -258,15 +258,13 @@ function CreateIssueModal({
 }
 
 export function IssueListView() {
-  const { issues, loading, error, fetchIssues, updateIssue, createIssue } =
-    useIssueStore();
+  const { data: issues = [], isLoading: loading, isError: error, refetch: fetchIssues } =
+    useIssues();
+  const createIssueMutation = useCreateIssue();
+  const updateIssueMutation = useUpdateIssue();
   const [selected, setSelected] = useState<Issue | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("");
-
-  useEffect(() => {
-    fetchIssues();
-  }, [fetchIssues]);
 
   const filtered = statusFilter
     ? issues.filter((i) => i.status === statusFilter)
@@ -274,7 +272,7 @@ export function IssueListView() {
 
   const handleStatusChange = (status: string) => {
     if (selected) {
-      updateIssue(selected.path, { status });
+      updateIssueMutation.mutate({ path: selected.path, data: { status } });
       setSelected({ ...selected, status: status as Issue["status"] });
     }
   };
@@ -309,7 +307,7 @@ export function IssueListView() {
       ) : error ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-sm text-error mb-2">Could not load issues. Check your connection and try again.</p>
+            <p className="text-sm text-error mb-2">Issues aren't loading right now. Try refreshing the page.</p>
             <button onClick={() => fetchIssues()} className="link link-accent text-xs">Try again</button>
           </div>
         </div>
@@ -351,7 +349,7 @@ export function IssueListView() {
       {showCreate && (
         <CreateIssueModal
           onClose={() => setShowCreate(false)}
-          onCreate={(data) => createIssue(data)}
+          onCreate={(data) => createIssueMutation.mutate(data)}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AgentInfo, useAgentStore } from "../../stores/agentStore";
+import { useAgents, useUpdatePersona } from "../../hooks/useAgents";
+import type { AgentInfo } from "../../hooks/useAgents";
 import { PluginBadges, PluginDetailSection } from "../AgentControls/PluginBadges";
 import { orgApiPath } from "../../stores/orgStore";
 import { AgentModelOverrides } from "./AgentModelOverrides";
@@ -10,7 +11,7 @@ interface DelegationConfig {
 }
 
 export function AgentsTab() {
-  const { agents, updatePersona, fetchAgents } = useAgentStore();
+  const { data: agents = [] } = useAgents();
   const advisors = agents.filter((a) => a.type !== "external");
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -25,7 +26,7 @@ export function AgentsTab() {
             allAgents={advisors}
             expanded={expanded === agent.id}
             onToggle={() => setExpanded(expanded === agent.id ? null : agent.id)}
-            onUpdate={async () => { await fetchAgents(); }}
+            onUpdate={async () => {}}
           />
         ))}
       </div>
@@ -46,7 +47,7 @@ function AgentRow({
   onToggle: () => void;
   onUpdate: () => Promise<void>;
 }) {
-  const { updatePersona } = useAgentStore();
+  const { mutateAsync: updatePersona } = useUpdatePersona();
   const [delegation, setDelegation] = useState<DelegationConfig | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -70,8 +71,7 @@ function AgentRow({
   };
 
   const toggleComms = async () => {
-    await updatePersona(agent.id, { comms_enabled: !agent.comms_enabled });
-    await onUpdate();
+    await updatePersona({ agentId: agent.id, update: { comms_enabled: !agent.comms_enabled } });
   };
 
   return (

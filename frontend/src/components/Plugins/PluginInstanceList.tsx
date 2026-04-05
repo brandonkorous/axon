@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { PluginInstanceInfo } from "../../stores/pluginStore";
-import { usePluginStore } from "../../stores/pluginStore";
+import type { PluginInstanceInfo } from "../../hooks/usePlugins";
+import { useDeleteInstance } from "../../hooks/usePlugins";
 import { PluginInstanceForm } from "./PluginInstanceForm";
 
 export function PluginInstanceList({
@@ -14,16 +14,18 @@ export function PluginInstanceList({
   agents: { id: string; name: string }[];
   onRefresh: () => void;
 }) {
-  const { deleteInstance } = usePluginStore();
+  const deleteInstance = useDeleteInstance();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
-    const ok = await deleteInstance(pluginName, id);
-    if (ok) {
+    try {
+      await deleteInstance.mutateAsync({ pluginName, instanceId: id });
       setDeletingId(null);
       onRefresh();
+    } catch {
+      // delete failed
     }
   };
 
@@ -142,7 +144,7 @@ function InstanceRow({
         <p className="text-xs text-base-content/50 font-mono truncate">{path}</p>
       )}
       {!path && (
-        <p className="text-xs text-base-content/50 italic">No mount — agent creates files inside container</p>
+        <p className="text-xs text-base-content/50 italic">No shared folder — agent works in its own isolated space</p>
       )}
 
       <div className="flex flex-wrap gap-1">

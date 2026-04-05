@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
+from axon.logging import get_logger
 from axon.sandbox.builder import get_all_build_statuses, get_build_status
 from axon.sandbox.manager import sandbox_manager
 from axon.sandbox.types import (
@@ -15,7 +15,7 @@ from axon.sandbox.types import (
     SandboxType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 org_router = APIRouter()
 

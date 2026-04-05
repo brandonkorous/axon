@@ -1,23 +1,24 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useApprovalStore, type Approval } from "../../stores/approvalStore";
+import type { Approval } from "../../stores/approvalStore";
+import {
+    usePendingApprovals,
+    useApprove,
+    useDecline,
+} from "../../hooks/useApprovals";
 import { PRIORITY_BADGE } from "../../constants/badges";
 import { StatusBarPopover } from "./StatusBarPopover";
 
 function ApprovalItem({ approval }: { approval: Approval }) {
-    const { approve, decline } = useApprovalStore();
-    const [acting, setActing] = useState(false);
+    const approveMutation = useApprove();
+    const declineMutation = useDecline();
+    const acting = approveMutation.isPending || declineMutation.isPending;
 
     const handleApprove = async () => {
-        setActing(true);
-        await approve(approval.task_path);
-        setActing(false);
+        await approveMutation.mutateAsync(approval.task_path);
     };
 
     const handleDecline = async () => {
-        setActing(true);
-        await decline(approval.task_path);
-        setActing(false);
+        await declineMutation.mutateAsync({ taskPath: approval.task_path });
     };
 
     return (
@@ -59,7 +60,8 @@ function ApprovalItem({ approval }: { approval: Approval }) {
 }
 
 export function StatusBarApprovals({ count }: { count: number }) {
-    const approvals = useApprovalStore((s) => s.approvals);
+    const { data: pendingData } = usePendingApprovals();
+    const approvals = (pendingData ?? []) as Approval[];
 
     return (
         <StatusBarPopover
