@@ -968,7 +968,10 @@ class Agent:
             if user_message:
                 content_blocks.append({"type": "text", "text": user_message})
             for att in attachments:
-                att_type = att.get("type", "")
+                att_type = att.get("type", "").strip()
+                if not att_type:
+                    import mimetypes as _mt
+                    att_type = _mt.guess_type(att.get("name", ""))[0] or "application/octet-stream"
                 if att_type.startswith("image/"):
                     file_path = Path(self.conversation_manager.data_dir) / att["path"]
                     try:
@@ -985,10 +988,35 @@ class Agent:
                             "text": f"\n[Attached image could not be loaded: {att['name']}]",
                         })
                 else:
-                    content_blocks.append({
-                        "type": "text",
-                        "text": f"\n[Attached file: {att['name']} ({att_type}, {att['size']} bytes)]",
-                    })
+                    # Try to read text-based files and include content inline
+                    TEXT_TYPES = (
+                        "text/", "application/json", "application/xml",
+                        "application/javascript", "application/typescript",
+                        "application/x-yaml", "application/toml",
+                        "application/csv",
+                    )
+                    file_path = Path(self.conversation_manager.data_dir) / att["path"]
+                    if any(att_type.startswith(t) for t in TEXT_TYPES) and file_path.exists():
+                        try:
+                            file_text = file_path.read_text(encoding="utf-8", errors="replace")
+                            # Cap at ~100k chars to avoid blowing up the context
+                            if len(file_text) > 100_000:
+                                file_text = file_text[:100_000] + "\n\n... [truncated]"
+                            content_blocks.append({
+                                "type": "text",
+                                "text": f"\n--- Attached file: {att['name']} ---\n{file_text}\n--- End of {att['name']} ---",
+                            })
+                        except Exception as exc:
+                            logger.warning("Failed to read text attachment %s: %s", att["path"], exc)
+                            content_blocks.append({
+                                "type": "text",
+                                "text": f"\n[Attached file could not be read: {att['name']}]",
+                            })
+                    else:
+                        content_blocks.append({
+                            "type": "text",
+                            "text": f"\n[Attached file: {att['name']} ({att_type}, {att['size']} bytes) — binary file, content not shown]",
+                        })
             messages.append({"role": "user", "content": content_blocks})
         else:
             messages.append({"role": "user", "content": user_message})

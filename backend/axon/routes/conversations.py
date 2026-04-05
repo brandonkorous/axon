@@ -396,7 +396,7 @@ async def _handle_upload(agent, file: UploadFile) -> dict:
         )
 
     original_name = file.filename or "upload"
-    content_type = file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+    content_type = (file.content_type or "").strip() or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
     sanitized = _sanitize_filename(original_name)
     stored_name = f"{int(time.time() * 1000)}_{sanitized}"
 
